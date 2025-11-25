@@ -1,0 +1,32 @@
+export enum DeviceStatus {
+    MOI = 'moi',
+    DANG_SU_DUNG = 'dang_su_dung',
+    THANH_LY = 'thanh_ly',
+    HUY_BO = 'huy_bo',
+}
+
+export const columnMapping: Record<string, string> = {
+    'Tên phương tiện': 'name',
+    'Nhãn hiệu': 'brand',
+    'Biển đăng ký': 'serial_number',
+    'Nước sản xuất': 'country_of_origin',
+    'Năm sản xuất': 'manufacture_year',
+    'Ghi chú': 'note',
+    'Mục đích sử dụng thiết bị': 'usage_purpose',
+    'Phạm vi hoạt động': 'operating_scope',
+    'Năm sử dụng': 'usage_start_year',
+    'Mã số - địa chỉ kỹ thuật': 'technical_code_address',
+    'Địa điểm - tọa độ thiết bị': 'location_coordinates',
+    'Thời gian hoạt động hàng ngày': 'daily_operation_time',
+    'Xuất xứ khi di dời thiết bị': 'relocation_origin',
+    'Năm di dời thiết bị': 'relocation_year',
+    'Mã số tài sản cố định (TSCĐ)': 'fixed_asset_code',
+    'Đơn vị sử dụng thiết bị': 'using_department',
+    'Kích thước - Dài': 'length',
+    'Kích thước - Rộng': 'width',
+    'Kích thước - Cao': 'height',
+    'Khối lượng thiết bị': 'weight',
+    'Nguồn điện cung cấp': 'power_source',
+    'Công suất tiêu thụ': 'power_consumption',
+    'Tình trạng kỹ thuật': 'other_specifications',
+};

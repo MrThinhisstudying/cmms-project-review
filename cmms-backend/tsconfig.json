@@ -1,0 +1,25 @@
+{
+    "compilerOptions": {
+        "baseUrl": ".",
+        "skipLibCheck": true,
+        "removeComments": true,
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "allowSyntheticDefaultImports": true,
+        "noImplicitAny": false,
+        "esModuleInterop": true,
+        "sourceMap": true,
+        "declaration": true,
+        "strict": true,
+        "target": "es2021",
+        "module": "commonjs",
+        "outDir": "./dist",
+        "incremental": true,
+        "moduleResolution": "node",
+        "resolveJsonModule": true,
+        "noImplicitReturns": false,
+        "strictNullChecks": false,
+        "typeRoots": ["./node_modules/@types", "./src/types"],
+        "lib": ["es2021", "es2018.asynciterable", "dom"]
+    }
+}

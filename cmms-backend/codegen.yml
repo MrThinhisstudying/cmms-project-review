@@ -1,0 +1,10 @@
+overwrite: true
+documents: './src/**/*.graphql'
+generates:
+  src/subsgraph/generated/graphql.ts:
+    plugins:
+      - typescript
+      - typescript-operations
+      - typescript-graphql-request
+    config:
+      rawRequest: false
