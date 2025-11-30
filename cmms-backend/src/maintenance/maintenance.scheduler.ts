@@ -5,7 +5,7 @@ import {In, Repository} from 'typeorm';
 import dayjs from 'dayjs';
 import {NotificationService} from 'src/notification/notification.service';
 import {MaintenanceTicket} from 'src/maintenance-ticket/entities/maintenance-ticket.entity';
-import { TicketStatus } from 'src/maintenance-ticket/enum/ticket.enum';
+import {TicketStatus} from 'src/maintenance-ticket/enum/ticket.enum';
 
 @Injectable()
 export class MaintenanceScheduler {
@@ -19,7 +19,7 @@ export class MaintenanceScheduler {
     async checkDueMaintenances() {
         const now = dayjs();
         const tickets = await this.ticketRepo.find({
-            where: { status: In(['open', 'in_progress'] as TicketStatus[]) },
+            where: {status: In(['open', 'in_progress'] as TicketStatus[])},
             relations: ['device', 'user', 'department', 'maintenance'],
         });
         for (const t of tickets) {
@@ -52,3 +52,4 @@ export class MaintenanceScheduler {
         }
     }
 }
+

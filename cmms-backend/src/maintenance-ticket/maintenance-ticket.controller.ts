@@ -5,7 +5,8 @@ import {User} from 'src/user/user.entity';
 import {ApiTags} from '@nestjs/swagger';
 import {MaintenanceTicketService} from './maintenance-ticket.service';
 import {TicketStatus} from './enum/ticket.enum';
-
+import {Response} from 'express'; // Import từ express
+import {Res, Header} from '@nestjs/common';
 @ApiTags('maintenance-tickets')
 @Controller('maintenance-tickets')
 export class MaintenanceTicketController {
@@ -18,6 +19,19 @@ export class MaintenanceTicketController {
             return {message: 'Tạo phiếu bảo dưỡng thành công', data};
         } catch (error) {
             throw new HttpException('Tạo phiếu bảo dưỡng thất bại', HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    // --- THÊM API NÀY ĐỂ FRONTEND GỌI KHI BẤM "LƯU PHIẾU" ---
+    @Post()
+    @UseGuards(JWTAuthGuard)
+    async createFromApp(@Body() body: any, @CurrentUser() user: User) {
+        // body sẽ chứa: { device_id, template_id, maintenance_level, checklist_result, arising_issues }
+        try {
+            const data = await this.ticketService.createFromApp(body, user);
+            return {message: 'Lưu phiếu thành công', data};
+        } catch (error) {
+            throw new HttpException('Lưu phiếu thất bại', HttpStatus.BAD_REQUEST);
         }
     }
 
@@ -81,4 +95,34 @@ export class MaintenanceTicketController {
             throw new HttpException('Xóa phiếu thất bại', HttpStatus.BAD_REQUEST);
         }
     }
+
+    @Get()
+    @UseGuards(JWTAuthGuard)
+    async findAllTickets(@Query() query: any) {
+        // Lấy tất cả phiếu, sắp xếp mới nhất
+        return this.ticketService.findAll();
+    }
+
+    @Get('history/all')
+    @UseGuards(JWTAuthGuard)
+    async getHistory() {
+        const data = await this.ticketService.findAllHistory();
+        return {message: 'Lấy lịch sử thành công', data};
+    }
+
+    @Get(':id/pdf')
+    @Header('Content-Type', 'application/pdf')
+    @Header('Content-Disposition', 'attachment; filename=maintenance_ticket.pdf')
+    async downloadPdf(@Param('id', ParseIntPipe) id: number, @Res() res: Response) {
+        const buffer = await this.ticketService.exportPdf(id);
+
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="Phieu_Bao_Duong_${id}.pdf"`,
+            'Content-Length': buffer.length,
+        });
+
+        res.end(buffer);
+    }
 }
+

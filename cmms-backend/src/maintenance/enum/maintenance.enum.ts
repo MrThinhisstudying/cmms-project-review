@@ -1,12 +1,18 @@
 export enum MaintenanceLevel {
-    THREE_MONTH = '3_month',
-    SIX_MONTH = '6_month',
-    NINE_MONTH = '9_month',
-    TWELVE_MONTH = '12_month',
+    ONE_MONTH = '1M', // Thêm mới
+    THREE_MONTH = '3M', // Đổi ngắn gọn cho dễ quản lý
+    SIX_MONTH = '6M',
+    NINE_MONTH = '9M',
+    ONE_YEAR = '1Y', // Thay cho 12_month
+    TWO_YEARS = '2Y', // Thay cho 24_month
 }
 
 export enum MaintenanceStatus {
     ACTIVE = 'active',
     INACTIVE = 'inactive',
     CANCELED = 'canceled',
+    // Thêm 2 trạng thái này để Cron Job chạy được
+    WARNING = 'warning',
+    OVERDUE = 'overdue',
 }
+

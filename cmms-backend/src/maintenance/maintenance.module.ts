@@ -10,9 +10,14 @@ import {Department} from 'src/departments/department.entity';
 import {MaintenanceScheduler} from './maintenance.scheduler';
 import {NotificationModule} from 'src/notification/notification.module';
 import {MaintenanceTicketModule} from 'src/maintenance-ticket/maintenance-ticket.module';
+import {MaintenanceChecklistTemplate} from './entities/maintenance-checklist-template.entity';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Maintenance, Device, User, Department, MaintenanceTicket]), NotificationModule, forwardRef(() => MaintenanceTicketModule)],
+    imports: [
+        TypeOrmModule.forFeature([Maintenance, Device, User, Department, MaintenanceTicket, MaintenanceChecklistTemplate]),
+        NotificationModule,
+        forwardRef(() => MaintenanceTicketModule),
+    ],
     providers: [MaintenanceService, MaintenanceScheduler],
     controllers: [MaintenanceController],
     exports: [MaintenanceService],

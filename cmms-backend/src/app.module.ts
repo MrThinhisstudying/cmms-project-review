@@ -1,18 +1,22 @@
+import {Module} from '@nestjs/common';
+import {ConfigModule} from '@nestjs/config';
+import {ScheduleModule} from '@nestjs/schedule';
+import {MailerModule} from '@nestjs-modules/mailer';
+import {ClsModule} from 'nestjs-cls';
+
+// Controllers & Services
+import {AppController} from './app.controller';
+import {AppService} from './app.service';
+
+// Custom Modules
 import {AuthModule} from './auth/auth.module';
 import {DatabaseModule} from './database/database.module';
-import {Module} from '@nestjs/common';
-import {AppController} from './app.controller';
-import {ConfigModule} from '@nestjs/config';
-import {AppService} from './app.service';
 import {UserModule} from './user/user.module';
 import {DevicesModule} from './devices/devices.module';
 import {DepartmentModule} from './departments/departments.module';
-import {MaintenanceModule} from './maintenance/maintenance.module';
+import {MaintenanceModule} from './maintenance/maintenance.module'; // Chỉ giữ lại dòng này
 import {NotificationModule} from './notification/notification.module';
-import {ScheduleModule} from '@nestjs/schedule';
-import {MailerModule} from '@nestjs-modules/mailer';
 import {AuditModule} from './audit-log/audit-log.module';
-import {ClsModule} from 'nestjs-cls';
 import {MaintenanceTicketModule} from './maintenance-ticket/maintenance-ticket.module';
 import {InventoryCategoryModule} from './inventory_category/inventory-category.module';
 import {InventoryItemModule} from './inventory_item/inventory-item.module';

@@ -1,302 +1,697 @@
-import React, { useEffect, useState } from "react";
-import { Box, Dialog, TextField, Divider, Grid, MenuItem } from "@mui/material";
-import dayjs, { Dayjs } from "dayjs";
-import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
-import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs";
-import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
+import React, { useState, useEffect } from "react";
 import {
-  IMaintenance,
-  MaintenanceUpsertPayload,
-} from "../../../../types/maintenance.types";
-import { useUsersContext } from "../../../../context/UsersContext/UsersContext";
+  Form,
+  Select,
+  Button,
+  message,
+  Input,
+  Spin,
+  InputNumber,
+  Row,
+  Col,
+  Card,
+  DatePicker,
+  Radio,
+  Divider,
+} from "antd";
+import { PlusOutlined, DeleteOutlined, UserOutlined } from "@ant-design/icons";
+import ChecklistExecutor from "../ChecklistExecutor/index";
 import {
-  EMPTY,
-  LEVEL_OPTIONS,
-  STATUS_OPTIONS,
-  toUpsertPayload,
-} from "../../../../constants/maintenance";
-import { useDepartmentsContext } from "../../../../context/DepartmentsContext/DepartmentsContext";
-import { useDevicesContext } from "../../../../context/DevicesContext/DevicesContext";
-import TopBar from "../../../../layout/MainLayout/TopBar";
-import { CustomButton } from "../../../../components/Button";
+  getAllTemplates,
+  getTemplateById,
+  createMaintenanceTicket,
+} from "../../../../apis/maintenance";
+import { getAllDevices } from "../../../../apis/devices";
+import { getAllUsers } from "../../../../apis/users"; // Import API user
+import { getToken } from "../../../../utils/auth";
+import dayjs from "dayjs";
+import "dayjs/locale/vi";
 
-type Props = {
-  open: boolean;
-  initialData?: IMaintenance | null;
-  onClose: () => void;
-  onSubmit: (data: MaintenanceUpsertPayload) => Promise<void> | void;
-  loading?: boolean;
-};
+const { Option } = Select;
+const { TextArea } = Input;
 
-const REQUIRED_FIELDS: (keyof IMaintenance)[] = [
-  "device",
-  "scheduled_date",
-  "status",
-  "level",
+// Danh sách hạng mục nghiệm thu
+const ACCEPTANCE_DATA = [
+  {
+    id: "1",
+    label: "1. Các hạng mục vật tư thay thế theo cấp BD / Parts replaced",
+    isSub: false,
+  },
+  { id: "2", label: "2. Dầu mỡ / Oil and grease", isSub: false },
+  {
+    id: "3",
+    label: "3. Tình trạng kỹ thuật các hệ thống / Operation of systems",
+    isSub: false,
+  },
+  { id: "3.1", label: "- Động cơ / Engine", isSub: true },
+  { id: "3.2", label: "- Hệ thống điện / Electric system", isSub: true },
+  { id: "3.3", label: "- Hệ thống thắng / Brake system", isSub: true },
+  {
+    id: "3.4",
+    label: "- Hệ thống truyền động / Power transmitting system",
+    isSub: true,
+  },
+  { id: "3.5", label: "- Khung sườn / Chassis", isSub: true },
 ];
 
-export default function MaintenanceForm({
-  open,
-  initialData,
-  onClose,
-  onSubmit,
-  loading,
-}: Props) {
-  const [form, setForm] = useState<Record<string, string>>({ ...EMPTY });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const isEdit = Boolean(initialData?.maintenance_id);
-  const { users } = useUsersContext();
-  const { departments } = useDepartmentsContext();
-  const { devices } = useDevicesContext();
+const MaintenanceForm: React.FC<any> = ({ onSuccess, onCancel }) => {
+  const [form] = Form.useForm();
+  const [loading, setLoading] = useState(false);
+  const token = getToken();
 
+  // Data State
+  const [devices, setDevices] = useState<any[]>([]);
+  const [templates, setTemplates] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [currentTemplateJson, setCurrentTemplateJson] = useState<any>(null);
+  const [currentLevel, setCurrentLevel] = useState<string | null>(null);
+
+  // Result State
+  const [checklistResults, setChecklistResults] = useState<any[]>([]);
+  const [acceptanceResults, setAcceptanceResults] = useState<
+    Record<string, { status: string | null; note: string }>
+  >({});
+
+  // Load Data
   useEffect(() => {
-    if (!initialData) {
-      setForm({ ...EMPTY });
-      setErrors({});
-      return;
-    }
-    setForm({
-      device_id: initialData.device?.device_id
-        ? String(initialData.device.device_id)
-        : "",
-      user_id: initialData.user?.user_id
-        ? String(initialData.user.user_id)
-        : "",
-      dept_id: initialData.department?.dept_id
-        ? String(initialData.department.dept_id)
-        : "",
-      scheduled_date: initialData.scheduled_date || "",
-      expired_date: initialData.expired_date || "",
-  status: initialData.status || "active",
-      level: initialData.level || "3_month",
-      description: initialData.description ?? "",
-    });
-    setErrors({});
-  }, [initialData]);
-
-  useEffect(() => {
-    if (!open) return;
-    setErrors({});
-    if (!initialData) setForm({ ...EMPTY });
-  }, [open, initialData]);
-
-  const handleChange =
-    (key: string) => (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value;
-      setForm((prev) => ({ ...prev, [key]: String(value) }));
-      if (errors[key]) setErrors((prev) => ({ ...prev, [key]: "" }));
+    const fetchData = async () => {
+      try {
+        const [devs, temps, userList] = await Promise.all([
+          getAllDevices(token),
+          getAllTemplates(token),
+          getAllUsers(token),
+        ]);
+        setDevices(devs);
+        setTemplates(temps);
+        setUsers(userList);
+      } catch (e) {
+        message.error("Lỗi tải dữ liệu");
+      }
     };
+    fetchData();
+  }, [token]);
 
-  const validate = () => {
-    const next: Record<string, string> = {};
-    REQUIRED_FIELDS.forEach((f) => {
-      const key = f === "device" ? "device_id" : String(f);
-      if (!(form[key] ?? "").trim()) next[key] = "Trường này là bắt buộc";
-    });
-    if (!form.user_id && !form.dept_id) {
-      next["user_id"] = "Chọn Người thực hiện hoặc Phòng ban";
-      next["dept_id"] = "Chọn Người thực hiện hoặc Phòng ban";
+  // Filter Users
+  const technicianList = users.filter((u) => {
+    const pos = u.position?.toLowerCase() || "";
+    const excluded = ["giám đốc", "phó giám đốc", "kế toán"];
+    return !excluded.some((ex) => pos.includes(ex));
+  });
+
+  const leaderList = users.filter((u) => {
+    const pos = u.position?.toLowerCase() || "";
+    return pos.includes("đội trưởng") || pos.includes("đội phó");
+  });
+
+  const operatorList = users.filter((u) => {
+    const pos = u.position?.toLowerCase() || "";
+    const excluded = [
+      "giám đốc",
+      "phó giám đốc",
+      "kế toán",
+      "đội trưởng",
+      "đội phó",
+    ];
+    return !excluded.some((ex) => pos.includes(ex));
+  });
+
+  const handleTemplateChange = async (id: number) => {
+    setLoading(true);
+    try {
+      const res = await getTemplateById(id, token);
+      if (res?.checklist_structure)
+        setCurrentTemplateJson(res.checklist_structure);
+    } catch (e) {
+      message.error("Lỗi tải quy trình");
+    } finally {
+      setLoading(false);
     }
-    setErrors(next);
-    return Object.keys(next).length === 0;
   };
 
-  const handleSave = async () => {
-    if (!validate()) return;
-    const payload = toUpsertPayload(form);
-    await onSubmit(payload);
+  const handleAcceptanceUpdate = (
+    label: string,
+    field: "status" | "note",
+    value: any
+  ) => {
+    setAcceptanceResults((prev) => ({
+      ...prev,
+      [label]: {
+        ...(prev[label] || { status: null, note: "" }),
+        [field]: value,
+      },
+    }));
+  };
+
+  const onFinish = async (values: any) => {
+    if (!currentTemplateJson) return message.warning("Chưa chọn quy trình!");
+
+    // Validate Nghiệm thu
+    const missingItems = ACCEPTANCE_DATA.filter((row) => {
+      const result = acceptanceResults[row.label];
+      return !result || !result.status;
+    });
+    if (missingItems.length > 0) {
+      return message.error(
+        `Vui lòng đánh giá Đạt/Không cho mục: "${missingItems[0].label}"`
+      );
+    }
+
+    const acceptanceFinal = ACCEPTANCE_DATA.map((row) => {
+      const result = acceptanceResults[row.label] || {
+        status: "pass",
+        note: "",
+      };
+      return {
+        id: row.id,
+        item: row.label,
+        status: result.status,
+        note: result.note || "",
+      };
+    });
+
+    const payload = {
+      device_id: values.device_id,
+      template_id: values.template_id,
+      maintenance_level: values.maintenance_level,
+      working_hours: values.working_hours,
+      manual_ticket_number: values.manual_ticket_number,
+      execution_team: values.execution_team,
+      execution_date: values.execution_date
+        ? values.execution_date.toISOString()
+        : new Date().toISOString(),
+      arising_issues: values.arising_issues,
+      checklist_result: checklistResults,
+      acceptance_result: acceptanceFinal,
+      final_conclusion: values.final_conclusion,
+      leader_user_id: values.leader_user_id,
+      operator_user_id: values.operator_user_id,
+    };
+
+    try {
+      setLoading(true);
+      await createMaintenanceTicket(token, payload);
+      message.success("Lưu phiếu thành công!");
+      onSuccess();
+    } catch (err: any) {
+      message.error("Lỗi: " + err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <Dialog
-      fullScreen
-      open={open}
-      onClose={onClose}
-      PaperProps={{
-        sx: { display: "flex", flexDirection: "column", height: "100dvh" },
-      }}
-    >
-      <TopBar />
-      <Box sx={{ flex: 1, overflowY: "auto", p: 2, mt: "70px", pt: "24px" }}>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>
-            <TextField
-              select
-              label="Thiết bị *"
-              value={form.device_id}
-              onChange={handleChange("device_id")}
-              error={Boolean(errors.device_id)}
-              helperText={errors.device_id}
-              fullWidth
-              disabled={loading}
-            >
-              <MenuItem value="">-- Chọn thiết bị --</MenuItem>
-              {devices.map((d) => (
-                <MenuItem key={d.device_id} value={String(d.device_id)}>
-                  {d.name} ({d.brand})
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <LocalizationProvider dateAdapter={AdapterDayjs}>
-              <DateTimePicker
-                label="Ngày giờ dự kiến *"
-                value={form.scheduled_date ? dayjs(form.scheduled_date) : null}
-                onChange={(val: Dayjs | null) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    scheduled_date: val
-                      ? val.format("YYYY-MM-DDTHH:mm:ss")
-                      : "",
-                  }))
-                }
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    fullWidth
-                    error={Boolean(errors.scheduled_date)}
-                    helperText={errors.scheduled_date}
-                    disabled={loading}
-                  />
-                )}
-              />
-            </LocalizationProvider>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <LocalizationProvider dateAdapter={AdapterDayjs}>
-              <DateTimePicker
-                label="Ngày giờ hết hạn"
-                value={form.expired_date ? dayjs(form.expired_date) : null}
-                onChange={(val: Dayjs | null) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    expired_date: val ? val.format("YYYY-MM-DDTHH:mm:ss") : "",
-                  }))
-                }
-                renderInput={(params) => (
-                  <TextField {...params} fullWidth disabled={loading} />
-                )}
-              />
-            </LocalizationProvider>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              select
-              label="Người thực hiện (User)"
-              value={form.user_id}
-              onChange={handleChange("user_id")}
-              error={Boolean(errors.user_id)}
-              helperText={errors.user_id}
-              fullWidth
-              disabled={loading}
-            >
-              <MenuItem value="">-- Chọn người dùng --</MenuItem>
-              {users.map((u) => (
-                <MenuItem key={u.user_id} value={u.user_id}>
-                  {u.name}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              select
-              label="Phòng ban"
-              value={form.dept_id}
-              onChange={handleChange("dept_id")}
-              error={Boolean(errors.dept_id)}
-              helperText={errors.dept_id}
-              fullWidth
-              disabled={loading}
-            >
-              <MenuItem value="">-- Chọn phòng ban --</MenuItem>
-              {departments.map((d) => (
-                <MenuItem key={d.dept_id} value={d.dept_id}>
-                  {d.name}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              select
-              label="Cấp bảo dưỡng *"
-              value={form.level}
-              onChange={handleChange("level")}
-              error={Boolean(errors.level)}
-              helperText={errors.level}
-              fullWidth
-              disabled={loading}
-            >
-              {LEVEL_OPTIONS.map((opt) => (
-                <MenuItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField
-              select
-              label="Trạng thái *"
-              value={form.status}
-              onChange={handleChange("status")}
-              error={Boolean(errors.status)}
-              helperText={errors.status}
-              fullWidth
-              disabled={loading}
-            >
-              {STATUS_OPTIONS.map((opt) => (
-                <MenuItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              label="Mô tả"
-              value={form.description}
-              onChange={handleChange("description")}
-              fullWidth
-              multiline
-              minRows={3}
-              disabled={loading}
-            />
-          </Grid>
-        </Grid>
-      </Box>
-      <Divider />
-      <Box
-        sx={{
-          p: 2,
-          display: "flex",
-          justifyContent: "flex-end",
-          gap: 2,
-          borderTop: "1px solid #ddd",
-          backgroundColor: "#fff",
-        }}
+    <Spin spinning={loading}>
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={onFinish}
+        initialValues={{ final_conclusion: true }}
       >
-        <CustomButton
-          onClick={onClose}
-          color="secondary"
-          variant="outlined"
-          padding="4px 12px"
-          disabled={loading}
+        {/* --- 1. THÔNG TIN CHUNG --- */}
+        <Card
+          title="1. TRANG THIẾT BỊ BẢO DƯỠNG / EQUIPMENT"
+          size="small"
+          style={{ marginBottom: 16, borderTop: "3px solid #1890ff" }}
         >
-          Hủy
-        </CustomButton>
-        <CustomButton
-          color="primary"
-          variant="contained"
-          padding="4px 12px"
-          onClick={handleSave}
-          disabled={loading}
+          <Row gutter={16}>
+            <Col span={16}>
+              <Form.Item
+                name="device_id"
+                label="1.1 & 1.2. Chủng loại & Số đăng ký"
+                rules={[{ required: true, message: "Chọn thiết bị" }]}
+              >
+                <Select
+                  placeholder="Chọn xe..."
+                  showSearch
+                  optionFilterProp="children"
+                  size="large"
+                >
+                  {devices.map((d) => (
+                    <Option key={d.device_id} value={d.device_id}>
+                      {d.name} ({d.serial_number})
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item name="working_hours" label="Số GHĐ (Km/Giờ)">
+                <InputNumber
+                  style={{ width: "100%" }}
+                  formatter={(v) =>
+                    `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                  }
+                  placeholder="Không bắt buộc"
+                  size="large"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="manual_ticket_number"
+                label="1.3. Phiếu công tác số"
+              >
+                <Input placeholder="Tự động hoặc nhập tay" size="large" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="execution_date"
+                label="Ngày / Date"
+                initialValue={dayjs()}
+                rules={[{ required: true }]}
+              >
+                <DatePicker
+                  format="DD/MM/YYYY"
+                  style={{ width: "100%" }}
+                  size="large"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="maintenance_level"
+                label="1.4. Cấp bảo dưỡng"
+                rules={[{ required: true, message: "Chọn cấp độ" }]}
+              >
+                <Select
+                  placeholder="Chọn cấp..."
+                  onChange={setCurrentLevel}
+                  size="large"
+                >
+                  <Option value="1M">01 Tháng</Option>
+                  <Option value="3M">03 Tháng</Option>
+                  <Option value="6M">06 Tháng</Option>
+                  <Option value="1Y">01 Năm</Option>
+                  <Option value="2Y">02 Năm</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={24}>
+              <Form.Item
+                name="template_id"
+                label="Quy trình áp dụng"
+                rules={[{ required: true, message: "Chọn quy trình" }]}
+                style={{ marginBottom: 0 }}
+              >
+                <Select
+                  placeholder="Chọn mẫu phiếu..."
+                  onChange={handleTemplateChange}
+                >
+                  {templates.map((t) => (
+                    <Option key={t.id} value={t.id}>
+                      {t.name}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+        </Card>
+
+        {/* --- 2. NGƯỜI THỰC HIỆN --- */}
+        <Card
+          title="2. NGƯỜI THỰC HIỆN / CHECKED BY"
+          size="small"
+          style={{ marginBottom: 16 }}
         >
-          {isEdit ? "Lưu thay đổi" : "Tạo mới"}
-        </CustomButton>
-      </Box>
-    </Dialog>
+          <Form.List name="execution_team">
+            {(fields, { add, remove }) => (
+              <>
+                {fields.map(({ key, name, ...restField }) => (
+                  <Row key={key} gutter={16} style={{ marginBottom: 8 }}>
+                    <Col span={14}>
+                      <Form.Item
+                        {...restField}
+                        name={[name, "name"]}
+                        noStyle
+                        rules={[{ required: true, message: "Chọn nhân viên" }]}
+                      >
+                        <Select
+                          placeholder="Chọn kỹ thuật viên..."
+                          showSearch
+                          optionFilterProp="children"
+                          popupMatchSelectWidth={false}
+                          style={{ width: "100%" }}
+                          filterOption={(input, option) => {
+                            const label = option?.children
+                              ? String(option.children)
+                              : "";
+                            return label
+                              .toLowerCase()
+                              .includes(input.toLowerCase());
+                          }}
+                        >
+                          {technicianList.map((u) => (
+                            <Option key={u.user_id} value={u.name}>
+                              {u.name} {u.position ? `- ${u.position}` : ""}
+                            </Option>
+                          ))}
+                        </Select>
+                      </Form.Item>
+                    </Col>
+                    <Col span={6}>
+                      <Form.Item
+                        {...restField}
+                        name={[name, "date"]}
+                        noStyle
+                        initialValue={dayjs()}
+                      >
+                        <DatePicker
+                          style={{ width: "100%" }}
+                          format="DD/MM/YYYY"
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={4}>
+                      <Button
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => remove(name)}
+                      />
+                    </Col>
+                  </Row>
+                ))}
+                <Button
+                  type="dashed"
+                  onClick={() => add()}
+                  block
+                  icon={<PlusOutlined />}
+                >
+                  Thêm người thực hiện
+                </Button>
+              </>
+            )}
+          </Form.List>
+        </Card>
+
+        {/* --- 3. CHECKLIST --- */}
+        <Card
+          title="3. NỘI DUNG BẢO DƯỠNG (ĐÍNH KÈM)"
+          size="small"
+          style={{ marginBottom: 16 }}
+        >
+          {currentTemplateJson && currentLevel ? (
+            <ChecklistExecutor
+              templateData={currentTemplateJson}
+              currentLevel={currentLevel}
+              onChange={setChecklistResults}
+            />
+          ) : (
+            <div style={{ textAlign: "center", color: "#999" }}>
+              Vui lòng chọn Thiết bị & Cấp độ
+            </div>
+          )}
+        </Card>
+
+        {/* --- 4. PHÁT SINH --- */}
+        <Card
+          title="4. PHÁT SINH KHÁC"
+          size="small"
+          style={{ marginBottom: 16 }}
+        >
+          <Form.Item name="arising_issues" noStyle>
+            <TextArea rows={3} placeholder="Nhập nội dung phát sinh..." />
+          </Form.Item>
+        </Card>
+
+        {/* --- 5. NGHIỆM THU (CẬP NHẬT 5.1 & 5.2) --- */}
+        <Card
+          title="5. NGHIỆM THU & KẾT LUẬN / CHECK AND TAKE OVER"
+          size="small"
+          style={{ marginBottom: 16 }}
+        >
+          {/* 5.1. Người thực hiện (Tự động hiển thị từ Mục 2) */}
+          <div
+            style={{
+              marginBottom: 20,
+              padding: "10px",
+              background: "#fafafa",
+              borderRadius: 4,
+            }}
+          >
+            <div style={{ fontWeight: "bold", marginBottom: 5 }}>
+              5.1. Người thực hiện / Checked by (Ký/ Signature):
+            </div>
+            {/* Dùng Form.Item shouldUpdate để lắng nghe thay đổi từ Mục 2 */}
+            <Form.Item
+              shouldUpdate={(prev, curr) =>
+                prev.execution_team !== curr.execution_team
+              }
+              noStyle
+            >
+              {({ getFieldValue }) => {
+                const team = getFieldValue("execution_team") || [];
+                const names = team
+                  .map((t: any) => t?.name)
+                  .filter(Boolean)
+                  .join(", ");
+                return (
+                  <div
+                    style={{
+                      marginLeft: 20,
+                      fontStyle: "italic",
+                      color: names ? "#000" : "#999",
+                    }}
+                  >
+                    {names || "(Chưa chọn người thực hiện ở Mục 2)"}
+                  </div>
+                );
+              }}
+            </Form.Item>
+          </div>
+
+          {/* 5.2. Bảng xác nhận */}
+          <div style={{ fontWeight: "bold", marginBottom: 10 }}>
+            5.2. Xác nhận của đơn vị sử dụng / Approved by using unit:
+          </div>
+
+          <table
+            style={{
+              width: "100%",
+              borderCollapse: "collapse",
+              border: "1px solid #d9d9d9",
+            }}
+          >
+            <thead style={{ background: "#fafafa" }}>
+              <tr>
+                <th
+                  style={{
+                    padding: 8,
+                    borderBottom: "1px solid #d9d9d9",
+                    textAlign: "left",
+                  }}
+                >
+                  Nội dung
+                </th>
+                <th
+                  style={{
+                    width: 80,
+                    borderBottom: "1px solid #d9d9d9",
+                    textAlign: "center",
+                  }}
+                >
+                  Đạt
+                </th>
+                <th
+                  style={{
+                    width: 80,
+                    borderBottom: "1px solid #d9d9d9",
+                    textAlign: "center",
+                  }}
+                >
+                  Không Đạt
+                </th>
+                <th style={{ width: 150, borderBottom: "1px solid #d9d9d9" }}>
+                  Ghi chú
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {ACCEPTANCE_DATA.map((row) => {
+                const currentResult = acceptanceResults[row.label] || {
+                  status: null,
+                  note: "",
+                };
+                return (
+                  <tr
+                    key={row.id}
+                    style={{ borderBottom: "1px solid #f0f0f0" }}
+                  >
+                    <td
+                      style={{
+                        padding: 8,
+                        paddingLeft: row.isSub ? 32 : 8,
+                        fontWeight: row.isSub ? 400 : 500,
+                      }}
+                    >
+                      {row.label}
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <input
+                        type="radio"
+                        name={`acc_${row.id}`}
+                        checked={currentResult.status === "pass"}
+                        onChange={() =>
+                          handleAcceptanceUpdate(row.label, "status", "pass")
+                        }
+                        style={{ transform: "scale(1.2)", cursor: "pointer" }}
+                      />
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <input
+                        type="radio"
+                        name={`acc_${row.id}`}
+                        checked={currentResult.status === "fail"}
+                        onChange={() =>
+                          handleAcceptanceUpdate(row.label, "status", "fail")
+                        }
+                        style={{ transform: "scale(1.2)", cursor: "pointer" }}
+                      />
+                    </td>
+                    <td style={{ padding: 4 }}>
+                      <Input
+                        bordered={false}
+                        size="small"
+                        placeholder="..."
+                        value={currentResult.note}
+                        onChange={(e) =>
+                          handleAcceptanceUpdate(
+                            row.label,
+                            "note",
+                            e.target.value
+                          )
+                        }
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          <Divider />
+
+          <Form.Item
+            name="final_conclusion"
+            label={
+              <span style={{ fontWeight: "bold" }}>KẾT LUẬN / CONCLUSION:</span>
+            }
+            valuePropName="checked"
+          >
+            <Radio.Group>
+              <Radio
+                value={true}
+                style={{ color: "green", fontWeight: "bold" }}
+              >
+                ĐẠT YCKT - Đưa vào khai thác
+              </Radio>
+              <Radio
+                value={false}
+                style={{ color: "red", fontWeight: "bold", marginLeft: 20 }}
+              >
+                KHÔNG ĐẠT
+              </Radio>
+            </Radio.Group>
+          </Form.Item>
+        </Card>
+
+        {/* --- 6. KÝ TÊN --- */}
+        <div style={{ marginTop: 30, marginBottom: 20 }}>
+          <div
+            style={{
+              textAlign: "right",
+              fontStyle: "italic",
+              marginBottom: 20,
+              fontSize: 15,
+            }}
+          >
+            Côn Đảo, ngày {dayjs().format("DD")} tháng {dayjs().format("MM")}{" "}
+            năm {dayjs().format("YYYY")}
+          </div>
+
+          <Row gutter={48}>
+            <Col span={12} style={{ textAlign: "center" }}>
+              <div style={{ fontWeight: "bold", marginBottom: 5 }}>
+                ĐỘI-KT / DIVISION/TEAM
+              </div>
+              <div
+                style={{ fontStyle: "italic", fontSize: 13, marginBottom: 15 }}
+              >
+                (Ký tên / Signature)
+              </div>
+              <Form.Item
+                name="leader_user_id"
+                rules={[{ required: true, message: "Chọn người ký!" }]}
+              >
+                <Select
+                  placeholder="-- Chọn Đội trưởng/Phó --"
+                  style={{ width: "100%", textAlign: "center" }}
+                  optionLabelProp="label"
+                  popupMatchSelectWidth={300}
+                >
+                  {leaderList.map((u) => (
+                    <Option
+                      key={u.user_id}
+                      value={u.user_id}
+                      label={
+                        <div style={{ textAlign: "center" }}>{u.name}</div>
+                      }
+                    >
+                      <div style={{ textAlign: "center" }}>{u.name}</div>
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+
+            <Col span={12} style={{ textAlign: "center" }}>
+              <div style={{ fontWeight: "bold", marginBottom: 5 }}>
+                TỔ VHTTBMĐ / GSE OP. TEAM
+              </div>
+              <div
+                style={{ fontStyle: "italic", fontSize: 13, marginBottom: 15 }}
+              >
+                (Ký tên / Signature)
+              </div>
+              <Form.Item
+                name="operator_user_id"
+                rules={[{ required: true, message: "Chọn người ký!" }]}
+              >
+                <Select
+                  placeholder="-- Chọn Nhân viên --"
+                  style={{ width: "100%", textAlign: "center" }}
+                  optionLabelProp="label"
+                  popupMatchSelectWidth={300}
+                >
+                  {operatorList.map((u) => (
+                    <Option
+                      key={u.user_id}
+                      value={u.user_id}
+                      label={
+                        <div style={{ textAlign: "center" }}>{u.name}</div>
+                      }
+                    >
+                      <div style={{ textAlign: "center" }}>{u.name}</div>
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+        </div>
+
+        <div style={{ textAlign: "right" }}>
+          <Button onClick={onCancel} style={{ marginRight: 8 }}>
+            Hủy
+          </Button>
+          <Button type="primary" htmlType="submit" size="large">
+            LƯU PHIẾU & KÝ
+          </Button>
+        </div>
+      </Form>
+    </Spin>
   );
-}
+};
+
+export default MaintenanceForm;

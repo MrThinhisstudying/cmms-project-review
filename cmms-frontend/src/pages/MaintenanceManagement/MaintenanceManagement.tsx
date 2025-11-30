@@ -1,164 +1,56 @@
-import React, { useMemo, useRef, useState } from "react";
-import { Box, Typography } from "@mui/material";
-import {
-  IMaintenance,
-  MaintenanceUpsertPayload,
-} from "../../types/maintenance.types";
-import { useMaintenanceContext } from "../../context/MaintenanceContext/MaintenanceContext";
-import Pagination from "../../components/Pagination/Pagination";
-import Toast from "../../components/Toast";
-import { CustomButton } from "../../components/Button";
-import AddIcon from "@mui/icons-material/Add";
-import {
-  createMaintenance,
-  deleteMaintenance,
-  updateMaintenance,
-} from "../../apis/maintenance";
-import MaintenanceSkeleton from "./components/MaintenanceManagementSkeleton";
+import React, { useState } from "react";
+import { Modal, Layout } from "antd";
+import MaintenanceHeader from "./components/MaintenanceHeader";
 import MaintenanceTable from "./components/MaintenanceTable";
 import MaintenanceForm from "./components/MaintenanceForm";
-import { getToken } from "../../utils/auth";
+
+const { Content } = Layout;
 
 const MaintenanceManagement: React.FC = () => {
-  const {
-    maintenances = [],
-    loading,
-    fetchMaintenances,
-  } = useMaintenanceContext();
-  const [page, setPage] = useState(1);
-  const rowsPerPage = 10;
-  const [openForm, setOpenForm] = useState(false);
-  const [selected, setSelected] = useState<IMaintenance | null>(null);
-  const [saving, setSaving] = useState(false);
-  const toast = useRef<{ type: "error" | "success"; content: string }>({
-    type: "success",
-    content: "",
-  });
-  const [openToast, setOpenToast] = useState(false);
+  // State quản lý đóng mở Modal tạo phiếu
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const handleAdd = () => {
-    setSelected(null);
-    setOpenForm(true);
+  // State dùng để ép Table load lại dữ liệu (mỗi khi số này thay đổi)
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Hàm được gọi khi Import Excel thành công hoặc Tạo phiếu thành công
+  const handleRefresh = () => {
+    setRefreshKey((prev) => prev + 1); // Tăng biến đếm -> Table thấy đổi -> Tự gọi lại API
+    setIsModalOpen(false); // Đóng modal
   };
-
-  const handleEdit = (row: IMaintenance) => {
-    setSelected(row);
-    setOpenForm(true);
-  };
-
-  const handleDelete = async (id: number) => {
-    try {
-      const token = getToken();
-      const res = await deleteMaintenance(id, token);
-      toast.current = {
-        type: "success",
-        content: (res as any).message || "Xóa thành công",
-      };
-      setOpenToast(true);
-      fetchMaintenances();
-    } catch (err: any) {
-      toast.current = {
-        type: "error",
-        content: err?.message || "Xóa thất bại",
-      };
-      setOpenToast(true);
-    }
-  };
-
-  const handleSubmitUpsert = async (data: MaintenanceUpsertPayload) => {
-    try {
-      setSaving(true);
-      const token = getToken();
-      if (selected?.maintenance_id) {
-        const res = await updateMaintenance(
-          selected.maintenance_id,
-          token,
-          data
-        );
-        toast.current = {
-          type: "success",
-          content: (res as any).message || "Cập nhật thành công",
-        };
-      } else {
-        const res = await createMaintenance(token, data);
-        toast.current = {
-          type: "success",
-          content: (res as any).message || "Tạo thành công",
-        };
-      }
-      setOpenToast(true);
-      setOpenForm(false);
-      setSelected(null);
-      fetchMaintenances();
-    } catch (err: any) {
-      toast.current = {
-        type: "error",
-        content: err?.message || "Lưu thất bại",
-      };
-      setOpenToast(true);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const filteredData = useMemo(() => maintenances, [maintenances]);
 
   return (
-    <>
-      {loading ? (
-        <MaintenanceSkeleton />
-      ) : (
-        <Box display="flex" flexDirection="column" height="calc(100vh - 130px)">
-          <Box
-            display="flex"
-            justifyContent="space-between"
-            alignItems="center"
-            pb={2}
-          >
-            <Typography variant="h6">Lập lịch bảo dưỡng</Typography>
-            <CustomButton
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={handleAdd}
-              sx={{ height: "40px" }}
-            >
-              Thêm mới
-            </CustomButton>
-          </Box>
-          <Box sx={{ flex: 1, overflow: "auto", minHeight: 0 }}>
-            <MaintenanceTable
-              rows={filteredData}
-              rowsPerPage={rowsPerPage}
-              page={page}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            />
-          </Box>
-          <Pagination
-            data={filteredData}
-            rowsPerPage={rowsPerPage}
-            onPageChange={setPage}
-            page={page}
+    <Layout style={{ minHeight: "100vh", background: "#f0f2f5" }}>
+      <Content style={{ padding: "24px" }}>
+        {/* 1. HEADER: Chứa nút Import và nút Tạo mới */}
+        {/* Truyền handleRefresh xuống để nút Import gọi khi upload xong */}
+        <MaintenanceHeader
+          onCreate={() => setIsModalOpen(true)}
+          onRefresh={handleRefresh}
+        />
+
+        {/* 2. TABLE: Hiển thị danh sách */}
+        {/* Table tự fetch dữ liệu, chỉ cần nhận refreshKey để biết khi nào cần reload */}
+        <MaintenanceTable refreshKey={refreshKey} />
+
+        {/* 3. MODAL: Chứa Form tạo phiếu bảo dưỡng */}
+        <Modal
+          title="Lập Phiếu Bảo Dưỡng"
+          open={isModalOpen} // Antd v5 dùng 'open' (thay vì 'visible')
+          onCancel={() => setIsModalOpen(false)}
+          footer={null} // Ẩn footer mặc định vì Form đã có nút Lưu riêng
+          width={1000} // Để rộng ra cho dễ nhìn Checklist
+          destroyOnClose // Reset form khi đóng
+          maskClosable={false} // Bắt buộc bấm dấu X hoặc Hủy mới đóng
+          style={{ top: 20 }}
+        >
+          <MaintenanceForm
+            onSuccess={handleRefresh}
+            onCancel={() => setIsModalOpen(false)}
           />
-        </Box>
-      )}
-      <Toast
-        content={toast.current?.content}
-        variant={toast.current?.type}
-        open={openToast}
-        onClose={() => setOpenToast(false)}
-      />
-      <MaintenanceForm
-        open={openForm}
-        initialData={selected}
-        onClose={() => {
-          setOpenForm(false);
-          setSelected(null);
-        }}
-        onSubmit={handleSubmitUpsert}
-        loading={saving}
-      />
-    </>
+        </Modal>
+      </Content>
+    </Layout>
   );
 };
 

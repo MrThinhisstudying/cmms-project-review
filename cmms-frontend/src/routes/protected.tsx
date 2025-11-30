@@ -10,6 +10,8 @@ import MaintenanceTasksPage from "../pages/MaintenanceTasks/MaintenanceTasks";
 import { InventoryManagementPage } from "../pages/Inventory/Inventory";
 import StockOutsPage from "../pages/StockOuts/StockOuts";
 import RepairsManagement from "../pages/RepairsManagement/RepairsManagement";
+import MaintenanceProcedurePage from "../pages/MaintenanceProcedure";
+import MaintenanceHistoryPage from "../pages/MaintenanceHistory";
 
 export const protectedRoutes = (userRole: string) => {
   if (userRole === "admin") {
@@ -28,6 +30,14 @@ export const protectedRoutes = (userRole: string) => {
           { path: "/quan_ly_sua_chua/*", element: <RepairsManagement /> },
           { path: "/quan_ly_bao_duong/*", element: <MaintenanceManagement /> },
           { path: "/quy_trinh_bao_duong/*", element: <MaintenanceTasksPage /> },
+          {
+            path: "/maintenance-procedures/*",
+            element: <MaintenanceProcedurePage />,
+          },
+          {
+            path: "/maintenance-history/*",
+            element: <MaintenanceHistoryPage />,
+          },
           { path: "/quan_ly_vat_tu/*", element: <InventoryManagementPage /> },
           { path: "/lay_vat_tu/*", element: <StockOutsPage /> },
           { path: "/bao_cao_thong_ke/*", element: <DevicesReport /> },
@@ -51,6 +61,14 @@ export const protectedRoutes = (userRole: string) => {
           { path: "/quan_ly_sua_chua/*", element: <RepairsManagement /> },
           { path: "/quan_ly_bao_duong/*", element: <MaintenanceManagement /> },
           { path: "/quy_trinh_bao_duong/*", element: <MaintenanceTasksPage /> },
+          {
+            path: "/maintenance-procedures/*",
+            element: <MaintenanceProcedurePage />,
+          },
+          {
+            path: "/maintenance-history/*",
+            element: <MaintenanceHistoryPage />,
+          },
           { path: "/quan_ly_vat_tu/*", element: <InventoryManagementPage /> },
           { path: "/lay_vat_tu/*", element: <StockOutsPage /> },
           { path: "/bao_cao_thong_ke/*", element: <DevicesReport /> },

@@ -17,6 +17,7 @@ import EngineeringIcon from "@mui/icons-material/Engineering";
 import ConstructionIcon from "@mui/icons-material/Construction";
 import ReplayIcon from "@mui/icons-material/Replay";
 import { Menu } from "../../../constants/menu";
+import { BookOutlined } from "@mui/icons-material";
 
 interface SidebarProps {
   mobileOpen: boolean;
@@ -71,6 +72,22 @@ const menuItems = [
     textColor: "#fff",
     color: "#FFC900",
     path: "/quy_trinh_bao_duong",
+    roles: ["admin", "staff", "manager"],
+  },
+  {
+    name: Menu.THU_VIEN_QUY_TRINH,
+    icon: <BookOutlined />, // Import icon từ antd
+    textColor: "#fff",
+    color: "#FFC900",
+    path: "/maintenance-procedures",
+    roles: ["admin", "staff", "manager"],
+  },
+  {
+    name: Menu.QUAN_LY_LICH_SU_PHIEU,
+    icon: <BookOutlined />, // Import icon từ antd
+    textColor: "#fff",
+    color: "#FFC900",
+    path: "/maintenance-history",
     roles: ["admin", "staff", "manager"],
   },
   {

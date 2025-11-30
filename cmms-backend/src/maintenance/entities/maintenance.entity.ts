@@ -35,21 +35,36 @@ export class Maintenance {
     @Column({type: 'timestamp', nullable: true})
     expired_date?: Date;
 
+    // --- CẬP NHẬT 1: Đổi kiểu Enum sang String để linh hoạt trạng thái (active, overdue...) ---
     @ApiProperty({enum: MaintenanceStatus, default: MaintenanceStatus.ACTIVE})
-    @Column({type: 'enum', enum: MaintenanceStatus, default: MaintenanceStatus.ACTIVE})
-    status: MaintenanceStatus;
+    @Column({default: MaintenanceStatus.ACTIVE}) // Bỏ type: 'enum' đi để tránh lỗi DB
+    status: string;
 
     @ApiProperty()
     @Column({type: 'text', nullable: true})
     description?: string;
 
+    // --- CẬP NHẬT 2: Đổi kiểu Enum sang String để hỗ trợ 1M, 2Y... ---
     @ApiProperty({enum: MaintenanceLevel})
-    @Column({type: 'enum', enum: MaintenanceLevel})
-    level: MaintenanceLevel;
-
+    @Column()
+    level: string;
     @ApiProperty({required: false})
     @Column({type: 'timestamp', nullable: true})
     last_notified_slot?: Date;
+
+    // --- CẬP NHẬT 3: THÊM 3 CỘT QUAN TRỌNG NÀY (Đang bị thiếu gây lỗi) ---
+    @ApiProperty({required: false})
+    @Column({type: 'timestamp', nullable: true})
+    last_maintenance_date: Date;
+
+    @ApiProperty({required: false})
+    @Column({type: 'timestamp', nullable: true})
+    next_maintenance_date: Date;
+
+    @ApiProperty({required: false})
+    @Column({nullable: true})
+    current_level: string;
+    // ---------------------------------------------------------------------
 
     @CreateDateColumn()
     created_at: Date;

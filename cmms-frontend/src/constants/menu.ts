@@ -7,6 +7,8 @@ export enum Menu {
   QUAN_LY_BAO_DUONG = "Quản lý bảo dưỡng",
   QUY_TRINH_BAO_DUONG = "Quy trình bảo dưỡng",
   QUAN_LY_VAT_TU = "Quản lý vật tư",
+  THU_VIEN_QUY_TRINH = "Thư viện quy trình",
+  QUAN_LY_LICH_SU_PHIEU = "Quản lý lịch sử phiếu",
   BAO_CAO_THONG_KE = "Báo cáo và thống kê",
   ROLLBACK = "Lịch sử thay đổi",
   DANG_XUAT = "Đăng xuất",

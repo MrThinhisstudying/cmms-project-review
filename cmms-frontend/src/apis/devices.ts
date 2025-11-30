@@ -2,12 +2,16 @@ import { IDevice } from "../types/devicesManagement.types";
 
 type DevicePayload = Partial<IDevice>;
 
-export const getAllDevices = async (): Promise<IDevice[]> => {
+export const getAllDevices = async (
+  token?: string | null
+): Promise<IDevice[]> => {
   try {
     const response = await fetch(`${process.env.REACT_APP_BASE_URL}/devices`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
+        // Thêm Authorization header
+        Authorization: token ? `Bearer ${token}` : "",
       },
     });
 
@@ -19,6 +23,7 @@ export const getAllDevices = async (): Promise<IDevice[]> => {
     }
 
     const res = await response.json();
+    // Đảm bảo backend trả về đúng cấu trúc này (res.data.result)
     return res.data.result;
   } catch (error) {
     return [];

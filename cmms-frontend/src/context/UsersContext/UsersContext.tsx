@@ -9,7 +9,7 @@ import {
 import { useAuthContext } from "../AuthContext/AuthContext";
 import { getAllUsers } from "../../apis/users";
 import { IUser, UsersContextValue } from "../../types/user.types";
-
+import { getToken } from "../../utils/auth";
 const UsersContext = createContext<UsersContextValue>({
   users: [],
   setUsers: () => {},
@@ -26,7 +26,8 @@ const UsersProvider = ({ children }: { children: ReactNode }) => {
     if (user) {
       try {
         setLoading(true);
-        const usersData = await getAllUsers();
+        const token = getToken(); // Lấy token
+        const usersData = await getAllUsers(token);
         setUsers(usersData || []);
       } catch (error) {
         console.error("Failed to fetch users:", error);

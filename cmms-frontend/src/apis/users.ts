@@ -9,23 +9,26 @@ export interface GetAllUsersResponse {
   };
 }
 
-export const getAllUsers = async () => {
+export const getAllUsers = async (token: string | null) => {
   try {
     const response = await fetch(`${process.env.REACT_APP_BASE_URL}/user`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
+        // Thêm dòng này để xác thực
+        Authorization: token ? `Bearer ${token}` : "",
       },
     });
 
     if (response.ok) {
       const res = await response.json();
-      return res?.data?.result as IUser[];
+      // Đảm bảo trả về mảng rỗng nếu không có dữ liệu
+      return (res?.data?.result || []) as IUser[];
     } else {
-      return null;
+      return [];
     }
   } catch (error) {
-    return null;
+    return [];
   }
 };
 
