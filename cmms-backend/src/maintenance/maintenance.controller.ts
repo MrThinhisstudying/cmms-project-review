@@ -68,17 +68,18 @@ export class MaintenanceController {
             throw new HttpException('Xóa thất bại', HttpStatus.BAD_REQUEST);
         }
     }
-    // 1. API Import Excel
+    // 9. Import Quy trình (Template) - ĐÃ CẬP NHẬT THEO YÊU CẦU CỦA BẠN
     @Post('templates/import')
     @UseInterceptors(FileInterceptor('file'))
     async importTemplate(
         @UploadedFile() file: Express.Multer.File,
         @Body('name') name: string,
-        @Body('device_type') deviceType: string, // <--- THÊM DÒNG NÀY
+        @Body('code') code: string, // <--- NHẬN THÊM CODE
+        @Body('device_type') deviceType: string,
     ) {
         if (!file) throw new HttpException('File is required', HttpStatus.BAD_REQUEST);
-        // Truyền thêm deviceType xuống Service
-        return this.maintenanceService.importTemplate(file.buffer, name, deviceType);
+        // Truyền đúng thứ tự sang Service
+        return this.maintenanceService.importTemplate(file.buffer, name, code, deviceType);
     }
 
     // 2. API Lấy danh sách mẫu (cho Dropdown)
@@ -108,6 +109,22 @@ export class MaintenanceController {
     @Put('templates/:id')
     async updateTemplate(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
         return this.maintenanceService.updateTemplate(id, body);
+    }
+
+    // THÊM API NÀY VÀO CONTROLLER
+    @Get('device/:deviceId') // Endpoint sẽ là: GET /maintenance/device/:deviceId
+    async findMaintenanceByDevice(@Param('deviceId', ParseIntPipe) deviceId: number) {
+        try {
+            const data = await this.maintenanceService.findByDevice(deviceId);
+            return {message: 'Lịch bảo dưỡng chi tiết theo thiết bị', data};
+        } catch (error) {
+            throw new HttpException('Lỗi tải lịch bảo dưỡng chi tiết', HttpStatus.NOT_FOUND);
+        }
+    }
+
+    @Put(':id/cancel')
+    async cancel(@Param('id', ParseIntPipe) id: number) {
+        return this.maintenanceService.cancel(id);
     }
 }
 

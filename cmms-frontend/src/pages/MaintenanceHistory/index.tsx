@@ -6,26 +6,59 @@ import {
   Card,
   Tooltip,
   message,
-  DatePicker,
   Input,
   Space,
+  DatePicker,
+  Select,
+  Row,
+  Col,
+  Modal,
 } from "antd";
-import { EyeOutlined, SearchOutlined, ReloadOutlined } from "@ant-design/icons";
-import { getMaintenanceHistory } from "../../apis/maintenance";
+import {
+  EyeOutlined,
+  SearchOutlined,
+  ReloadOutlined,
+  FilePdfOutlined,
+  FilterOutlined,
+  StopOutlined,
+  ExclamationCircleOutlined,
+} from "@ant-design/icons";
+import {
+  getMaintenanceHistory,
+  cancelMaintenanceTicket,
+} from "../../apis/maintenance";
 import { getToken } from "../../utils/auth";
-import { FilePdfOutlined } from "@ant-design/icons";
+import TicketDetailModal from "./components/TicketDetailModal";
+import dayjs from "dayjs";
+import isBetween from "dayjs/plugin/isBetween";
+
+dayjs.extend(isBetween);
+
+const { RangePicker } = DatePicker;
+const { Option } = Select;
 
 const MaintenanceHistoryPage: React.FC = () => {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // --- STATE BỘ LỌC ---
   const [searchText, setSearchText] = useState("");
+  const [filterLevel, setFilterLevel] = useState<string | undefined>(undefined);
+  const [filterStatus, setFilterStatus] = useState<string | undefined>(
+    undefined
+  );
+  const [dateRange, setDateRange] = useState<any>(null);
+
+  // State Modal
+  const [selectedTicket, setSelectedTicket] = useState<any>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const token = getToken();
       const res = await getMaintenanceHistory(token);
-      setData(res);
+      setData(Array.isArray(res) ? res : []);
     } catch (error) {
       message.error("Lỗi tải dữ liệu lịch sử");
     } finally {
@@ -37,37 +70,65 @@ const MaintenanceHistoryPage: React.FC = () => {
     fetchData();
   }, []);
 
-  // 2. Hàm xử lý download
+  // Hàm tải PDF
   const handleDownloadPdf = async (ticketId: number) => {
     try {
-      message.loading("Đang tạo PDF...", 1);
+      message.loading({ content: "Đang tạo PDF...", key: "pdf_loading" });
       const token = getToken();
-      // Gọi thẳng URL Backend để browser tự tải
-      const url = `${process.env.REACT_APP_BASE_URL}/maintenance-tickets/${ticketId}/pdf?token=${token}`;
+      const url = `${process.env.REACT_APP_BASE_URL}/maintenance-tickets/${ticketId}/pdf`;
 
-      // Cách tải file an toàn hơn qua Blob (nếu API yêu cầu Header Authorization)
-      const response = await fetch(
-        `${process.env.REACT_APP_BASE_URL}/maintenance-tickets/${ticketId}/pdf`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (!response.ok) throw new Error("Lỗi tải file");
 
       const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = window.URL.createObjectURL(blob);
+      link.href = downloadUrl;
       link.download = `Phieu_Bao_Duong_${ticketId}.pdf`;
+      document.body.appendChild(link);
       link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
 
-      message.success("Tải xong!");
+      message.success({ content: "Tải xong!", key: "pdf_loading" });
     } catch (e) {
-      message.error("Không thể tải file PDF");
+      message.error({ content: "Không thể tải file PDF", key: "pdf_loading" });
     }
   };
 
-  // Cấu hình cột
+  // Hàm hủy phiếu
+  const handleCancelTicket = (ticketId: number) => {
+    let reason = "";
+    Modal.confirm({
+      title: "Hủy phiếu bảo dưỡng này?",
+      icon: <ExclamationCircleOutlined />,
+      content: (
+        <div>
+          <p>Hành động này sẽ đổi trạng thái phiếu sang "Đã hủy".</p>
+          <Input
+            placeholder="Nhập lý do hủy..."
+            onChange={(e) => (reason = e.target.value)}
+          />
+        </div>
+      ),
+      okText: "Xác nhận Hủy",
+      okType: "danger",
+      onOk: async () => {
+        if (!reason.trim()) return message.warning("Vui lòng nhập lý do!");
+        try {
+          await cancelMaintenanceTicket(ticketId, reason, getToken());
+          message.success("Đã hủy phiếu");
+          fetchData(); // Reload bảng
+        } catch (e) {
+          message.error("Lỗi hủy phiếu");
+        }
+      },
+    });
+  };
+
   const columns = [
     {
       title: "Mã Phiếu",
@@ -83,7 +144,7 @@ const MaintenanceHistoryPage: React.FC = () => {
         <div>
           <div style={{ fontWeight: 600, color: "#1890ff" }}>{text}</div>
           <div style={{ fontSize: 12, color: "#888" }}>
-            {record.device?.brand}
+            {record.device?.brand} ({record.device?.serial_number})
           </div>
         </div>
       ),
@@ -92,95 +153,202 @@ const MaintenanceHistoryPage: React.FC = () => {
       title: "Cấp độ",
       dataIndex: "maintenance_level",
       align: "center" as const,
-      render: (text: string) => <Tag color="orange">{text}</Tag>,
-    },
-    {
-      title: "Quy trình áp dụng",
-      dataIndex: ["template", "name"],
-      ellipsis: true,
+      width: 120,
+      render: (text: string) => {
+        const map: any = {
+          "1M": "01 Tháng",
+          "3M": "03 Tháng",
+          "6M": "06 Tháng",
+          "1Y": "01 Năm",
+          "2Y": "02 Năm",
+        };
+        return <Tag color="orange">{map[text] || text}</Tag>;
+      },
     },
     {
       title: "Người thực hiện",
       dataIndex: ["user", "name"],
-      render: (t: string) => t || "---",
+      render: (t: string) => t || <span style={{ color: "#ccc" }}>---</span>,
     },
     {
       title: "Ngày hoàn thành",
-      dataIndex: "created_at",
-      render: (d: string) =>
-        d ? new Date(d).toLocaleDateString("vi-VN") : "-",
+      dataIndex: "execution_date",
+      width: 120,
+      align: "center" as const,
+      render: (d: string) => (d ? dayjs(d).format("DD/MM/YYYY") : "-"),
+    },
+    {
+      title: "Trạng thái",
+      dataIndex: "status",
+      align: "center" as const,
+      width: 120,
+      render: (status: string) => {
+        const mapColor: any = { done: "green", canceled: "error" };
+        const mapText: any = { done: "Hoàn thành", canceled: "Đã hủy" };
+        return (
+          <Tag color={mapColor[status] || "default"}>
+            {mapText[status] || status}
+          </Tag>
+        );
+      },
     },
     {
       title: "Thao tác",
       key: "action",
-      width: 100,
+      width: 150,
       align: "center" as const,
       render: (_, record: any) => (
-        <Tooltip title="Xem chi tiết kết quả">
-          <Button
-            icon={<EyeOutlined />}
-            onClick={() => message.info("Chức năng xem chi tiết sẽ làm sau")}
-          />
-        </Tooltip>
-      ),
-    },
-    {
-      title: "Thao tác",
-      key: "action",
-      render: (_, record) => (
-        <Tooltip title="Tải PDF">
-          <Button
-            icon={<FilePdfOutlined />}
-            size="small"
-            type="dashed"
-            onClick={() => handleDownloadPdf(record.ticket_id)} // <--- GỌI HÀM
-          />
-        </Tooltip>
+        <Space size="small">
+          <Tooltip title="Xem chi tiết">
+            <Button
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => {
+                setSelectedTicket(record);
+                setIsDetailOpen(true);
+              }}
+            />
+          </Tooltip>
+
+          <Tooltip title="Tải PDF">
+            <Button
+              type="primary"
+              ghost
+              size="small"
+              icon={<FilePdfOutlined />}
+              onClick={() => handleDownloadPdf(record.ticket_id)}
+            />
+          </Tooltip>
+
+          {/* Chỉ hiện nút hủy nếu chưa hủy */}
+          {record.status !== "canceled" && (
+            <Tooltip title="Hủy phiếu">
+              <Button
+                danger
+                size="small"
+                icon={<StopOutlined />}
+                onClick={() => handleCancelTicket(record.ticket_id)}
+              />
+            </Tooltip>
+          )}
+        </Space>
       ),
     },
   ];
 
-  // Lọc dữ liệu theo Search Text
-  const filteredData = data.filter(
-    (item) =>
+  // --- LOGIC LỌC DỮ LIỆU ---
+  const filteredData = data.filter((item) => {
+    const matchText =
+      !searchText ||
       item.device?.name?.toLowerCase().includes(searchText.toLowerCase()) ||
-      item.user?.name?.toLowerCase().includes(searchText.toLowerCase())
-  );
+      item.user?.name?.toLowerCase().includes(searchText.toLowerCase()) ||
+      item.device?.serial_number
+        ?.toLowerCase()
+        .includes(searchText.toLowerCase());
+
+    const matchLevel = !filterLevel || item.maintenance_level === filterLevel;
+    const matchStatus = !filterStatus || item.status === filterStatus;
+
+    let matchDate = true;
+    if (dateRange && dateRange[0] && dateRange[1]) {
+      const ticketDate = dayjs(item.created_at);
+      matchDate = ticketDate.isBetween(dateRange[0], dateRange[1], "day", "[]");
+    }
+
+    return matchText && matchLevel && matchStatus && matchDate;
+  });
 
   return (
     <div style={{ padding: 24 }}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          marginBottom: 16,
-        }}
-      >
-        <h2 style={{ margin: 0 }}>📜 Lịch Sử Bảo Dưỡng</h2>
-        <Space>
-          <Input
-            placeholder="Tìm theo tên xe, tên thợ..."
-            prefix={<SearchOutlined />}
-            onChange={(e) => setSearchText(e.target.value)}
-            style={{ width: 250 }}
-          />
+      <div style={{ marginBottom: 16 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            marginBottom: 16,
+          }}
+        >
+          <h2 style={{ margin: 0 }}>📜 Lịch Sử Bảo Dưỡng</h2>
           <Button icon={<ReloadOutlined />} onClick={fetchData}>
             Làm mới
           </Button>
-        </Space>
+        </div>
+
+        {/* THANH BỘ LỌC */}
+        <Card bodyStyle={{ padding: 16 }} style={{ borderRadius: 8 }}>
+          <Row gutter={[12, 12]}>
+            <Col xs={24} md={6}>
+              <Input
+                placeholder="🔍 Tìm tên xe, biển số..."
+                prefix={<SearchOutlined style={{ color: "#999" }} />}
+                onChange={(e) => setSearchText(e.target.value)}
+                allowClear
+              />
+            </Col>
+            <Col xs={12} md={4}>
+              <Select
+                placeholder="Lọc cấp độ"
+                style={{ width: "100%" }}
+                allowClear
+                onChange={setFilterLevel}
+              >
+                <Option value="1M">01 Tháng</Option>
+                <Option value="3M">03 Tháng</Option>
+                <Option value="6M">06 Tháng</Option>
+                <Option value="1Y">01 Năm</Option>
+              </Select>
+            </Col>
+            <Col xs={12} md={4}>
+              <Select
+                placeholder="Lọc trạng thái"
+                style={{ width: "100%" }}
+                allowClear
+                onChange={setFilterStatus}
+              >
+                <Option value="done">Hoàn thành</Option>
+                <Option value="canceled">Đã hủy</Option>
+              </Select>
+            </Col>
+            <Col xs={12} md={6}>
+              <RangePicker
+                style={{ width: "100%" }}
+                format="DD/MM/YYYY"
+                onChange={(dates) => setDateRange(dates)}
+              />
+            </Col>
+            <Col xs={24} md={4} style={{ textAlign: "right" }}>
+              <div style={{ lineHeight: "32px", color: "#888" }}>
+                <FilterOutlined /> <b>{filteredData.length}</b> phiếu
+              </div>
+            </Col>
+          </Row>
+        </Card>
       </div>
 
       <Card
         style={{ borderRadius: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}
+        bodyStyle={{ padding: 0 }}
       >
         <Table
           dataSource={filteredData}
           columns={columns}
           rowKey="ticket_id"
           loading={loading}
-          pagination={{ pageSize: 10 }}
+          pagination={{
+            pageSize: 10,
+            showTotal: (total) => `Tổng ${total} phiếu`,
+          }}
         />
       </Card>
+
+      <TicketDetailModal
+        open={isDetailOpen}
+        data={selectedTicket}
+        onCancel={() => {
+          setIsDetailOpen(false);
+          setSelectedTicket(null);
+        }}
+      />
     </div>
   );
 };

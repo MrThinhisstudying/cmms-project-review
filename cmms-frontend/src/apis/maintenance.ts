@@ -20,16 +20,21 @@ export const getAllMaintenances = async (): Promise<IMaintenance[]> => {
   return (j?.data ?? j) as IMaintenance[];
 };
 
+// Thêm hàm API này vào src/apis/maintenance.ts
 export const getMaintenancesByDevice = async (
   deviceId: number,
-  token?: string | null
-): Promise<IMaintenance[]> => {
-  const res = await fetch(`${BASE}/devices/${deviceId}/maintenance`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  token: string | null
+) => {
+  const BASE = process.env.REACT_APP_BASE_URL as string;
+
+  const res = await fetch(`${BASE}/maintenance/device/${deviceId}`, {
+    // <--- Đảm bảo URL gọi đúng endpoint mới
+    headers: { Authorization: token ? `Bearer ${token}` : "" },
   });
-  if (!res.ok) throw new Error("Không lấy được lịch sử bảo trì");
-  const j = await res.json().catch(() => null);
-  return (j?.data ?? j) as IMaintenance[];
+
+  if (!res.ok) throw new Error("Lỗi tải lịch sử bảo dưỡng chi tiết");
+  const data = await res.json();
+  return data.data;
 };
 
 export const getMaintenanceDetail = async (
@@ -99,12 +104,14 @@ export const importTemplate = async (
   file: File,
   name: string,
   deviceType: string,
+  code: string,
   token: string | null
 ) => {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("name", name);
-
+  formData.append("code", code);
+  formData.append("device_type", deviceType);
   const res = await fetch(`${BASE}/maintenance/templates/import`, {
     method: "POST",
     headers: {
@@ -233,4 +240,35 @@ export const getMaintenanceHistory = async (token: string | null) => {
   // Trả về j.data nếu cấu trúc backend là { message: "...", data: [...] }
   // Hoặc trả về j nếu backend trả mảng trực tiếp
   return j.data || j;
+};
+
+// 1. Hủy Kế hoạch
+export const cancelMaintenancePlan = async (
+  id: number,
+  token: string | null
+) => {
+  const res = await fetch(`${BASE}/maintenance/${id}/cancel`, {
+    method: "PUT",
+    headers: { Authorization: token ? `Bearer ${token}` : "" },
+  });
+  if (!res.ok) throw new Error("Hủy kế hoạch thất bại");
+  return await res.json();
+};
+
+// 2. Hủy Phiếu (Ticket)
+export const cancelMaintenanceTicket = async (
+  id: number,
+  reason: string,
+  token: string | null
+) => {
+  const res = await fetch(`${BASE}/maintenance-tickets/${id}/cancel`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: token ? `Bearer ${token}` : "",
+    },
+    body: JSON.stringify({ reason }),
+  });
+  if (!res.ok) throw new Error("Hủy phiếu thất bại");
+  return await res.json();
 };

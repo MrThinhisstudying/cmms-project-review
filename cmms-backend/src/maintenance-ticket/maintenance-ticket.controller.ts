@@ -124,5 +124,10 @@ export class MaintenanceTicketController {
 
         res.end(buffer);
     }
+
+    @Put(':id/cancel')
+    async cancelTicket(@Param('id', ParseIntPipe) id: number, @Body('reason') reason: string) {
+        return this.ticketService.cancel(id, reason);
+    }
 }
 

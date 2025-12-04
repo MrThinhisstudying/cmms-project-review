@@ -1,56 +1,257 @@
-import React, { useState } from "react";
-import { Modal, Layout } from "antd";
+import React, { useState, useEffect } from "react";
+import {
+  Modal,
+  Layout,
+  Card,
+  Row,
+  Col,
+  Input,
+  Select,
+  DatePicker,
+  Button,
+  message,
+  Space,
+} from "antd";
+import {
+  SearchOutlined,
+  ReloadOutlined,
+  FilterOutlined,
+} from "@ant-design/icons";
 import MaintenanceHeader from "./components/MaintenanceHeader";
 import MaintenanceTable from "./components/MaintenanceTable";
 import MaintenanceForm from "./components/MaintenanceForm";
+import EditPlanModal from "./components/EditPlanModal";
+import { getAllMaintenances } from "../../apis/maintenance";
+import moment from "moment";
 
 const { Content } = Layout;
+const { Option } = Select;
+const { RangePicker } = DatePicker;
 
 const MaintenanceManagement: React.FC = () => {
-  // State quản lý đóng mở Modal tạo phiếu
+  // --- STATE QUẢN LÝ MODAL ---
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [initialData, setInitialData] = useState<any>(null);
 
-  // State dùng để ép Table load lại dữ liệu (mỗi khi số này thay đổi)
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<any>(null);
 
-  // Hàm được gọi khi Import Excel thành công hoặc Tạo phiếu thành công
+  // --- STATE DỮ LIỆU ---
+  const [allData, setAllData] = useState<any[]>([]);
+  const [filteredData, setFilteredData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  // --- STATE BỘ LỌC ---
+  const [searchText, setSearchText] = useState("");
+  const [filterLevel, setFilterLevel] = useState<string | undefined>(undefined);
+  const [filterStatus, setFilterStatus] = useState<string | undefined>(
+    undefined
+  );
+  const [dateRange, setDateRange] = useState<any>(null);
+
+  // 1. Hàm lấy dữ liệu từ Server
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const res = await getAllMaintenances();
+      const data = Array.isArray(res) ? res : [];
+      setAllData(data);
+      setFilteredData(data); // Mới vào chưa lọc thì bằng data gốc
+    } catch (error) {
+      message.error("Không thể tải danh sách kế hoạch");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Gọi API khi vào trang
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // 2. Logic Lọc Dữ Liệu
+  useEffect(() => {
+    let result = [...allData];
+
+    // Lọc theo Từ khóa
+    if (searchText) {
+      const lowerText = searchText.toLowerCase();
+      result = result.filter(
+        (item) =>
+          item.device?.name?.toLowerCase().includes(lowerText) ||
+          item.device?.serial_number?.toLowerCase().includes(lowerText)
+      );
+    }
+
+    // Lọc theo Cấp độ
+    if (filterLevel) {
+      result = result.filter((item) => item.level === filterLevel);
+    }
+
+    // Lọc theo Trạng thái (Frontend logic)
+    if (filterStatus) {
+      const today = moment().startOf("day");
+      result = result.filter((item) => {
+        if (item.status !== "active") return filterStatus === item.status;
+
+        if (!item.next_maintenance_date) return false;
+        const nextDate = moment(item.next_maintenance_date).startOf("day");
+        const diffDays = nextDate.diff(today, "days");
+
+        if (filterStatus === "overdue") return diffDays < 0;
+        if (filterStatus === "warning") return diffDays >= 0 && diffDays <= 5;
+        if (filterStatus === "active") return diffDays > 5;
+        return false;
+      });
+    }
+
+    // Lọc theo Ngày đến hạn
+    if (dateRange && dateRange[0] && dateRange[1]) {
+      const start = dateRange[0].startOf("day");
+      const end = dateRange[1].endOf("day");
+      result = result.filter((item) => {
+        if (!item.next_maintenance_date) return false;
+        const nextDate = moment(item.next_maintenance_date);
+        return nextDate.isSameOrAfter(start) && nextDate.isSameOrBefore(end);
+      });
+    }
+
+    setFilteredData(result);
+  }, [searchText, filterLevel, filterStatus, dateRange, allData]);
+
+  // --- HANDLERS ---
   const handleRefresh = () => {
-    setRefreshKey((prev) => prev + 1); // Tăng biến đếm -> Table thấy đổi -> Tự gọi lại API
-    setIsModalOpen(false); // Đóng modal
+    fetchData();
+    setIsModalOpen(false);
+    setIsEditOpen(false);
+  };
+
+  const handleCreateNew = () => {
+    setInitialData(null);
+    setIsModalOpen(true);
+  };
+
+  const handlePerformMaintenance = (record: any) => {
+    setInitialData({
+      device_id: record.device?.device_id,
+      maintenance_level: record.level,
+      scheduled_date: record.next_maintenance_date,
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleEditPlan = (record: any) => {
+    setEditingRecord(record);
+    setIsEditOpen(true);
   };
 
   return (
-    <Layout style={{ minHeight: "100vh", background: "#f0f2f5" }}>
-      <Content style={{ padding: "24px" }}>
-        {/* 1. HEADER: Chứa nút Import và nút Tạo mới */}
-        {/* Truyền handleRefresh xuống để nút Import gọi khi upload xong */}
-        <MaintenanceHeader
-          onCreate={() => setIsModalOpen(true)}
-          onRefresh={handleRefresh}
-        />
+    <div
+      style={{
+        width: "100%",
+        padding: "24px",
+        background: "#f0f2f5",
+        minHeight: "100vh",
+      }}
+    >
+      {/* Header */}
+      <MaintenanceHeader onCreate={handleCreateNew} onRefresh={fetchData} />
 
-        {/* 2. TABLE: Hiển thị danh sách */}
-        {/* Table tự fetch dữ liệu, chỉ cần nhận refreshKey để biết khi nào cần reload */}
-        <MaintenanceTable refreshKey={refreshKey} />
+      {/* Filter Bar */}
+      <Card
+        bodyStyle={{ padding: "16px" }}
+        style={{ marginBottom: 16, borderRadius: 8 }}
+      >
+        <Row gutter={[16, 16]}>
+          <Col xs={24} md={6}>
+            <Input
+              placeholder="🔍 Tìm thiết bị, biển số..."
+              prefix={<SearchOutlined style={{ color: "#bfbfbf" }} />}
+              onChange={(e) => setSearchText(e.target.value)}
+              allowClear
+            />
+          </Col>
+          <Col xs={12} md={4}>
+            <Select
+              placeholder="Cấp độ"
+              style={{ width: "100%" }}
+              allowClear
+              onChange={setFilterLevel}
+            >
+              <Option value="1M">01 Tháng</Option>
+              <Option value="3M">03 Tháng</Option>
+              <Option value="6M">06 Tháng</Option>
+              <Option value="9M">09 Tháng</Option>
+              <Option value="1Y">01 Năm</Option>
+              <Option value="2Y">02 Năm</Option>
+            </Select>
+          </Col>
+          <Col xs={12} md={4}>
+            <Select
+              placeholder="Trạng thái"
+              style={{ width: "100%" }}
+              allowClear
+              onChange={setFilterStatus}
+            >
+              <Option value="overdue">🔴 Quá hạn</Option>
+              <Option value="warning">🟠 Sắp đến hạn</Option>
+              <Option value="active">🔵 Đang theo dõi</Option>
+            </Select>
+          </Col>
+          <Col xs={12} md={6}>
+            <RangePicker
+              style={{ width: "100%" }}
+              format="DD/MM/YYYY"
+              onChange={(dates) => setDateRange(dates)}
+            />
+          </Col>
+          <Col xs={24} md={4} style={{ textAlign: "right" }}>
+            <div style={{ lineHeight: "32px", color: "#888" }}>
+              <FilterOutlined /> <b>{filteredData.length}</b> xe
+            </div>
+          </Col>
+        </Row>
+      </Card>
 
-        {/* 3. MODAL: Chứa Form tạo phiếu bảo dưỡng */}
-        <Modal
-          title="Lập Phiếu Bảo Dưỡng"
-          open={isModalOpen} // Antd v5 dùng 'open' (thay vì 'visible')
+      {/* BẢNG DỮ LIỆU (Đã sửa props cho khớp với con) */}
+      <MaintenanceTable
+        loading={loading} // Truyền loading
+        dataSource={filteredData} // Truyền data đã lọc
+        onCreateTicket={handlePerformMaintenance}
+        onEdit={handleEditPlan}
+        onRefresh={fetchData}
+      />
+
+      {/* Modal Lập phiếu */}
+      <Modal
+        title={
+          initialData
+            ? "Thực Hiện Bảo Dưỡng Định Kỳ"
+            : "Lập Phiếu Bảo Dưỡng Mới"
+        }
+        open={isModalOpen}
+        onCancel={() => setIsModalOpen(false)}
+        footer={null}
+        width={1000}
+        destroyOnClose
+        maskClosable={false}
+        style={{ top: 20 }}
+      >
+        <MaintenanceForm
+          initialData={initialData}
+          onSuccess={handleRefresh}
           onCancel={() => setIsModalOpen(false)}
-          footer={null} // Ẩn footer mặc định vì Form đã có nút Lưu riêng
-          width={1000} // Để rộng ra cho dễ nhìn Checklist
-          destroyOnClose // Reset form khi đóng
-          maskClosable={false} // Bắt buộc bấm dấu X hoặc Hủy mới đóng
-          style={{ top: 20 }}
-        >
-          <MaintenanceForm
-            onSuccess={handleRefresh}
-            onCancel={() => setIsModalOpen(false)}
-          />
-        </Modal>
-      </Content>
-    </Layout>
+        />
+      </Modal>
+
+      {/* Modal Sửa kế hoạch */}
+      <EditPlanModal
+        open={isEditOpen}
+        data={editingRecord}
+        onCancel={() => setIsEditOpen(false)}
+        onSuccess={handleRefresh}
+      />
+    </div>
   );
 };
 

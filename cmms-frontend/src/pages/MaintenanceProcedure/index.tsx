@@ -151,6 +151,19 @@ const MaintenanceProcedurePage: React.FC = () => {
       align: "center" as const,
       render: (text: any, record: any, index: number) => index + 1,
     },
+    // --- THÊM CỘT NÀY VÀO ĐẦU ---
+    {
+      title: "Mã quy trình",
+      dataIndex: "code",
+      key: "code",
+      width: 150,
+      render: (text: string) => (
+        <span style={{ fontWeight: "bold", color: "#1890ff" }}>
+          {text || "---"}
+        </span>
+      ),
+    },
+    // -----------------------------
     {
       title: "Tên Quy Trình",
       dataIndex: "name",

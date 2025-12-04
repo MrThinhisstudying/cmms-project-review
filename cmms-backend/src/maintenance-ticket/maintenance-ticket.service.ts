@@ -11,6 +11,7 @@ import * as puppeteer from 'puppeteer';
 import * as fs from 'fs';
 import * as path from 'path';
 import {buildPdfTemplate} from './utils/pdf-template.util';
+
 @Injectable()
 export class MaintenanceTicketService {
     constructor(
@@ -36,16 +37,15 @@ export class MaintenanceTicketService {
         return await this.ticketRepo.save(t);
     }
 
-    // --- THÊM HÀM XỬ LÝ TỪ APP ---
+    // --- HÀM TẠO PHIẾU TỪ APP (ĐÃ FIX NGÀY) ---
     async createFromApp(data: any, user: any) {
-        // data: { device_id, template_id, maintenance_level, checklist_result, arising_issues }
-
-        // 1. Tìm Maintenance Plan hiện tại của xe này (để link vào)
-        // (Logic đơn giản: Lấy cái plan ACTIVE gần nhất của device đó)
         const plans = await this.maintenanceService.findByDevice(data.device_id);
-        const activePlan = plans.find((p) => p.status === 'active');
+        const activePlan = plans.find((p) => p.status === 'active' || p.status === 'warning' || p.status === 'overdue');
 
         const template = await this.templateRepo.findOne({where: {id: data.template_id}});
+
+        // Lấy ngày thực hiện từ Form
+        const actualDate = data.execution_date ? new Date(data.execution_date) : new Date();
 
         const ticket = this.ticketRepo.create({
             device: {device_id: data.device_id} as any,
@@ -55,30 +55,26 @@ export class MaintenanceTicketService {
             maintenance_level: data.maintenance_level,
             checklist_result: data.checklist_result,
             arising_issues: data.arising_issues,
-
-            // --- MAP DỮ LIỆU MỚI VÀO ĐÂY ---
             working_hours: data.working_hours,
             execution_team: data.execution_team,
             acceptance_result: data.acceptance_result,
             final_conclusion: data.final_conclusion,
-            // Nếu có ngày thực hiện thì lấy, không thì lấy ngày hiện tại
-            execution_date: data.execution_date ? new Date(data.execution_date) : new Date(),
-            // -------------------------------
-            // --- THÊM MỚI ---
-            leader_user_id: data.leader_user_id,
-            operator_user_id: data.operator_user_id,
-            // ----------------
+
+            // --- FIX: Lưu ngày thực tế ---
+            execution_date: actualDate,
+            completed_at: actualDate, // Lưu completed_at bằng ngày thực hiện luôn
+            // ----------------------------
+
+            leader_user: data.leader_user_id ? ({user_id: data.leader_user_id} as any) : null,
+            operator_user: data.operator_user_id ? ({user_id: data.operator_user_id} as any) : null,
             status: 'done',
-            completed_at: new Date(),
-            created_at: new Date(),
+            created_at: new Date(), // Ngày tạo bản ghi (Audit log)
         });
 
         const saved = await this.ticketRepo.save(ticket);
 
-        // 2. Nếu có Plan, cập nhật ngày tiếp theo luôn
         if (activePlan) {
-            // Gọi hàm bạn đã viết sẵn bên MaintenanceService để sinh lịch tiếp theo
-            await this.maintenanceService.markCompletedAndSpawnNext(activePlan.maintenance_id);
+            await this.maintenanceService.markCompletedAndSpawnNext(activePlan.maintenance_id, actualDate);
         }
 
         return saved;
@@ -161,7 +157,7 @@ export class MaintenanceTicketService {
         const saved = await this.ticketRepo.save(t);
         const maint = await this.maintenanceService.findOne(t.maintenance.maintenance_id);
         if (maint.status === MaintenanceStatus.ACTIVE) {
-            await this.maintenanceService.markCompletedAndSpawnNext(t.maintenance.maintenance_id);
+            await this.maintenanceService.markCompletedAndSpawnNext(t.maintenance.maintenance_id, new Date());
         }
         return {ticket: saved};
     }
@@ -172,23 +168,32 @@ export class MaintenanceTicketService {
         return {success: true};
     }
 
+    // 1. Lấy tất cả lịch sử
     async findAll() {
-        return this.ticketRepo.find({
-            relations: ['device', 'user', 'template'], // Join để lấy tên xe, tên thợ, tên quy trình
+        return await this.ticketRepo.find({
+            relations: ['device', 'user', 'template', 'leader_user', 'operator_user'],
             order: {created_at: 'DESC'},
         });
     }
 
-    // Lấy toàn bộ lịch sử phiếu (kèm thông tin xe, thợ, quy trình)
-    async findAllHistory() {
+    // 2. Lấy lịch sử theo thiết bị
+    async findHistoryByDevice(deviceId: number) {
         return await this.ticketRepo.find({
-            relations: ['device', 'user', 'template'], // Join bảng để lấy tên
-            order: {created_at: 'DESC'}, // Mới nhất lên đầu
+            where: {device: {device_id: deviceId}},
+            relations: ['user', 'template', 'leader_user', 'operator_user'],
+            order: {created_at: 'DESC'},
         });
     }
 
+    async findAllHistory() {
+        return await this.ticketRepo.find({
+            relations: ['device', 'user', 'template'],
+            order: {created_at: 'DESC'},
+        });
+    }
+
+    // --- XUẤT PDF (ĐÃ CẬP NHẬT FOOTER CHUẨN) ---
     async exportPdf(ticketId: number) {
-        // 1. Lấy dữ liệu phiếu đầy đủ
         const ticket = await this.ticketRepo.findOne({
             where: {ticket_id: ticketId},
             relations: ['device', 'leader_user', 'operator_user'],
@@ -196,37 +201,78 @@ export class MaintenanceTicketService {
 
         if (!ticket) throw new NotFoundException('Phiếu không tồn tại');
 
-        // 2. Tạo HTML từ template
         const htmlContent = buildPdfTemplate(ticket);
 
-        // 3. Khởi động Puppeteer để in
-        const browser = await puppeteer.launch({headless: true});
-        const page = await browser.newPage();
-        await page.setContent(htmlContent);
+        const browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        });
 
-        // 4. Tạo file PDF
+        const page = await browser.newPage();
+        await page.setContent(htmlContent, {waitUntil: 'networkidle0'});
+
+        // --- ĐỊNH NGHĨA FOOTER HTML & CSS ---
+        // Lưu ý: CSS của Footer hoạt động độc lập, cần khai báo size chữ cụ thể
+        const footerHTML = `
+            <style>
+                .footer-wrapper {
+                    font-family: 'Times New Roman', serif;
+                    font-size: 10px; /* Cỡ chữ chuẩn cho footer */
+                    width: 100%;
+                    margin-left: 20px;
+                    margin-right: 20px;
+                    padding-top: 5px;
+                    border-top: 1px solid #000; 
+                    display: flex;
+                    justify-content: space-between;
+                    color: #000;
+                }
+                .bold { font-weight: bold; }
+                .right-col { text-align: right; }
+            </style>
+            
+            <div class="footer-wrapper">
+                <div style="width: 30%;">
+                    <span class="bold">B06.QT08/VCS-KT-TTB</span>
+                </div>
+                <div style="width: 30%; text-align: center;">
+                    Lần ban hành/ sửa đổi: <span class="bold">01/00</span>
+                </div>
+                <div style="width: 40%;" class="right-col">
+                    <div><span class="pageNumber"></span>/<span class="totalPages"></span></div>
+                </div>
+            </div>
+        `;
+
         const buffer = await page.pdf({
             format: 'A4',
             printBackground: true,
-            margin: {top: '20px', bottom: '20px', left: '20px', right: '20px'},
+            displayHeaderFooter: true, // <--- BẮT BUỘC: Bật chế độ Footer
+
+            headerTemplate: '<div></div>', // Header rỗng (để ẩn URL mặc định)
+            footerTemplate: footerHTML, // <--- Chèn Footer vào đây
+
+            margin: {
+                top: '20px',
+                // QUAN TRỌNG: Tăng lề dưới để chứa Footer (70px ~ 2cm)
+                // Nếu để 20px như cũ, Footer sẽ bị đè hoặc ẩn mất
+                bottom: '70px',
+                left: '20px',
+                right: '20px',
+            },
         });
 
         await browser.close();
 
-        // 5. (Tùy chọn) Lưu file vào ổ cứng để làm "Kho lưu trữ Offline"
-        const fileName = `ticket_${ticketId}_${Date.now()}.pdf`;
-        const uploadDir = './uploads/tickets';
+        // (Đoạn lưu file vào ổ cứng nếu bạn cần thì giữ lại, không thì return buffer luôn)
+        return buffer;
+    }
 
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, {recursive: true});
-        }
-        fs.writeFileSync(path.join(uploadDir, fileName), buffer);
-
-        // Cập nhật đường dẫn vào DB
-        ticket.pdf_file_path = `/uploads/tickets/${fileName}`;
-        await this.ticketRepo.save(ticket);
-
-        return buffer; // Trả về buffer để Controller gửi xuống Client
+    async cancel(id: number, reason: string) {
+        const ticket = await this.findOne(id);
+        ticket.status = 'canceled';
+        ticket.arising_issues = (ticket.arising_issues || '') + ` [HỦY: ${reason}]`;
+        return await this.ticketRepo.save(ticket);
     }
 }
 

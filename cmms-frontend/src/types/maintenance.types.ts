@@ -41,6 +41,11 @@ export interface IMaintenance {
   description?: string | null;
   created_at?: string;
   updated_at?: string;
+  last_maintenance_date?: string | null; // Ngày làm gần nhất
+  next_maintenance_date?: string | null; // Ngày đến hạn (dùng để tính trạng thái)
+  current_level?: string | null; // Cấp độ hiện tại
+  cycle_config?: string[]; // Cấu hình chu kỳ
+  start_date?: string | null;
 }
 
 export interface MaintenanceUpsertPayload {

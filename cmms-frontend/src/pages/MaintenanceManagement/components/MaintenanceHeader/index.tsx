@@ -37,7 +37,7 @@ const MaintenanceHeader: React.FC<Props> = ({ onCreate, onRefresh }) => {
       const templateName = `Quy trình Import ${new Date().toLocaleDateString(
         "vi-VN"
       )}`;
-      await importTemplate(file, templateName, "khac", token);
+      await importTemplate(file, templateName, "khac", "VH", token);
       message.success(`Đã import quy trình "${file.name}" thành công!`);
 
       if (onRefresh) onRefresh();

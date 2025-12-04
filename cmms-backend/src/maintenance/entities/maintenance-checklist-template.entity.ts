@@ -4,7 +4,8 @@ import {Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColu
 export class MaintenanceChecklistTemplate {
     @PrimaryGeneratedColumn()
     id: number;
-
+    @Column({nullable: true})
+    code: string;
     @Column()
     name: string; // Tên mẫu (Vd: Xe Toyota)
 

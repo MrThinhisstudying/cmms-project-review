@@ -3,7 +3,7 @@ import { Modal, Form, Input, Upload, Button, message, Select } from "antd";
 import { UploadOutlined } from "@ant-design/icons";
 import { importTemplate, updateTemplate } from "../../../apis/maintenance";
 import { getToken } from "../../../utils/auth";
-import { DEVICE_TYPES } from "../../../constants/device-types"; // Import danh sách chuẩn
+import { DEVICE_TYPES } from "../../../constants/device-types";
 
 const { Option } = Select;
 
@@ -11,7 +11,7 @@ interface Props {
   open: boolean;
   onCancel: () => void;
   onSuccess: () => void;
-  editData?: any; // Dữ liệu cần sửa (nếu có)
+  editData?: any;
 }
 
 const ImportTemplateModal: React.FC<Props> = ({
@@ -23,11 +23,12 @@ const ImportTemplateModal: React.FC<Props> = ({
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
 
-  // Khi mở modal, nếu có editData -> điền vào form
+  // 1. Load dữ liệu cũ khi mở Modal (Nếu là sửa)
   useEffect(() => {
     if (open) {
       if (editData) {
         form.setFieldsValue({
+          code: editData.code, // <--- ĐIỀN MÃ CŨ
           name: editData.name,
           device_type: editData.device_type,
         });
@@ -48,6 +49,7 @@ const ImportTemplateModal: React.FC<Props> = ({
         await updateTemplate(
           editData.id,
           {
+            code: values.code, // <--- GỬI MÃ MỚI
             name: values.name,
             device_type: values.device_type,
           },
@@ -61,10 +63,13 @@ const ImportTemplateModal: React.FC<Props> = ({
           return message.warning("Chưa chọn file Excel!");
         }
         const fileOrigin = values.file[0].originFileObj;
+
+        // Gọi API import (Lưu ý thứ tự tham số phải khớp với file apis/maintenance.ts)
         await importTemplate(
           fileOrigin,
           values.name,
           values.device_type,
+          values.code, // <--- GỬI MÃ
           token
         );
         message.success("Import thành công!");
@@ -80,25 +85,35 @@ const ImportTemplateModal: React.FC<Props> = ({
 
   return (
     <Modal
-      title={editData ? "Cập Nhật Thông Tin" : "Import Quy Trình Mới"}
+      title={editData ? "Cập Nhật Quy Trình" : "Import Quy Trình Mới"}
       open={open}
       onCancel={onCancel}
       footer={null}
       destroyOnClose
     >
       <Form form={form} layout="vertical" onFinish={onFinish}>
+        {/* --- Ô NHẬP MÃ QUY TRÌNH (MỚI) --- */}
+        <Form.Item
+          name="code"
+          label="Mã Quy Trình"
+          rules={[{ required: true, message: "Vui lòng nhập mã quy trình!" }]}
+        >
+          <Input placeholder="Vd: HD04-VCS-KT-002" />
+        </Form.Item>
+        {/* -------------------------------- */}
+
         <Form.Item
           name="name"
           label="Tên Quy Trình"
-          rules={[{ required: true }]}
+          rules={[{ required: true, message: "Vui lòng nhập tên quy trình!" }]}
         >
-          <Input placeholder="Vd: Quy trình xe Toyota 2025" />
+          <Input placeholder="Vd: Quy trình bảo dưỡng xe Toyota" />
         </Form.Item>
 
         <Form.Item
           name="device_type"
-          label="Loại thiết bị"
-          rules={[{ required: true }]}
+          label="Loại thiết bị áp dụng"
+          rules={[{ required: true, message: "Vui lòng chọn loại thiết bị!" }]}
         >
           <Select placeholder="Chọn loại...">
             {DEVICE_TYPES.map((type) => (
@@ -109,7 +124,6 @@ const ImportTemplateModal: React.FC<Props> = ({
           </Select>
         </Form.Item>
 
-        {/* Nếu là Sửa thì ẩn phần chọn file đi (hoặc cho phép re-upload nếu bạn muốn nâng cao) */}
         {!editData && (
           <Form.Item
             name="file"
@@ -129,7 +143,7 @@ const ImportTemplateModal: React.FC<Props> = ({
             Hủy
           </Button>
           <Button type="primary" htmlType="submit" loading={loading}>
-            {editData ? "Cập Nhật" : "Lưu & Import"}
+            {editData ? "Lưu Thay Đổi" : "Lưu & Import"}
           </Button>
         </div>
       </Form>

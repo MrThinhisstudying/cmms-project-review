@@ -166,10 +166,21 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
             
             .sign-table td { border: none; text-align: center; vertical-align: top; }
             .sign-space { height: 60px; } /* Khoảng ký tên nhỏ hơn */
+
+            // /* 2. CSS CHO FOOTER */
+            // .footer {
+            //     position: fixed;
+            //     bottom: -1cm; /* Đẩy xuống sát mép trang */
+            //     left: 0; 
+            //     right: 0;
+            //     height: 1cm;
+            //     font-size: 9pt;
+            //     color: #000;
+            //     border-top: 1px solid #000; (Bỏ comment nếu muốn có dòng kẻ trên) 
+            // }
         </style>
     </head>
     <body>
-
         <div class="text-center" style="margin-bottom: 10px;">
             <div style="font-size: 14pt; font-weight: bold; margin-bottom: 2px;">PHIẾU CÔNG TÁC BẢO DƯỠNG</div>
             <div style="font-size: 12pt; font-weight: bold;">MAINTENANCE CHECKLIST</div>
@@ -310,22 +321,22 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
 
         
         
-        <table style="width: 100%;" class="compact-td">
-            <col style="width: 5%"> <col style="width: 35%">
-            <col style="width: 7.5%"><col style="width: 7.5%"> <col style="width: 7.5%"><col style="width: 7.5%"> <col style="width: 7.5%"><col style="width: 7.5%"> <col style="width: 7.5%"><col style="width: 7.5%"> 
-            <thead>
+       <table style="width: 100%;">
+            <col style="width: 5%">  <col style="width: 35%"> <col style="width: 7.5%"><col style="width: 7.5%"> <col style="width: 7.5%"><col style="width: 7.5%"> <col style="width: 7.5%"><col style="width: 7.5%"> <col style="width: 7.5%"><col style="width: 7.5%"> <thead>
                 <tr class="bg-header">
                     <th rowspan="2">STT<br>No.</th>
                     <th rowspan="2">NỘI DUNG BẢO DƯỠNG<br>MAINTENANCE TASKS</th>
-                    <th colspan="2">1T/250G<br>1M/250H</th>
-                    <th colspan="2">6T/500G<br>6M/500H</th>
-                    <th colspan="2">1N/1000G<br>1Y/1000H</th>
-                    <th colspan="2">2N/2000H<br>2Y/2000H</th>
+                    <th colspan="8" style="padding: 5px;">CHU KỲ BẢO DƯỠNG ĐỊNH KỲ / PERIODIC MAINTENANCE CYCLE</th>
+                </tr>
+                
+                <tr class="bg-header">
+                    <th colspan="2">1T/250G<br>1M/250G</th>
+                    <th colspan="2">6T/500G<br>6M/500G</th>
+                    <th colspan="2">1Y/1000G<br>1Y/1000H</th>
+                    <th colspan="2">2Y/2000H<br>2Y/2000H</th>
                 </tr>
             </thead>
-            <tbody>
-                ${checklistHtml}
-            </tbody>
+            <tbody>${checklistHtml}</tbody>
         </table>
 ${notesHtml}
     </body>

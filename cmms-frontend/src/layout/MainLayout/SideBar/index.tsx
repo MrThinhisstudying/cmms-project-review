@@ -66,14 +66,7 @@ const menuItems = [
     path: "/quan_ly_bao_duong",
     roles: ["admin", "staff", "manager"],
   },
-  {
-    name: Menu.QUY_TRINH_BAO_DUONG,
-    icon: <ConstructionIcon />,
-    textColor: "#fff",
-    color: "#FFC900",
-    path: "/quy_trinh_bao_duong",
-    roles: ["admin", "staff", "manager"],
-  },
+
   {
     name: Menu.THU_VIEN_QUY_TRINH,
     icon: <BookOutlined />, // Import icon từ antd

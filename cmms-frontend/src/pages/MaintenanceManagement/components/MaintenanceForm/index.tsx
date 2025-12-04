@@ -14,15 +14,15 @@ import {
   Radio,
   Divider,
 } from "antd";
-import { PlusOutlined, DeleteOutlined, UserOutlined } from "@ant-design/icons";
+import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
 import ChecklistExecutor from "../ChecklistExecutor/index";
 import {
   getAllTemplates,
   getTemplateById,
   createMaintenanceTicket,
 } from "../../../../apis/maintenance";
-import { getAllDevices } from "../../../../apis/devices";
-import { getAllUsers } from "../../../../apis/users"; // Import API user
+import { getAllDevices } from "../../../../apis/devices"; // Kiểm tra lại đường dẫn này
+import { getAllUsers } from "../../../../apis/users";
 import { getToken } from "../../../../utils/auth";
 import dayjs from "dayjs";
 import "dayjs/locale/vi";
@@ -54,7 +54,18 @@ const ACCEPTANCE_DATA = [
   { id: "3.5", label: "- Khung sườn / Chassis", isSub: true },
 ];
 
-const MaintenanceForm: React.FC<any> = ({ onSuccess, onCancel }) => {
+// --- 1. CẬP NHẬT INTERFACE PROPS ---
+interface Props {
+  onSuccess: () => void;
+  onCancel: () => void;
+  initialData?: any; // <--- Thêm cái này để nhận dữ liệu từ bảng
+}
+
+const MaintenanceForm: React.FC<Props> = ({
+  onSuccess,
+  onCancel,
+  initialData,
+}) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const token = getToken();
@@ -72,7 +83,7 @@ const MaintenanceForm: React.FC<any> = ({ onSuccess, onCancel }) => {
     Record<string, { status: string | null; note: string }>
   >({});
 
-  // Load Data
+  // Load Data (Devices, Users, Templates)
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -85,11 +96,37 @@ const MaintenanceForm: React.FC<any> = ({ onSuccess, onCancel }) => {
         setTemplates(temps);
         setUsers(userList);
       } catch (e) {
-        message.error("Lỗi tải dữ liệu");
+        message.error("Lỗi tải dữ liệu danh mục");
       }
     };
     fetchData();
   }, [token]);
+
+  // --- 2. LOGIC AUTO-FILL (QUAN TRỌNG NHẤT) ---
+  useEffect(() => {
+    if (initialData) {
+      // Nếu có dữ liệu truyền vào (từ nút Cờ lê hoặc Timeline)
+      form.setFieldsValue({
+        device_id: initialData.device_id,
+        // Chấp nhận cả key 'maintenance_level' hoặc 'level' tùy nguồn gọi
+        maintenance_level: initialData.maintenance_level || initialData.level,
+        // Nếu có ngày dự kiến thì điền, không thì lấy hôm nay
+        execution_date: initialData.scheduled_date
+          ? dayjs(initialData.scheduled_date)
+          : dayjs(),
+      });
+
+      // Cập nhật state Level để hiển thị đúng cột trong Checklist
+      setCurrentLevel(initialData.maintenance_level || initialData.level);
+    } else {
+      // Nếu tạo mới hoàn toàn -> Reset
+      form.resetFields();
+      form.setFieldsValue({ execution_date: dayjs() });
+      setCurrentLevel(null);
+      setCurrentTemplateJson(null);
+    }
+  }, [initialData, form]);
+  // ----------------------------------------------
 
   // Filter Users
   const technicianList = users.filter((u) => {
@@ -176,6 +213,7 @@ const MaintenanceForm: React.FC<any> = ({ onSuccess, onCancel }) => {
       working_hours: values.working_hours,
       manual_ticket_number: values.manual_ticket_number,
       execution_team: values.execution_team,
+      // Lấy ngày thực hiện từ Form (nếu người dùng sửa)
       execution_date: values.execution_date
         ? values.execution_date.toISOString()
         : new Date().toISOString(),
@@ -282,6 +320,7 @@ const MaintenanceForm: React.FC<any> = ({ onSuccess, onCancel }) => {
                   <Option value="1M">01 Tháng</Option>
                   <Option value="3M">03 Tháng</Option>
                   <Option value="6M">06 Tháng</Option>
+                  <Option value="9M">09 Tháng</Option>
                   <Option value="1Y">01 Năm</Option>
                   <Option value="2Y">02 Năm</Option>
                 </Select>
@@ -297,10 +336,12 @@ const MaintenanceForm: React.FC<any> = ({ onSuccess, onCancel }) => {
                 <Select
                   placeholder="Chọn mẫu phiếu..."
                   onChange={handleTemplateChange}
+                  showSearch
+                  optionFilterProp="children"
                 >
                   {templates.map((t) => (
                     <Option key={t.id} value={t.id}>
-                      {t.name}
+                      {t.code ? <b>[{t.code}] </b> : ""} {t.name}
                     </Option>
                   ))}
                 </Select>
@@ -331,16 +372,12 @@ const MaintenanceForm: React.FC<any> = ({ onSuccess, onCancel }) => {
                           placeholder="Chọn kỹ thuật viên..."
                           showSearch
                           optionFilterProp="children"
-                          popupMatchSelectWidth={false}
                           style={{ width: "100%" }}
-                          filterOption={(input, option) => {
-                            const label = option?.children
-                              ? String(option.children)
-                              : "";
-                            return label
+                          filterOption={(input, option) =>
+                            (option?.children as unknown as string)
                               .toLowerCase()
-                              .includes(input.toLowerCase());
-                          }}
+                              .includes(input.toLowerCase())
+                          }
                         >
                           {technicianList.map((u) => (
                             <Option key={u.user_id} value={u.name}>
@@ -399,7 +436,7 @@ const MaintenanceForm: React.FC<any> = ({ onSuccess, onCancel }) => {
             />
           ) : (
             <div style={{ textAlign: "center", color: "#999" }}>
-              Vui lòng chọn Thiết bị & Cấp độ
+              Vui lòng chọn Thiết bị & Cấp độ & Quy Trình
             </div>
           )}
         </Card>
@@ -415,13 +452,12 @@ const MaintenanceForm: React.FC<any> = ({ onSuccess, onCancel }) => {
           </Form.Item>
         </Card>
 
-        {/* --- 5. NGHIỆM THU (CẬP NHẬT 5.1 & 5.2) --- */}
+        {/* --- 5. NGHIỆM THU --- */}
         <Card
           title="5. NGHIỆM THU & KẾT LUẬN / CHECK AND TAKE OVER"
           size="small"
           style={{ marginBottom: 16 }}
         >
-          {/* 5.1. Người thực hiện (Tự động hiển thị từ Mục 2) */}
           <div
             style={{
               marginBottom: 20,
@@ -433,7 +469,6 @@ const MaintenanceForm: React.FC<any> = ({ onSuccess, onCancel }) => {
             <div style={{ fontWeight: "bold", marginBottom: 5 }}>
               5.1. Người thực hiện / Checked by (Ký/ Signature):
             </div>
-            {/* Dùng Form.Item shouldUpdate để lắng nghe thay đổi từ Mục 2 */}
             <Form.Item
               shouldUpdate={(prev, curr) =>
                 prev.execution_team !== curr.execution_team
@@ -461,11 +496,9 @@ const MaintenanceForm: React.FC<any> = ({ onSuccess, onCancel }) => {
             </Form.Item>
           </div>
 
-          {/* 5.2. Bảng xác nhận */}
           <div style={{ fontWeight: "bold", marginBottom: 10 }}>
             5.2. Xác nhận của đơn vị sử dụng / Approved by using unit:
           </div>
-
           <table
             style={{
               width: "100%",
@@ -569,9 +602,7 @@ const MaintenanceForm: React.FC<any> = ({ onSuccess, onCancel }) => {
               })}
             </tbody>
           </table>
-
           <Divider />
-
           <Form.Item
             name="final_conclusion"
             label={
@@ -609,7 +640,6 @@ const MaintenanceForm: React.FC<any> = ({ onSuccess, onCancel }) => {
             Côn Đảo, ngày {dayjs().format("DD")} tháng {dayjs().format("MM")}{" "}
             năm {dayjs().format("YYYY")}
           </div>
-
           <Row gutter={48}>
             <Col span={12} style={{ textAlign: "center" }}>
               <div style={{ fontWeight: "bold", marginBottom: 5 }}>
@@ -644,7 +674,6 @@ const MaintenanceForm: React.FC<any> = ({ onSuccess, onCancel }) => {
                 </Select>
               </Form.Item>
             </Col>
-
             <Col span={12} style={{ textAlign: "center" }}>
               <div style={{ fontWeight: "bold", marginBottom: 5 }}>
                 TỔ VHTTBMĐ / GSE OP. TEAM

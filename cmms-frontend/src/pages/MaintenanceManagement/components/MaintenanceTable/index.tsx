@@ -1,43 +1,69 @@
-import React, { useEffect, useState } from "react";
-import { Table, message, Tooltip, Button } from "antd";
-import { CalendarOutlined, FileSearchOutlined } from "@ant-design/icons";
-import { getAllMaintenances } from "../../../../apis/maintenance";
+import React, { useState } from "react";
+import { Table, Tooltip, Button, Tag, Space, message } from "antd";
+import {
+  CalendarOutlined,
+  FileSearchOutlined,
+  ToolOutlined,
+  EditOutlined,
+} from "@ant-design/icons";
 import { IMaintenance } from "../../../../types/maintenance.types";
-import { StatusTag } from "./style";
-import moment from "moment";
+import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
+// Import Modal xem chi tiết
+import DeviceMaintenanceDetail from "../DeviceMaintenanceDetail";
+import { Modal } from "antd";
+import { StopOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
+import { cancelMaintenancePlan } from "../../../../apis/maintenance";
+import { getToken } from "../../../../utils/auth";
+const { confirm } = Modal;
+// --- QUAN TRỌNG: CẬP NHẬT INTERFACE ĐỂ KHỚP VỚI TRANG CHA ---
 interface Props {
-  refreshKey: number; // Dùng để trigger reload bảng từ bên ngoài
+  loading: boolean; // Nhận loading từ cha (để fix lỗi Property 'loading' does not exist)
+  dataSource: IMaintenance[]; // Nhận dữ liệu từ cha
+  onCreateTicket?: (record: IMaintenance) => void;
+  onEdit?: (record: IMaintenance) => void;
+  onRefresh?: () => void;
 }
 
-const MaintenanceTable: React.FC<Props> = ({ refreshKey }) => {
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<IMaintenance[]>([]);
+const MaintenanceTable: React.FC<Props> = ({
+  loading,
+  dataSource,
+  onCreateTicket,
+  onEdit,
+  onRefresh,
+}) => {
   const navigate = useNavigate();
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const res = await getAllMaintenances();
-      setData(res);
-    } catch (error) {
-      message.error("Không thể tải danh sách bảo dưỡng");
-    } finally {
-      setLoading(false);
-    }
+
+  // State quản lý Modal xem lịch 12 tháng
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState<any>(null);
+  const handleCancelPlan = (id: number) => {
+    confirm({
+      title: "Dừng theo dõi thiết bị này?",
+      icon: <ExclamationCircleOutlined />,
+      content:
+        "Kế hoạch sẽ bị hủy và không còn hiện trong danh sách theo dõi. Bạn có chắc không?",
+      okText: "Dừng theo dõi",
+      okType: "danger",
+      cancelText: "Hủy",
+      onOk: async () => {
+        try {
+          await cancelMaintenancePlan(id, getToken());
+          message.success("Đã hủy kế hoạch thành công");
+          if (onRefresh) onRefresh(); // Reload bảng
+        } catch (e) {
+          message.error("Lỗi khi hủy kế hoạch");
+        }
+      },
+    });
   };
-
-  // Reload khi component mount hoặc khi refreshKey thay đổi
-  useEffect(() => {
-    fetchData();
-  }, [refreshKey]);
-
   const columns = [
     {
       title: "Thiết bị",
       key: "device",
       render: (_, record: IMaintenance) => (
         <div>
-          <div style={{ fontWeight: "bold" }}>
+          <div style={{ fontWeight: "bold", color: "#1890ff" }}>
             {record.device?.name || "N/A"}
           </div>
           <div style={{ fontSize: "12px", color: "#888" }}>
@@ -47,66 +73,219 @@ const MaintenanceTable: React.FC<Props> = ({ refreshKey }) => {
       ),
     },
     {
-      title: "Cấp bảo dưỡng",
+      title: "Lịch trình",
+      key: "timeline",
+      align: "center" as const,
+      width: 90,
+      render: (_, record: IMaintenance) => (
+        <Tooltip title="Xem chi tiết kế hoạch năm">
+          <Button
+            type="primary"
+            ghost
+            size="small"
+            icon={<CalendarOutlined />}
+            onClick={() => {
+              setSelectedDevice(record.device);
+              setIsDetailOpen(true);
+            }}
+          >
+            Chi tiết
+          </Button>
+        </Tooltip>
+      ),
+    },
+    {
+      title: "Cấp độ tiếp theo",
       dataIndex: "level",
-      key: "level",
-      render: (level: string) => (
-        <span style={{ fontWeight: 500 }}>
-          {level?.replace("_", " ").toUpperCase()}
+      align: "center" as const,
+      width: 130,
+      render: (level: string) => {
+        const map: any = {
+          "1M": "01 Tháng",
+          "3M": "03 Tháng",
+          "6M": "06 Tháng",
+          "9M": "09 Tháng",
+          "1Y": "01 Năm",
+          "2Y": "02 Năm",
+        };
+        let color = "blue";
+        if (level === "6M") color = "orange";
+        if (level === "1Y") color = "purple";
+
+        return <Tag color={color}>{map[level] || level}</Tag>;
+      },
+    },
+    {
+      title: "Lần làm gần nhất",
+      dataIndex: "last_maintenance_date",
+      align: "center" as const,
+      render: (date: string) => (
+        <span style={{ color: "#888" }}>
+          {date && dayjs(date).isValid()
+            ? dayjs(date).format("DD/MM/YYYY")
+            : "(Chưa làm)"}
         </span>
       ),
     },
     {
-      title: "Ngày dự kiến",
-      dataIndex: "scheduled_date",
-      key: "scheduled_date",
-      render: (date: string) => (
-        <div>
-          <CalendarOutlined style={{ marginRight: 5, color: "#1890ff" }} />
-          {date ? moment(date).format("DD/MM/YYYY") : "-"}
-        </div>
-      ),
+      title: "Ngày đến hạn (Dự kiến)",
+      dataIndex: "next_maintenance_date",
+      align: "center" as const,
+      sorter: (a: any, b: any) => {
+        const dateA = a.next_maintenance_date
+          ? dayjs(a.next_maintenance_date).unix()
+          : 0;
+        const dateB = b.next_maintenance_date
+          ? dayjs(b.next_maintenance_date).unix()
+          : 0;
+        return dateA - dateB;
+      },
+      render: (date: string) => {
+        if (!date) return "-";
+        const isLate = dayjs()
+          .startOf("day")
+          .isAfter(dayjs(date).startOf("day"));
+        return (
+          <div
+            style={{
+              fontWeight: isLate ? "bold" : "normal",
+              color: isLate ? "red" : "black",
+            }}
+          >
+            <CalendarOutlined style={{ marginRight: 5 }} />
+            {dayjs(date).format("DD/MM/YYYY")}
+          </div>
+        );
+      },
     },
     {
       title: "Trạng thái",
-      dataIndex: "status",
-      key: "status",
-      render: (status: string) => {
-        let label = status;
-        if (status === "active") label = "Đang hoạt động";
-        if (status === "overdue") label = "Quá hạn";
-        if (status === "warning") label = "Sắp đến hạn";
-        return <StatusTag status={status}>{label}</StatusTag>;
+      key: "status_display",
+      align: "center" as const,
+      render: (_, record: IMaintenance) => {
+        if (record.status !== "active")
+          return <Tag color="default">{record.status?.toUpperCase()}</Tag>;
+        if (!record.next_maintenance_date) return <Tag>Chưa có lịch</Tag>;
+
+        const today = dayjs().startOf("day");
+        const nextDate = dayjs(record.next_maintenance_date).startOf("day");
+        const diffDays = nextDate.diff(today, "days");
+
+        const GRACE_DAYS = 3;
+
+        if (diffDays < -GRACE_DAYS) {
+          // QUÁ HẠN (Trễ hơn 3 ngày ân hạn)
+          return (
+            <Tag color="error" style={{ fontWeight: "bold" }}>
+              QUÁ HẠN {Math.abs(diffDays)} NGÀY
+            </Tag>
+          );
+        }
+        if (diffDays <= GRACE_DAYS) {
+          // ĐANG DIỄN RA (Từ [Ngày đến hạn - 3 ngày] đến [Ngày đến hạn + 3 ngày])
+          return (
+            <Tag color="volcano" style={{ fontWeight: "bold" }}>
+              ĐANG DIỄN RA
+            </Tag>
+          );
+        }
+        if (diffDays <= 7) {
+          // SẮP ĐẾN HẠN (4 đến 7 ngày)
+          return (
+            <Tag color="warning" style={{ fontWeight: "bold" }}>
+              SẮP ĐẾN HẠN ({diffDays} ngày)
+            </Tag>
+          );
+        }
+
+        // CÒN XA
+        return <Tag color="processing">ĐANG THEO DÕI</Tag>;
       },
     },
     {
       title: "Thao tác",
       key: "action",
+      align: "center" as const,
+      width: 150,
       render: (_, record: IMaintenance) => (
-        <Tooltip title="Xem lịch sử phiếu">
-          <Button
-            type="text"
-            icon={<FileSearchOutlined />}
-            onClick={() => {
-              // Chuyển hướng sang trang chi tiết thiết bị (giả sử route là /devices/:id)
-              // Hoặc mở một Modal danh sách phiếu ngay tại đây (nếu bạn muốn)
-              navigate(`/devices/${record.device?.device_id}?tab=history`);
-            }}
-          />
-        </Tooltip>
+        <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
+          {/* 1. Nút Thực hiện (Chỉ hiện khi Active) */}
+          {record.status === "active" && (
+            <Tooltip title="Thực hiện bảo dưỡng ngay">
+              <Button
+                type="primary"
+                size="small"
+                icon={<ToolOutlined />}
+                onClick={() => onCreateTicket && onCreateTicket(record)}
+              />
+            </Tooltip>
+          )}
+
+          {/* 2. Nút Sửa Kế Hoạch */}
+          <Tooltip title="Chỉnh sửa kế hoạch">
+            <Button
+              type="default"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => onEdit && onEdit(record)}
+            />
+          </Tooltip>
+
+          {/* 3. Nút Xem Lịch Sử */}
+          <Tooltip title="Xem lịch sử phiếu">
+            <Button
+              type="default"
+              size="small"
+              icon={<FileSearchOutlined />}
+              onClick={() =>
+                navigate(
+                  `/maintenance-history?search=${encodeURIComponent(
+                    record.device?.brand || ""
+                  )}`
+                )
+              }
+            />
+          </Tooltip>
+          {/* --- NÚT HỦY KẾ HOẠCH (MỚI) --- */}
+          <Tooltip title="Dừng theo dõi / Hủy kế hoạch">
+            <Button
+              danger
+              size="small"
+              icon={<StopOutlined />}
+              onClick={() => handleCancelPlan(record.maintenance_id)}
+            />
+          </Tooltip>
+        </div>
       ),
     },
   ];
 
   return (
-    <Table
-      columns={columns}
-      dataSource={data}
-      rowKey="maintenance_id"
-      loading={loading}
-      pagination={{ pageSize: 10 }}
-      style={{ marginTop: 16, background: "#fff", borderRadius: 8 }}
-    />
+    <>
+      <Table
+        columns={columns}
+        dataSource={dataSource} // Sử dụng dữ liệu từ props
+        rowKey="maintenance_id"
+        loading={loading} // Sử dụng loading từ props
+        pagination={{
+          pageSize: 10,
+          showTotal: (total) => `Tổng ${total} kế hoạch`,
+        }}
+        style={{ marginTop: 16, background: "#fff", borderRadius: 8 }}
+      />
+
+      <DeviceMaintenanceDetail
+        open={isDetailOpen}
+        device={selectedDevice}
+        onCancel={() => {
+          setIsDetailOpen(false);
+          setSelectedDevice(null);
+        }}
+        onSuccess={() => {
+          if (onRefresh) onRefresh();
+        }}
+      />
+    </>
   );
 };
 

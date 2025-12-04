@@ -184,11 +184,18 @@ export default function RepairHistoryTab({ loading, repairs }: Props) {
                 />
               </Tooltip>
             )}
-            {r.inspection_duration_minutes !== undefined && r.inspection_duration_minutes !== null && (
-              <Typography variant="caption" color="primary" display="block" sx={{ mt: 0.5, fontWeight: 600 }}>
-                Thời gian: {Math.floor(r.inspection_duration_minutes / 60)}h {r.inspection_duration_minutes % 60}m
-              </Typography>
-            )}
+            {r.inspection_duration_minutes !== undefined &&
+              r.inspection_duration_minutes !== null && (
+                <Typography
+                  variant="caption"
+                  color="primary"
+                  display="block"
+                  sx={{ mt: 0.5, fontWeight: 600 }}
+                >
+                  Thời gian: {Math.floor(r.inspection_duration_minutes / 60)}h{" "}
+                  {r.inspection_duration_minutes % 60}m
+                </Typography>
+              )}
           </Box>
         </TableCell>
 
@@ -226,11 +233,18 @@ export default function RepairHistoryTab({ loading, repairs }: Props) {
                 />
               </Tooltip>
             )}
-            {r.acceptance_duration_minutes !== undefined && r.acceptance_duration_minutes !== null && (
-              <Typography variant="caption" color="success.main" display="block" sx={{ mt: 0.5, fontWeight: 600 }}>
-                Thời gian: {Math.floor(r.acceptance_duration_minutes / 60)}h {r.acceptance_duration_minutes % 60}m
-              </Typography>
-            )}
+            {r.acceptance_duration_minutes !== undefined &&
+              r.acceptance_duration_minutes !== null && (
+                <Typography
+                  variant="caption"
+                  color="success.main"
+                  display="block"
+                  sx={{ mt: 0.5, fontWeight: 600 }}
+                >
+                  Thời gian: {Math.floor(r.acceptance_duration_minutes / 60)}h{" "}
+                  {r.acceptance_duration_minutes % 60}m
+                </Typography>
+              )}
           </Box>
         </TableCell>
 

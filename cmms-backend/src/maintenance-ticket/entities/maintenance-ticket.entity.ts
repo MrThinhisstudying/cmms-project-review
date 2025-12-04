@@ -103,19 +103,19 @@ export class MaintenanceTicket {
     // ---------------------------------------------
 
     // Người ký: Đội trưởng/Đội phó
-    @ManyToOne(() => User, {nullable: true})
+    @ManyToOne(() => User, {eager: true})
     @JoinColumn({name: 'leader_user_id'})
     leader_user: User;
 
-    @Column({nullable: true})
-    leader_user_id: number;
+    // @Column({nullable: true})
+    //leader_user_id: number;
 
     // Người ký: Tổ viên
-    @ManyToOne(() => User, {nullable: true})
+    @ManyToOne(() => User, {eager: true})
     @JoinColumn({name: 'operator_user_id'})
     operator_user: User;
 
-    @Column({nullable: true})
-    operator_user_id: number;
+    //@Column({nullable: true})
+    // operator_user_id: number;
 }
 

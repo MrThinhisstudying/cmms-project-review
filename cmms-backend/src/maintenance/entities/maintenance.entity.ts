@@ -1,5 +1,15 @@
 import {ApiProperty} from '@nestjs/swagger';
-import {Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn, OneToMany} from 'typeorm';
+import {
+    Entity,
+    PrimaryGeneratedColumn,
+    Column,
+    ManyToOne,
+    JoinColumn,
+    CreateDateColumn,
+    UpdateDateColumn,
+    OneToMany,
+    DeleteDateColumn,
+} from 'typeorm';
 import {Device} from 'src/devices/entities/device.entity';
 import {User} from 'src/user/user.entity';
 import {Department} from 'src/departments/department.entity';
@@ -35,24 +45,25 @@ export class Maintenance {
     @Column({type: 'timestamp', nullable: true})
     expired_date?: Date;
 
-    // --- CẬP NHẬT 1: Đổi kiểu Enum sang String để linh hoạt trạng thái (active, overdue...) ---
+    // Đã đổi sang varchar để linh hoạt status (active, overdue...)
     @ApiProperty({enum: MaintenanceStatus, default: MaintenanceStatus.ACTIVE})
-    @Column({default: MaintenanceStatus.ACTIVE}) // Bỏ type: 'enum' đi để tránh lỗi DB
+    @Column({type: 'varchar', default: MaintenanceStatus.ACTIVE})
     status: string;
 
     @ApiProperty()
     @Column({type: 'text', nullable: true})
     description?: string;
 
-    // --- CẬP NHẬT 2: Đổi kiểu Enum sang String để hỗ trợ 1M, 2Y... ---
+    // Đã đổi sang varchar để linh hoạt level
     @ApiProperty({enum: MaintenanceLevel})
-    @Column()
+    @Column({type: 'varchar'})
     level: string;
+
     @ApiProperty({required: false})
     @Column({type: 'timestamp', nullable: true})
     last_notified_slot?: Date;
 
-    // --- CẬP NHẬT 3: THÊM 3 CỘT QUAN TRỌNG NÀY (Đang bị thiếu gây lỗi) ---
+    // --- CÁC CỘT TIẾN ĐỘ ---
     @ApiProperty({required: false})
     @Column({type: 'timestamp', nullable: true})
     last_maintenance_date: Date;
@@ -64,7 +75,7 @@ export class Maintenance {
     @ApiProperty({required: false})
     @Column({nullable: true})
     current_level: string;
-    // ---------------------------------------------------------------------
+    // ------------------------
 
     @CreateDateColumn()
     created_at: Date;
@@ -72,7 +83,17 @@ export class Maintenance {
     @UpdateDateColumn()
     updated_at: Date;
 
+    // --- BỔ SUNG CỘT SOFT DELETE (QUAN TRỌNG) ---
+    @DeleteDateColumn()
+    deleted_at: Date;
+    // ----------------------------------------------
+
     @OneToMany(() => MaintenanceTicket, (t) => t.maintenance, {cascade: false})
     tickets?: MaintenanceTicket[];
-}
 
+    @Column({type: 'jsonb', nullable: true})
+    cycle_config: string[]; // Lưu cấu hình chu kỳ: ['1M', '6M', '1Y']
+
+    @Column({type: 'timestamp', nullable: true})
+    start_date: Date; // Mốc thời gian bắt đầu tính chu kỳ
+}

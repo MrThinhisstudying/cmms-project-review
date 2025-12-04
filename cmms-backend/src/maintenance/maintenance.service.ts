@@ -1,6 +1,6 @@
-import {Injectable, NotFoundException, Inject, forwardRef, ForbiddenException, BadRequestException} from '@nestjs/common';
+import {Injectable, NotFoundException, Inject, forwardRef, ForbiddenException} from '@nestjs/common';
 import {InjectRepository} from '@nestjs/typeorm';
-import {Repository} from 'typeorm';
+import {Repository, In, IsNull, LessThan, ILike} from 'typeorm';
 import {Device} from 'src/devices/entities/device.entity';
 import {User} from 'src/user/user.entity';
 import {Department} from 'src/departments/department.entity';
@@ -11,6 +11,8 @@ import {UpdateMaintenanceDto} from './dto/update-maintenance.dto';
 import {MaintenanceTicketService} from 'src/maintenance-ticket/maintenance-ticket.service';
 import {MaintenanceChecklistTemplate} from './entities/maintenance-checklist-template.entity';
 import * as XLSX from 'xlsx';
+import dayjs from 'dayjs';
+
 @Injectable()
 export class MaintenanceService {
     constructor(
@@ -18,28 +20,60 @@ export class MaintenanceService {
         @InjectRepository(Device) private deviceRepo: Repository<Device>,
         @InjectRepository(User) private userRepo: Repository<User>,
         @InjectRepository(Department) private deptRepo: Repository<Department>,
+        @InjectRepository(MaintenanceChecklistTemplate) private templateRepo: Repository<MaintenanceChecklistTemplate>,
         @Inject(forwardRef(() => MaintenanceTicketService)) private ticketService: MaintenanceTicketService,
-        @InjectRepository(MaintenanceChecklistTemplate)
-        private templateRepo: Repository<MaintenanceChecklistTemplate>,
     ) {}
 
+    // =================================================================
+    // 1. HELPERS (CÁC HÀM PHỤ TRỢ)
+    // =================================================================
+
     private toDateOrNull(input?: string | Date | null): Date | null {
-        if (input === null || input === undefined) return null;
-        const d = input instanceof Date ? input : new Date(input);
+        if (!input) return null;
+        const d = new Date(input);
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    private excelDateToJSDate(serial: any): Date | null {
+        if (!serial) return null;
+        const s = String(serial).toLowerCase().trim();
+        if (s === 'n/a' || s === '-' || s === '') return null;
+
+        if (typeof serial === 'number') {
+            const utc_days = Math.floor(serial - 25569);
+            const utc_value = utc_days * 86400;
+            const date_info = new Date(utc_value * 1000);
+            return date_info;
+        }
+        if (typeof serial === 'string') {
+            const parts = serial.split('/');
+            if (parts.length === 3) {
+                const d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+                if (!isNaN(d.getTime())) return d;
+            }
+        }
+        const d = new Date(serial);
         return isNaN(d.getTime()) ? null : d;
     }
 
     private levelToMonths(level: MaintenanceLevel | string): number {
-        const v = level.toString(); // Chuyển về chuỗi để so sánh cho chắc ăn
+        const v = String(level);
+        if (v === '1M' || v === '01 Tháng') return 1;
+        if (v === '3M' || v === '03 Tháng') return 3;
+        if (v === '6M' || v === '06 Tháng') return 6;
+        if (v === '9M' || v === '09 Tháng') return 9;
+        if (v === '1Y' || v === '01 Năm') return 12;
+        if (v === '2Y' || v === '02 Năm') return 24;
+        return 1;
+    }
 
-        if (v === MaintenanceLevel.ONE_MONTH || v === '1M') return 1;
-        if (v === MaintenanceLevel.THREE_MONTH || v === '3M') return 3;
-        if (v === MaintenanceLevel.SIX_MONTH || v === '6M') return 6;
-        if (v === MaintenanceLevel.NINE_MONTH || v === '9M') return 9;
-        if (v === MaintenanceLevel.ONE_YEAR || v === '1Y') return 12;
-        if (v === MaintenanceLevel.TWO_YEARS || v === '2Y') return 24; // Thêm cấp 2 năm
-
-        return 0; // Mặc định
+    private calculateLevelForMonth(k: number, cycles: string[]): string {
+        if (cycles.includes('2Y') && k % 24 === 0) return '2Y';
+        if (cycles.includes('1Y') && k % 12 === 0) return '1Y';
+        if (cycles.includes('9M') && k % 9 === 0) return '9M';
+        if (cycles.includes('6M') && k % 6 === 0) return '6M';
+        if (cycles.includes('3M') && k % 3 === 0) return '3M';
+        return '1M';
     }
 
     private addMonths(date: Date, months: number): Date {
@@ -48,139 +82,240 @@ export class MaintenanceService {
         return d;
     }
 
+    // =================================================================
+    // 2. CRUD CƠ BẢN
+    // =================================================================
+
     async create(dto: CreateMaintenanceDto) {
         const device = await this.deviceRepo.findOne({where: {device_id: dto.device_id}});
         if (!device) throw new NotFoundException('Device not found');
-        let user: User = null;
-        if (dto.user_id !== undefined && dto.user_id !== null) {
-            user = await this.userRepo.findOne({where: {user_id: dto.user_id}});
-            if (!user) throw new NotFoundException('User not found');
-        }
-        let department: Department = null;
-        if (dto.dept_id !== undefined && dto.dept_id !== null) {
-            department = await this.deptRepo.findOne({where: {dept_id: dto.dept_id}});
-            if (!department) throw new NotFoundException('Department not found');
-        }
-        const maintenance = this.maintenanceRepo.create({
+        const m = this.maintenanceRepo.create({
             ...dto,
-            scheduled_date: this.toDateOrNull(dto.scheduled_date),
-            expired_date: this.toDateOrNull(dto.expired_date),
             device,
-            user,
-            department,
+            scheduled_date: this.toDateOrNull(dto.scheduled_date),
+            next_maintenance_date: this.toDateOrNull(dto.scheduled_date),
+            status: MaintenanceStatus.ACTIVE,
         });
-        const saved: Maintenance = await this.maintenanceRepo.save(maintenance);
-        if (saved.status === MaintenanceStatus.ACTIVE) {
-            await this.ticketService.createForMaintenance(saved.maintenance_id);
-        }
-        return saved;
+        return await this.maintenanceRepo.save(m);
     }
 
+    // Trang chủ: Chỉ lấy các kế hoạch ĐANG CHẠY (ACTIVE) để báo cáo/thực hiện
     async findAll() {
-        return await this.maintenanceRepo.find({order: {updated_at: 'DESC'}, relations: ['device', 'user', 'department']});
+        return await this.maintenanceRepo.find({
+            where: {status: MaintenanceStatus.ACTIVE},
+            order: {next_maintenance_date: 'ASC'},
+            relations: ['device', 'user', 'department'],
+        });
+    }
+
+    // Modal chi tiết: Lấy TOÀN BỘ (Active + Inactive + Completed) để vẽ Timeline 2 năm
+    async findByDevice(deviceId: number) {
+        return await this.maintenanceRepo.find({
+            where: {device: {device_id: deviceId}},
+            order: {next_maintenance_date: 'ASC'},
+            relations: ['device', 'user', 'department'],
+        });
     }
 
     async findOne(id: number) {
-        const m = await this.maintenanceRepo.findOne({where: {maintenance_id: id}, relations: ['device', 'user', 'department']});
-        if (!m) throw new NotFoundException('Maintenance not found');
-        return m;
-    }
-
-    async findByDevice(deviceId: number) {
-        return await this.maintenanceRepo
-            .createQueryBuilder('m')
-            .leftJoinAndSelect('m.device', 'device')
-            .leftJoinAndSelect('m.user', 'user')
-            .leftJoinAndSelect('m.department', 'department')
-            .where('device.device_id = :deviceId', {deviceId})
-            .orderBy('m.scheduled_date', 'DESC')
-            .getMany();
+        return await this.maintenanceRepo.findOne({where: {maintenance_id: id}, relations: ['device']});
     }
 
     async update(id: number, dto: UpdateMaintenanceDto) {
-        const maintenance = await this.maintenanceRepo.findOne({where: {maintenance_id: id}, relations: ['device', 'user', 'department']});
-        if (!maintenance) throw new NotFoundException('Maintenance not found');
-        if (maintenance.status !== MaintenanceStatus.ACTIVE) {
-            throw new ForbiddenException('Cannot modify a non-active maintenance schedule');
+        const m = await this.findOne(id);
+        if (!m) throw new NotFoundException('Maintenance not found');
+
+        if (m.status === MaintenanceStatus.INACTIVE || m.status === MaintenanceStatus.CANCELED) {
+            throw new ForbiddenException('Không thể sửa kế hoạch đã đóng');
         }
-        if ('device_id' in dto) {
-            if (dto.device_id == null) throw new NotFoundException('Device not found');
-            const dev = await this.deviceRepo.findOne({where: {device_id: dto.device_id}});
-            if (!dev) throw new NotFoundException('Device not found');
-            maintenance.device = dev;
+
+        if (dto.scheduled_date) {
+            const d = this.toDateOrNull(dto.scheduled_date);
+            m.scheduled_date = d;
+            m.next_maintenance_date = d;
         }
-        if ('user_id' in dto) {
-            if (dto.user_id == null) maintenance.user = null;
-            else {
-                const usr = await this.userRepo.findOne({where: {user_id: dto.user_id}});
-                if (!usr) throw new NotFoundException('User not found');
-                maintenance.user = usr;
-            }
-        }
-        if ('dept_id' in dto) {
-            if (dto.dept_id == null) maintenance.department = null;
-            else {
-                const dep = await this.deptRepo.findOne({where: {dept_id: dto.dept_id}});
-                if (!dep) throw new NotFoundException('Department not found');
-                maintenance.department = dep;
-            }
-        }
-        if ('scheduled_date' in dto) maintenance.scheduled_date = this.toDateOrNull(dto.scheduled_date ?? null);
-        if ('expired_date' in dto) maintenance.expired_date = this.toDateOrNull(dto.expired_date ?? null);
-        if ('status' in dto) maintenance.status = dto.status;
-        if ('level' in dto) maintenance.level = dto.level;
-        if ('description' in dto) maintenance.description = dto.description;
-        const saved: Maintenance = await this.maintenanceRepo.save(maintenance);
-        return saved;
+        if (dto.level) m.level = dto.level;
+        if (dto.status) m.status = dto.status;
+
+        return await this.maintenanceRepo.save(m);
+    }
+
+    // Hủy kế hoạch (Dừng theo dõi)
+    async cancel(id: number) {
+        const maintenance = await this.findOne(id);
+        maintenance.status = MaintenanceStatus.CANCELED;
+        maintenance.next_maintenance_date = null;
+        return await this.maintenanceRepo.save(maintenance);
     }
 
     async remove(id: number) {
-        const maintenance = await this.maintenanceRepo.findOne({where: {maintenance_id: id}});
-        if (!maintenance) throw new NotFoundException('Maintenance not found');
-        if (maintenance.status !== MaintenanceStatus.ACTIVE) {
-            throw new ForbiddenException('Cannot remove a non-active maintenance schedule');
-        }
-        const result = await this.maintenanceRepo.delete(id);
-        if (result.affected === 0) throw new NotFoundException('Maintenance not found');
+        await this.maintenanceRepo.delete(id);
         return {success: true};
     }
 
-    async createNextFrom(maintenanceId: number) {
+    // =================================================================
+    // 3. LOGIC HOÀN THÀNH & TỰ ĐỘNG KÍCH HOẠT (Rolling Wave)
+    // =================================================================
+
+    // --- CẬP NHẬT: THÊM THAM SỐ actualDate ---
+    async markCompletedAndSpawnNext(maintenanceId: number, actualDate: Date) {
         const current = await this.findOne(maintenanceId);
-        const months = this.levelToMonths(current.level);
-        if (!months || !current.scheduled_date) return null;
-        let nextDate = this.addMonths(current.scheduled_date, months);
-        while (nextDate.getTime() <= Date.now()) nextDate = this.addMonths(nextDate, months);
-        const next = this.maintenanceRepo.create({
-            device: current.device,
-            user: current.user ?? null,
-            department: current.department ?? null,
-            level: current.level,
-            status: MaintenanceStatus.ACTIVE,
-            scheduled_date: nextDate,
-            expired_date: null,
-            description: null,
+
+        // 1. Đánh dấu kế hoạch hiện tại là ĐÃ XONG
+        current.status = MaintenanceStatus.INACTIVE;
+
+        // QUAN TRỌNG: Dùng ngày thực tế từ phiếu, không dùng new Date()
+        current.last_maintenance_date = actualDate;
+
+        await this.maintenanceRepo.save(current);
+
+        // 2. Tìm kế hoạch DỰ KIẾN tiếp theo
+        const nextPlan = await this.maintenanceRepo.findOne({
+            where: {
+                device: {device_id: current.device.device_id},
+                status: MaintenanceStatus.INACTIVE,
+                last_maintenance_date: IsNull(),
+            },
+            order: {next_maintenance_date: 'ASC'},
         });
-        const saved: Maintenance = await this.maintenanceRepo.save(next);
-        if (saved.status === MaintenanceStatus.ACTIVE) {
-            await this.ticketService.createForMaintenance(saved.maintenance_id);
+
+        // 3. Kích hoạt nó lên
+        if (nextPlan) {
+            nextPlan.status = MaintenanceStatus.ACTIVE;
+            // Gán ngày làm gần nhất cho phiếu tiếp theo để hiển thị liên kết
+            nextPlan.last_maintenance_date = actualDate;
+            await this.maintenanceRepo.save(nextPlan);
         }
-        return saved;
     }
 
-    async markCompletedAndSpawnNext(maintenanceId: number) {
-        const m = await this.findOne(maintenanceId);
-        const originalStatus = m.status;
-        if (originalStatus !== MaintenanceStatus.INACTIVE && originalStatus !== MaintenanceStatus.CANCELED) {
-            m.status = MaintenanceStatus.INACTIVE;
-            await this.maintenanceRepo.save(m);
+    // =================================================================
+    // 4. CHỨC NĂNG IMPORT (Logic 2 Năm & Smart Archive)
+    // =================================================================
+
+    // --- IMPORT SINH LỊCH 2 NĂM (ĐÃ FIX LOGIC NGÀY CUỐI THÁNG) ---
+    // --- IMPORT SINH LỊCH 2 NĂM (ĐÃ FIX LỖI LẶP & TRẠNG THÁI) ---
+    async importMaintenancePlan(fileBuffer: Buffer) {
+        const workbook = XLSX.read(fileBuffer, {type: 'buffer'});
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rawRows = XLSX.utils.sheet_to_json(sheet, {header: 1}) as any[][];
+
+        // 1. Dò tìm Header
+        let headerRowIdx = 0,
+            colNameIdx = -1,
+            dateColIdx = -1;
+        for (let i = 0; i < Math.min(rawRows.length, 15); i++) {
+            const rowStr = rawRows[i].map((c) => String(c).trim().toUpperCase());
+            if (rowStr.includes('TÊN TRANG THIẾT BỊ')) {
+                headerRowIdx = i;
+                colNameIdx = rowStr.indexOf('TÊN TRANG THIẾT BỊ');
+                rawRows[i].forEach((val, idx) => {
+                    const v = String(val).toUpperCase();
+                    if (v.includes('NGÀY') && (v.includes('BD') || v.includes('GẦN NHẤT') || v.includes('THỰC HIỆN'))) dateColIdx = idx;
+                });
+                break;
+            }
         }
-        if (originalStatus !== MaintenanceStatus.CANCELED) {
-            return await this.createNextFrom(maintenanceId);
+
+        if (colNameIdx === -1) return {message: 'Lỗi format file Excel'};
+
+        const headers = rawRows[headerRowIdx] as string[];
+        const dataRows = rawRows.slice(headerRowIdx + 1);
+        const results = [];
+
+        for (const rowArray of dataRows) {
+            const row: any = {};
+            headers.forEach((h, idx) => {
+                if (h) row[h.trim()] = rowArray[idx];
+            });
+
+            const deviceName = row['TÊN TRANG THIẾT BỊ'];
+            if (!deviceName) continue;
+
+            const device = await this.deviceRepo
+                .createQueryBuilder('d')
+                .where('d.name ILIKE :name OR d.serial_number ILIKE :name', {name: `%${deviceName}%`})
+                .getOne();
+
+            if (!device) {
+                results.push({name: deviceName, status: 'Skipped'});
+                continue;
+            }
+
+            // --- QUAN TRỌNG: XÓA SẠCH DỮ LIỆU CŨ CỦA XE NÀY TRƯỚC ---
+            // Để đảm bảo không bị trùng lặp khi import nhiều lần
+            await this.maintenanceRepo.delete({device: {device_id: device.device_id}});
+            // ---------------------------------------------------------
+
+            // 2. Xác định Mốc thời gian (Ưu tiên Excel)
+
+            // Lấy từ Excel
+            let excelLastDate = dateColIdx !== -1 && rowArray[dateColIdx] ? this.excelDateToJSDate(rowArray[dateColIdx]) : null;
+
+            // (Tùy chọn: Lấy từ DB cũ nếu muốn giữ lại lịch sử, nhưng ở trên đã xóa rồi nên ta dùng Excel là chính)
+            // Nếu bạn muốn giữ lịch sử cũ thì phải query trước khi delete.
+            // Ở đây ta ưu tiên làm mới lộ trình từ Excel.
+
+            let lastDate = excelLastDate;
+            const baseDate = lastDate ? dayjs(lastDate) : dayjs();
+
+            // 3. Đọc cấu hình chu kỳ
+            const cycles: string[] = [];
+            const checkX = (k: string) => row[k] && String(row[k]).toLowerCase().includes('x');
+            if (checkX('1 Tháng')) cycles.push('1M');
+            if (checkX('3 Tháng')) cycles.push('3M');
+            if (checkX('6 Tháng')) cycles.push('6M');
+            if (checkX('9 Tháng')) cycles.push('9M');
+            if (checkX('1 Năm')) cycles.push('1Y');
+            if (checkX('2 Năm')) cycles.push('2Y');
+            if (cycles.length === 0) cycles.push('1M');
+
+            const plansToSave = [];
+
+            // 4. Sinh 24 tháng
+            for (let k = 1; k <= 24; k++) {
+                // Tính ngày cuối tháng
+                // k=1 (Phiếu đầu): baseDate + 0 tháng -> Cuối tháng 11 (30/11)
+                // k=2 (Phiếu sau): baseDate + 1 tháng -> Cuối tháng 12 (31/12)
+                const nextDate = baseDate
+                    .add(k - 1, 'month')
+                    .endOf('month')
+                    .toDate();
+
+                const level = this.calculateLevelForMonth(k, cycles);
+
+                // Phiếu đầu tiên (k=1) là ACTIVE
+                const status = k === 1 ? MaintenanceStatus.ACTIVE : MaintenanceStatus.INACTIVE;
+
+                // --- SỬA LỖI HIỂN THỊ "HOÀN THÀNH" ---
+                // Chỉ gán ngày làm gần nhất cho phiếu đầu tiên (k=1)
+                // Các phiếu sau (k > 1) phải để null để hệ thống hiểu là "Chưa làm"
+                const planLastDate = k === 1 ? lastDate : null;
+                // -------------------------------------
+
+                plansToSave.push(
+                    this.maintenanceRepo.create({
+                        device,
+                        level,
+                        status: status as any,
+                        scheduled_date: nextDate,
+                        next_maintenance_date: nextDate,
+                        last_maintenance_date: planLastDate,
+                        cycle_config: cycles,
+                        start_date: baseDate.toDate(),
+                        description: `Kế hoạch tháng ${dayjs(nextDate).format('MM/YYYY')} (Tự động)`,
+                    }),
+                );
+            }
+
+            await this.maintenanceRepo.save(plansToSave);
+            results.push({name: deviceName, status: 'Generated 2 Years'});
         }
-        return null;
+
+        return {message: 'Import thành công', details: results};
     }
-    async importTemplate(fileBuffer: Buffer, name: string, deviceType: string) {
+
+    // --- IMPORT TEMPLATE (CẬP NHẬT 4 THAM SỐ) ---
+    async importTemplate(fileBuffer: Buffer, name: string, code: string, deviceType: string) {
         const workbook = XLSX.read(fileBuffer, {type: 'buffer'});
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rawData = XLSX.utils.sheet_to_json(sheet);
@@ -188,29 +323,22 @@ export class MaintenanceService {
         const structure = [];
         let currentCategory = null;
 
-        // Giả sử file Excel có các cột: Category, Task, Type, 1M, 6M, 1Y...
         for (const row of rawData) {
             if (!currentCategory || currentCategory.category !== row['Category']) {
                 currentCategory = {category: row['Category'], items: []};
                 structure.push(currentCategory);
             }
-
             currentCategory.items.push({
-                code: row['Code'] || `ITEM_${Date.now()}_${Math.random()}`, // Tạo mã nếu excel không có
+                code: row['Code'] || `ITEM_${Date.now()}_${Math.random()}`,
                 task: row['Task'],
                 type: row['Type'] === 'M' ? 'input_number' : 'checkbox',
-                requirements: {
-                    '1M': row['1M'],
-                    '3M': row['3M'],
-                    '6M': row['6M'],
-                    '1Y': row['1Y'],
-                    '2Y': row['2Y'],
-                },
+                requirements: {'1M': row['1M'], '3M': row['3M'], '6M': row['6M'], '1Y': row['1Y'], '2Y': row['2Y']},
             });
         }
 
         const newTemplate = this.templateRepo.create({
             name: name,
+            code: code,
             device_type: deviceType,
             checklist_structure: structure,
         });
@@ -218,7 +346,8 @@ export class MaintenanceService {
         return await this.templateRepo.save(newTemplate);
     }
 
-    // Hàm lấy danh sách Template để hiện lên Dropdown Frontend
+    // --- CÁC HÀM KHÁC (Template/Dashboard) ---
+
     async findAllTemplates() {
         return await this.templateRepo.find({order: {created_at: 'DESC'}});
     }
@@ -227,123 +356,39 @@ export class MaintenanceService {
         return await this.templateRepo.findOne({where: {id}});
     }
 
-    // --- HÀM IMPORT THÔNG MINH (ĐÃ SỬA LỖI LOOP) ---
-    async importMaintenancePlan(fileBuffer: Buffer) {
-        const workbook = XLSX.read(fileBuffer, {type: 'buffer'});
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-
-        // Đọc dữ liệu dạng Mảng các dòng
-        const rows = XLSX.utils.sheet_to_json(sheet, {header: 1}) as any[][];
-        const results = [];
-
-        // Tự động dò tìm vị trí các cột
-        let nameColIdx = -1;
-        let col1M = -1,
-            col3M = -1,
-            col6M = -1,
-            col1Y = -1,
-            col2Y = -1;
-        let dataStartRow = 0;
-
-        // Quét 15 dòng đầu để tìm Header
-        for (let i = 0; i < Math.min(rows.length, 15); i++) {
-            const row = rows[i];
-            if (!row) continue;
-
-            row.forEach((cell, idx) => {
-                const val = String(cell).toLowerCase().trim();
-                if (val.includes('tên trang thiết bị') || val.includes('tên phương tiện')) {
-                    nameColIdx = idx;
-                    dataStartRow = i + 1;
-                }
-                if (val.includes('1 tháng')) col1M = idx;
-                else if (val.includes('3 tháng')) col3M = idx;
-                else if (val.includes('6 tháng')) col6M = idx;
-                else if (val.includes('1 năm')) col1Y = idx;
-                else if (val.includes('2 năm')) col2Y = idx;
-            });
-        }
-
-        if (nameColIdx === -1) {
-            return {message: 'Lỗi: Không tìm thấy cột "TÊN TRANG THIẾT BỊ" trong file Excel'};
-        }
-
-        // --- BẮT ĐẦU VÒNG LẶP ---
-        for (let i = dataStartRow; i < rows.length; i++) {
-            const row = rows[i];
-            if (!row || !row[nameColIdx]) continue;
-
-            const deviceName = String(row[nameColIdx]).trim();
-            if (deviceName.toLowerCase().includes('tên trang thiết bị')) continue;
-
-            // Tìm thiết bị
-            const device = await this.deviceRepo
-                .createQueryBuilder('d')
-                .where('d.name ILIKE :name OR d.serial_number ILIKE :name', {name: `%${deviceName}%`})
-                .getOne();
-
-            if (!device) {
-                results.push({name: deviceName, status: 'Skipped - Device Not Found'});
-                continue;
-            }
-
-            // Xác định cấp độ
-            let startLevel: MaintenanceLevel = MaintenanceLevel.ONE_MONTH;
-            const hasX = (colIdx: number) => colIdx !== -1 && row[colIdx] && String(row[colIdx]).toLowerCase().includes('x');
-
-            if (hasX(col1M)) startLevel = MaintenanceLevel.ONE_MONTH;
-            else if (hasX(col3M)) startLevel = MaintenanceLevel.THREE_MONTH;
-            else if (hasX(col6M)) startLevel = MaintenanceLevel.SIX_MONTH;
-            else if (hasX(col1Y)) startLevel = MaintenanceLevel.ONE_YEAR;
-            else if (hasX(col2Y)) startLevel = MaintenanceLevel.TWO_YEARS;
-
-            // Lưu vào DB
-            let plan = await this.maintenanceRepo.findOne({where: {device: {device_id: device.device_id}}});
-
-            if (plan) {
-                plan.level = startLevel;
-                plan.status = MaintenanceStatus.ACTIVE;
-                await this.maintenanceRepo.save(plan);
-                results.push({name: deviceName, status: 'Updated Plan'});
-            } else {
-                const newPlan = this.maintenanceRepo.create({
-                    device: device,
-                    level: startLevel,
-                    status: MaintenanceStatus.ACTIVE,
-                    scheduled_date: new Date(),
-                    next_maintenance_date: new Date(),
-                    description: 'Imported from Excel Plan',
-                });
-                await this.maintenanceRepo.save(newPlan);
-                results.push({name: deviceName, status: 'Created Plan'});
-            }
-        } // <--- KẾT THÚC VÒNG LẶP TẠI ĐÂY
-
-        // Trả về kết quả sau khi ĐÃ chạy hết tất cả các dòng
-        return {message: 'Import hoàn tất', processed: results.length, details: results};
-    }
-
-    // Xóa mềm quy trình (Soft Delete)
     async removeTemplate(id: number) {
-        // Hàm softDelete sẽ tự động update cột deleted_at = now()
-        // Nó KHÔNG xóa row khỏi DB, nên không bị lỗi khóa ngoại (Foreign Key)
-        const result = await this.templateRepo.softDelete(id);
-
-        if (result.affected === 0) {
-            throw new NotFoundException('Không tìm thấy quy trình');
-        }
-        return {success: true, message: 'Đã lưu trữ quy trình thành công'};
+        await this.templateRepo.softDelete(id);
+        return {success: true};
     }
 
-    // Cập nhật tên hoặc loại thiết bị
-    async updateTemplate(id: number, data: {name?: string; device_type?: string}) {
-        const template = await this.templateRepo.findOne({where: {id}});
-        if (!template) throw new NotFoundException('Không tìm thấy quy trình');
+    async updateTemplate(id: number, data: any) {
+        const t = await this.templateRepo.findOne({where: {id}});
+        if (data.name) t.name = data.name;
+        if (data.code) t.code = data.code;
+        if (data.device_type) t.device_type = data.device_type;
+        return await this.templateRepo.save(t);
+    }
 
-        if (data.name) template.name = data.name;
-        if (data.device_type) template.device_type = data.device_type;
+    // API Thống kê cho Dashboard
+    async getDashboardStats() {
+        const totalDevices = await this.deviceRepo.count();
+        const activePlans = await this.maintenanceRepo.find({where: {status: MaintenanceStatus.ACTIVE}});
 
-        return await this.templateRepo.save(template);
+        let overdue = 0,
+            warning = 0,
+            monitoring = 0;
+        const today = dayjs().startOf('day');
+
+        activePlans.forEach((p) => {
+            if (p.next_maintenance_date) {
+                const diff = dayjs(p.next_maintenance_date).diff(today, 'day');
+                if (diff < -3) overdue++;
+                else if (diff <= 3) warning++; // Trong khoảng ân hạn 3 ngày tính là Warning/Doing
+                else monitoring++;
+            }
+        });
+
+        return {totalDevices, totalActive: activePlans.length, overdue, warning, monitoring};
     }
 }
 

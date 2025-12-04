@@ -1,5 +1,11 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Box, Typography, CircularProgress } from "@mui/material";
+import {
+  Box,
+  Typography,
+  CircularProgress,
+  TextField,
+  Autocomplete,
+} from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import { CustomButton } from "../../components/Button";
 import Toast from "../../components/Toast";
@@ -11,6 +17,7 @@ import RepairsTable from "./components/RepairsTable";
 import RepairDetailDialog from "./components/RepairDetailDialog";
 import RepairInspectionForm from "./components/RepairInspectionForm";
 import RepairAcceptanceForm from "./components/RepairAcceptanceForm";
+import { useDevicesContext } from "../../context/DevicesContext/DevicesContext";
 import {
   IRepair,
   RepairUpsertPayload,
@@ -35,6 +42,20 @@ const RepairsManagement: React.FC = () => {
   const { user } = useAuthContext();
   const role = user?.role ?? "";
   const perms = user?.permissions ?? [];
+  // Lấy danh sách thiết bị giống như trong RepairForm
+  const { devices } = useDevicesContext();
+
+  const availableDevices = useMemo(
+    () =>
+      devices.filter(
+        (d: any) =>
+          (d.status || "").toLowerCase() === "moi" ||
+          (d.status || "").toLowerCase() === "dang_su_dung"
+      ),
+    [devices]
+  );
+
+  const [searchDevice, setSearchDevice] = useState<any | null>(null);
 
   const canCreate = role === "admin" || perms.includes("CREATE_REPAIR");
   const canUpdate = role === "admin" || perms.includes("UPDATE_REPAIR");
@@ -57,7 +78,15 @@ const RepairsManagement: React.FC = () => {
 
   const [openToast, setOpenToast] = useState(false);
 
-  const filteredData = useMemo(() => repairs, [repairs]);
+  const filteredData = useMemo(() => {
+    let data = repairs;
+
+    if (searchDevice) {
+      data = data.filter((r) => r.device?.device_id === searchDevice.device_id);
+    }
+
+    return data;
+  }, [repairs, searchDevice]);
 
   const handleSubmit = async (data: RepairUpsertPayload) => {
     try {
@@ -202,10 +231,33 @@ const RepairsManagement: React.FC = () => {
         </Box>
       ) : (
         <Box display="flex" flexDirection="column" height="calc(100vh - 130px)">
-          <Box display="flex" justifyContent="space-between" pb={2}>
-            <Typography variant="h6" fontWeight="bold">
-              Quản lý quy trình phiếu sửa chữa
-            </Typography>
+          <Box
+            display="flex"
+            justifyContent="space-between"
+            alignItems="center"
+            pb={2}
+          >
+            <Box display="flex" flexDirection="column">
+              <Typography variant="h6" fontWeight="bold" mb={1}>
+                Quản lý quy trình phiếu sửa chữa
+              </Typography>
+
+              <Autocomplete
+                options={availableDevices}
+                getOptionLabel={(d: any) => `${d.name} (${d.brand || ""})`}
+                value={searchDevice}
+                onChange={(_, newValue) => setSearchDevice(newValue)}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    size="small"
+                    label="Tìm theo thiết bị"
+                    placeholder="Nhập tên TTB..."
+                  />
+                )}
+                sx={{ width: 320, background: "#fff" }}
+              />
+            </Box>
 
             {canCreate && (
               <CustomButton
