@@ -5,12 +5,15 @@ import {
   PlusOutlined,
   FileExcelOutlined,
   CalendarOutlined,
+  TableOutlined,
 } from "@ant-design/icons";
 import {
   importMaintenancePlan,
   importTemplate,
 } from "../../../../apis/maintenance";
 import { getToken } from "../../../../utils/auth";
+import MasterPlanModal from "../MasterPlanModal";
+import OriginalPlanModal from "../OriginalPlanModal";
 
 const { Title } = Typography;
 
@@ -23,7 +26,8 @@ const MaintenanceHeader: React.FC<Props> = ({ onCreate, onRefresh }) => {
   // State loading riêng cho từng nút để UX tốt hơn
   const [uploadingTemplate, setUploadingTemplate] = useState(false);
   const [uploadingPlan, setUploadingPlan] = useState(false);
-
+  const [isMasterOpen, setIsMasterOpen] = useState(false);
+  const [isOriginalViewOpen, setIsOriginalViewOpen] = useState(false);
   // 1. Xử lý Import QUY TRÌNH (Template)
   const handleImportTemplate = async (file: File) => {
     const token = getToken(); // Luôn lấy token mới nhất từ hàm chuẩn
@@ -97,7 +101,7 @@ const MaintenanceHeader: React.FC<Props> = ({ onCreate, onRefresh }) => {
       </div>
 
       <Space>
-        {/* Nút 1: Import Quy trình */}
+        {/* Nút 1: Import Quy trình 
         <Upload
           beforeUpload={handleImportTemplate}
           showUploadList={false}
@@ -115,7 +119,7 @@ const MaintenanceHeader: React.FC<Props> = ({ onCreate, onRefresh }) => {
           >
             {uploadingTemplate ? "Đang tải..." : "Import Quy trình"}
           </Button>
-        </Upload>
+        </Upload>*/}
 
         {/* Nút 2: Import Kế hoạch */}
         <Upload
@@ -136,12 +140,31 @@ const MaintenanceHeader: React.FC<Props> = ({ onCreate, onRefresh }) => {
             {uploadingPlan ? "Đang nạp..." : "Import Kế hoạch"}
           </Button>
         </Upload>
-
+        <Button
+          icon={<TableOutlined />}
+          onClick={() => setIsOriginalViewOpen(true)}
+        >
+          Xem bảng kế hoạch
+        </Button>
+        <Button
+          icon={<CalendarOutlined />}
+          onClick={() => setIsMasterOpen(true)}
+        >
+          Kế hoạch tổng thể
+        </Button>
         {/* Nút 3: Tạo Phiếu Mới */}
         <Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>
           Lập Phiếu Bảo Dưỡng
         </Button>
       </Space>
+      <MasterPlanModal
+        open={isMasterOpen}
+        onCancel={() => setIsMasterOpen(false)}
+      />
+      <OriginalPlanModal
+        open={isOriginalViewOpen}
+        onCancel={() => setIsOriginalViewOpen(false)}
+      />
     </div>
   );
 };

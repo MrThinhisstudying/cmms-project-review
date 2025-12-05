@@ -73,7 +73,7 @@ const MaintenanceTable: React.FC<Props> = ({
       ),
     },
     {
-      title: "Lịch trình",
+      title: "Lịch BD",
       key: "timeline",
       align: "center" as const,
       width: 90,
@@ -116,7 +116,7 @@ const MaintenanceTable: React.FC<Props> = ({
       },
     },
     {
-      title: "Lần làm gần nhất",
+      title: "Ngày BD gần nhất",
       dataIndex: "last_maintenance_date",
       align: "center" as const,
       render: (date: string) => (

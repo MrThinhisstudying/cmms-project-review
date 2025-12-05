@@ -1,6 +1,6 @@
 import {Injectable, NotFoundException, Inject, forwardRef, ForbiddenException} from '@nestjs/common';
 import {InjectRepository} from '@nestjs/typeorm';
-import {Repository, In, IsNull, LessThan, ILike} from 'typeorm';
+import {Repository, In, IsNull, LessThan, ILike, Between} from 'typeorm';
 import {Device} from 'src/devices/entities/device.entity';
 import {User} from 'src/user/user.entity';
 import {Department} from 'src/departments/department.entity';
@@ -389,6 +389,56 @@ export class MaintenanceService {
         });
 
         return {totalDevices, totalActive: activePlans.length, overdue, warning, monitoring};
+    }
+
+    // --- LẤY KẾ HOẠCH TỔNG THỂ (MASTER PLAN) ---
+    async getYearlyPlan(year: number) {
+        // Lấy tất cả kế hoạch có ngày đến hạn trong năm được chọn
+        const startOfYear = new Date(`${year}-01-01`);
+        const endOfYear = new Date(`${year}-12-31`);
+
+        const plans = await this.maintenanceRepo.find({
+            where: {
+                next_maintenance_date: Between(startOfYear, endOfYear),
+            },
+            relations: ['device'],
+            order: {device: {name: 'ASC'}, next_maintenance_date: 'ASC'},
+        });
+
+        // Group dữ liệu theo Device để Frontend dễ hiển thị
+        // Cấu trúc trả về: [ { device: {...}, plans: [ ... ] }, ... ]
+        const result = [];
+        const deviceMap = new Map();
+
+        for (const p of plans) {
+            const dId = p.device.device_id;
+            if (!deviceMap.has(dId)) {
+                deviceMap.set(dId, {
+                    device: p.device,
+                    monthlyData: {}, // Object lưu: '1': plan, '2': plan...
+                });
+                result.push(deviceMap.get(dId));
+            }
+
+            // Lấy tháng (0-11) -> cộng 1 thành (1-12)
+            const month = p.next_maintenance_date.getMonth() + 1;
+            deviceMap.get(dId).monthlyData[month] = p;
+        }
+
+        return result;
+    }
+
+    // --- LẤY VIEW GIỐNG FILE EXCEL GỐC ---
+    async getOriginalPlanView() {
+        // Chỉ cần lấy các dòng ACTIVE là đủ (vì nó đại diện cho xe đó)
+        // Dòng Active chứa: device, last_maintenance_date, và cycle_config
+        const plans = await this.maintenanceRepo.find({
+            where: {status: MaintenanceStatus.ACTIVE},
+            relations: ['device'],
+            order: {device: {name: 'ASC'}},
+        });
+
+        return plans;
     }
 }
 

@@ -1,4 +1,4 @@
-import {Controller, Get, Post, Body, Param, Put, Delete, ParseIntPipe, HttpException, HttpStatus} from '@nestjs/common';
+import {Controller, Get, Post, Body, Param, Put, Delete, ParseIntPipe, HttpException, HttpStatus, Query} from '@nestjs/common';
 import {ApiTags} from '@nestjs/swagger';
 import {MaintenanceService} from './maintenance.service';
 import {CreateMaintenanceDto} from './dto/create-maintenance.dto';
@@ -125,6 +125,19 @@ export class MaintenanceController {
     @Put(':id/cancel')
     async cancel(@Param('id', ParseIntPipe) id: number) {
         return this.maintenanceService.cancel(id);
+    }
+
+    @Get('plan/yearly')
+    async getYearlyPlan(@Query('year') year: number) {
+        const y = year || new Date().getFullYear();
+        const data = await this.maintenanceService.getYearlyPlan(y);
+        return {message: 'Kế hoạch tổng thể', data};
+    }
+
+    @Get('plan/original-view')
+    async getOriginalPlanView() {
+        const data = await this.maintenanceService.getOriginalPlanView();
+        return {message: 'Dữ liệu kế hoạch gốc', data};
     }
 }
 

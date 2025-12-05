@@ -217,7 +217,7 @@ export class MaintenanceTicketService {
             <style>
                 .footer-wrapper {
                     font-family: 'Times New Roman', serif;
-                    font-size: 10px; /* Cỡ chữ chuẩn cho footer */
+                    font-size: 10.5px; /* Cỡ chữ chuẩn cho footer */
                     width: 100%;
                     margin-left: 20px;
                     margin-right: 20px;
@@ -233,10 +233,10 @@ export class MaintenanceTicketService {
             
             <div class="footer-wrapper">
                 <div style="width: 30%;">
-                    <span class="bold">B06.QT08/VCS-KT-TTB</span>
+                    <span >B06.QT08/VCS-KT-TTB</span>
                 </div>
                 <div style="width: 30%; text-align: center;">
-                    Lần ban hành/ sửa đổi: <span class="bold">01/00</span>
+                    Lần ban hành/ sửa đổi: <span>01/00</span>
                 </div>
                 <div style="width: 40%;" class="right-col">
                     <div><span class="pageNumber"></span>/<span class="totalPages"></span></div>
