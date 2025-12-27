@@ -192,7 +192,10 @@ const TicketDetailModal: React.FC<Props> = ({ open, onCancel, data }) => {
         style={{ marginBottom: 16 }}
       >
         <Table
-          dataSource={data.checklist_result || []}
+          dataSource={(data.checklist_result || []).filter((item: any) => {
+             // Filter: Only show items that have a requirement string and it's not "-"
+             return item.req && item.req !== "-" && item.req !== "–";
+          })}
           columns={checklistColumns}
           rowKey="code"
           pagination={false}

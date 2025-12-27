@@ -108,6 +108,26 @@ export class MaintenanceService {
         });
     }
 
+    // API Dashboard: Group By Device, lấy phiếu gần nhất
+    async getDashboardOverview() {
+        const allActive = await this.maintenanceRepo.find({
+            where: { status: MaintenanceStatus.ACTIVE },
+            order: { next_maintenance_date: 'ASC' },
+            relations: ['device']
+        });
+
+        // Dedup: Chỉ lấy phiếu đầu tiên (gần nhất) cho mỗi Device
+        const uniqueMap = new Map();
+        allActive.forEach(plan => {
+            const dId = plan.device.device_id;
+            if (!uniqueMap.has(dId)) {
+                uniqueMap.set(dId, plan);
+            }
+        });
+
+        return Array.from(uniqueMap.values());
+    }
+
     // Modal chi tiết: Lấy TOÀN BỘ (Active + Inactive + Completed) để vẽ Timeline 2 năm
     async findByDevice(deviceId: number) {
         return await this.maintenanceRepo.find({
@@ -182,8 +202,9 @@ export class MaintenanceService {
         // 3. Kích hoạt nó lên
         if (nextPlan) {
             nextPlan.status = MaintenanceStatus.ACTIVE;
-            // Gán ngày làm gần nhất cho phiếu tiếp theo để hiển thị liên kết
-            nextPlan.last_maintenance_date = actualDate;
+            // FIX: Không gán last_maintenance_date cho phiếu tiếp theo
+            // Nếu gán, hệ thống sẽ hiểu là phiếu đó ĐÃ hoàn thành
+            nextPlan.last_maintenance_date = null;
             await this.maintenanceRepo.save(nextPlan);
         }
     }
@@ -194,41 +215,35 @@ export class MaintenanceService {
 
     // --- IMPORT SINH LỊCH 2 NĂM (ĐÃ FIX LOGIC NGÀY CUỐI THÁNG) ---
     // --- IMPORT SINH LỊCH 2 NĂM (ĐÃ FIX LỖI LẶP & TRẠNG THÁI) ---
+    // --- IMPORT SINH LỊCH 2 NĂM (ĐÃ TỐI ƯU & FIX LỖI HIỂN THỊ) ---
+    // --- IMPORT LOGIC SONG HÀNH (CỘNG DỒN) ---
     async importMaintenancePlan(fileBuffer: Buffer) {
         const workbook = XLSX.read(fileBuffer, {type: 'buffer'});
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rawRows = XLSX.utils.sheet_to_json(sheet, {header: 1}) as any[][];
+        const rawRows = XLSX.utils.sheet_to_json(sheet, {header: 1, defval: ''}) as any[][];
 
-        // 1. Dò tìm Header
-        let headerRowIdx = 0,
+        // 1. Tìm Header (Giữ nguyên logic cũ)
+        let headerRowIdx = -1,
             colNameIdx = -1,
             dateColIdx = -1;
-        for (let i = 0; i < Math.min(rawRows.length, 15); i++) {
+        for (let i = 0; i < Math.min(rawRows.length, 20); i++) {
             const rowStr = rawRows[i].map((c) => String(c).trim().toUpperCase());
-            if (rowStr.includes('TÊN TRANG THIẾT BỊ')) {
+            if (rowStr.findIndex((s) => s.includes('TÊN') && (s.includes('THIẾT BỊ') || s.includes('TB'))) !== -1) {
                 headerRowIdx = i;
-                colNameIdx = rowStr.indexOf('TÊN TRANG THIẾT BỊ');
-                rawRows[i].forEach((val, idx) => {
-                    const v = String(val).toUpperCase();
-                    if (v.includes('NGÀY') && (v.includes('BD') || v.includes('GẦN NHẤT') || v.includes('THỰC HIỆN'))) dateColIdx = idx;
-                });
+                colNameIdx = rowStr.findIndex((s) => s.includes('TÊN') && (s.includes('THIẾT BỊ') || s.includes('TB')));
+                dateColIdx = rowStr.findIndex((s) => s.includes('NGÀY') && (s.includes('BD') || s.includes('GẦN') || s.includes('LAST')));
                 break;
             }
         }
 
-        if (colNameIdx === -1) return {message: 'Lỗi format file Excel'};
-
-        const headers = rawRows[headerRowIdx] as string[];
+        if (headerRowIdx === -1) return {message: 'Lỗi: Không tìm thấy dòng tiêu đề'};
+        const headers = rawRows[headerRowIdx].map((h) => String(h).trim());
         const dataRows = rawRows.slice(headerRowIdx + 1);
         const results = [];
 
         for (const rowArray of dataRows) {
-            const row: any = {};
-            headers.forEach((h, idx) => {
-                if (h) row[h.trim()] = rowArray[idx];
-            });
-
-            const deviceName = row['TÊN TRANG THIẾT BỊ'];
+            if (!rowArray || rowArray.length === 0) continue;
+            const deviceName = rowArray[colNameIdx];
             if (!deviceName) continue;
 
             const device = await this.deviceRepo
@@ -237,81 +252,130 @@ export class MaintenanceService {
                 .getOne();
 
             if (!device) {
-                results.push({name: deviceName, status: 'Skipped'});
+                results.push({name: deviceName, status: 'Skipped (Not Found)'});
                 continue;
             }
 
-            // --- QUAN TRỌNG: XÓA SẠCH DỮ LIỆU CŨ CỦA XE NÀY TRƯỚC ---
-            // Để đảm bảo không bị trùng lặp khi import nhiều lần
+            // Xóa sạch dữ liệu cũ của thiết bị này
             await this.maintenanceRepo.delete({device: {device_id: device.device_id}});
-            // ---------------------------------------------------------
 
-            // 2. Xác định Mốc thời gian (Ưu tiên Excel)
+            // Lấy ngày gốc (Base Date)
+            const excelDate = dateColIdx !== -1 ? this.excelDateToJSDate(rowArray[dateColIdx]) : null;
+            const baseDate = excelDate ? dayjs(excelDate) : dayjs().startOf('year');
 
-            // Lấy từ Excel
-            let excelLastDate = dateColIdx !== -1 && rowArray[dateColIdx] ? this.excelDateToJSDate(rowArray[dateColIdx]) : null;
-
-            // (Tùy chọn: Lấy từ DB cũ nếu muốn giữ lại lịch sử, nhưng ở trên đã xóa rồi nên ta dùng Excel là chính)
-            // Nếu bạn muốn giữ lịch sử cũ thì phải query trước khi delete.
-            // Ở đây ta ưu tiên làm mới lộ trình từ Excel.
-
-            let lastDate = excelLastDate;
-            const baseDate = lastDate ? dayjs(lastDate) : dayjs();
-
-            // 3. Đọc cấu hình chu kỳ
+            // --- BƯỚC 1: XÁC ĐỊNH CÁC CHU KỲ ĐƯỢC CHỌN ---
+            // Chúng ta cần biết người dùng đã tích vào những ô nào
             const cycles: string[] = [];
-            const checkX = (k: string) => row[k] && String(row[k]).toLowerCase().includes('x');
-            if (checkX('1 Tháng')) cycles.push('1M');
-            if (checkX('3 Tháng')) cycles.push('3M');
-            if (checkX('6 Tháng')) cycles.push('6M');
-            if (checkX('9 Tháng')) cycles.push('9M');
-            if (checkX('1 Năm')) cycles.push('1Y');
-            if (checkX('2 Năm')) cycles.push('2Y');
-            if (cycles.length === 0) cycles.push('1M');
+            const checkHeader = (key: string) => {
+                const idx = headers.findIndex((h) => h.toUpperCase().includes(key.toUpperCase()));
+                return (
+                    idx !== -1 &&
+                    String(rowArray[idx] || '')
+                        .toLowerCase()
+                        .includes('x')
+                );
+            };
+
+            // Định nghĩa danh sách các chu kỳ cần check
+            const config = {
+                hasWeekly: checkHeader('Tuần') || checkHeader('Weekly'), // Cần thêm cột này trong Excel nếu chưa có
+                has1M: checkHeader('1 Tháng') || checkHeader('1M'),
+                has3M: checkHeader('3 Tháng') || checkHeader('3M'),
+                has6M: checkHeader('6 Tháng') || checkHeader('6M'),
+                has1Y: checkHeader('1 Năm') || checkHeader('1Y'),
+                has2Y: checkHeader('2 Năm') || checkHeader('2Y'),
+            };
+
+            // Lưu vào DB để tham khảo (nếu cần)
+            if (config.hasWeekly) cycles.push('Tuần');
+            if (config.has1M) cycles.push('1M');
+            if (config.has3M) cycles.push('3M');
+            if (config.has6M) cycles.push('6M');
+            if (config.has1Y) cycles.push('1Y');
+            if (config.has2Y) cycles.push('2Y');
 
             const plansToSave = [];
 
-            // 4. Sinh 24 tháng
-            for (let k = 1; k <= 24; k++) {
-                // Tính ngày cuối tháng
-                // k=1 (Phiếu đầu): baseDate + 0 tháng -> Cuối tháng 11 (30/11)
-                // k=2 (Phiếu sau): baseDate + 1 tháng -> Cuối tháng 12 (31/12)
-                const nextDate = baseDate
-                    .add(k - 1, 'month')
-                    .endOf('month')
-                    .toDate();
-
-                const level = this.calculateLevelForMonth(k, cycles);
-
-                // Phiếu đầu tiên (k=1) là ACTIVE
-                const status = k === 1 ? MaintenanceStatus.ACTIVE : MaintenanceStatus.INACTIVE;
-
-                // --- SỬA LỖI HIỂN THỊ "HOÀN THÀNH" ---
-                // Chỉ gán ngày làm gần nhất cho phiếu đầu tiên (k=1)
-                // Các phiếu sau (k > 1) phải để null để hệ thống hiểu là "Chưa làm"
-                const planLastDate = k === 1 ? lastDate : null;
-                // -------------------------------------
-
-                plansToSave.push(
-                    this.maintenanceRepo.create({
-                        device,
-                        level,
-                        status: status as any,
-                        scheduled_date: nextDate,
-                        next_maintenance_date: nextDate,
-                        last_maintenance_date: planLastDate,
-                        cycle_config: cycles,
-                        start_date: baseDate.toDate(),
-                        description: `Kế hoạch tháng ${dayjs(nextDate).format('MM/YYYY')} (Tự động)`,
-                    }),
-                );
+            // --- BƯỚC 2: SINH LỊCH TUẦN (WEEKLY) ---
+            // Tuần chạy độc lập với tháng, cứ 7 ngày 1 lần
+            if (config.hasWeekly) {
+                // Sinh cho 2 năm (104 tuần)
+                for (let w = 1; w <= 104; w++) {
+                    const nextDate = baseDate.add(w * 7, 'day').toDate();
+                    plansToSave.push(this.createPlanEntity(device, 'Tuần', nextDate, cycles, w === 1 && !!excelDate));
+                }
             }
 
+            // --- BƯỚC 3: SINH LỊCH THÁNG/NĂM (MONTHLY/YEARLY) ---
+            // Chạy vòng lặp 24 tháng
+            for (let k = 1; k <= 24; k++) {
+                const nextDateInfo = baseDate.add(k, 'month').endOf('month').toDate();
+
+                // Logic CỘNG DỒN: Không dùng else if, dùng if riêng lẻ
+
+                // 1. Kiểm tra 1 Tháng
+                if (config.has1M) {
+                    // Tháng nào cũng làm
+                    plansToSave.push(this.createPlanEntity(device, '1M', nextDateInfo, cycles, k === 1 && !!excelDate));
+                }
+
+                // 2. Kiểm tra 3 Tháng
+                if (config.has3M && k % 3 === 0) {
+                    plansToSave.push(this.createPlanEntity(device, '3M', nextDateInfo, cycles, false));
+                }
+
+                // 3. Kiểm tra 6 Tháng
+                if (config.has6M && k % 6 === 0) {
+                    plansToSave.push(this.createPlanEntity(device, '6M', nextDateInfo, cycles, false));
+                }
+
+                // 4. Kiểm tra 1 Năm
+                if (config.has1Y && k % 12 === 0) {
+                    plansToSave.push(this.createPlanEntity(device, '1Y', nextDateInfo, cycles, false));
+                }
+
+                // 5. Kiểm tra 2 Năm
+                if (config.has2Y && k % 24 === 0) {
+                    plansToSave.push(this.createPlanEntity(device, '2Y', nextDateInfo, cycles, false));
+                }
+            }
+
+            // Lưu tất cả vào DB (Batch Insert)
             await this.maintenanceRepo.save(plansToSave);
-            results.push({name: deviceName, status: 'Generated 2 Years'});
+            results.push({name: deviceName, status: `Đã tạo ${plansToSave.length} phiếu (Bao gồm trùng lịch)`});
         }
 
-        return {message: 'Import thành công', details: results};
+        return {message: 'Import thành công theo logic song hành', details: results};
+    }
+
+    // Helper tạo Entity để code gọn hơn
+    private createPlanEntity(device: any, level: string, date: Date, cycles: string[], isFirstActive: boolean, customLastDate?: Date) {
+        // Chỉ phiếu đầu tiên của chu kỳ nhỏ nhất (thường là 1M hoặc Weekly) mới Active
+        // Hoặc bạn có thể để tất cả Inactive chờ đến ngày
+        // Ở đây tôi để Active nếu là phiếu đầu tiên và có ngày thực tế
+        const status = isFirstActive ? MaintenanceStatus.ACTIVE : MaintenanceStatus.INACTIVE;
+
+        return this.maintenanceRepo.create({
+            device,
+            level: level,
+            status: status,
+            scheduled_date: date,
+            next_maintenance_date: date,
+            last_maintenance_date: customLastDate ? customLastDate : (isFirstActive ? date : null), // Ưu tiên customLastDate
+            cycle_config: cycles,
+            description: `Bảo dưỡng cấp ${level} - ${dayjs(date).format('DD/MM/YYYY')}`,
+        });
+    }
+
+    // Helper kiểm tra tháng này có rơi vào chu kỳ không (để gán Level đúng)
+    private isCycleMatch(monthIndex: number, cycles: string[]): boolean {
+        if (cycles.includes('1M')) return true;
+        if (cycles.includes('3M') && monthIndex % 3 === 0) return true;
+        if (cycles.includes('6M') && monthIndex % 6 === 0) return true;
+        if (cycles.includes('9M') && monthIndex % 9 === 0) return true;
+        if (cycles.includes('1Y') && monthIndex % 12 === 0) return true;
+        if (cycles.includes('2Y') && monthIndex % 24 === 0) return true;
+        return false;
     }
 
     // --- IMPORT TEMPLATE (CẬP NHẬT 4 THAM SỐ) ---
@@ -324,15 +388,45 @@ export class MaintenanceService {
         let currentCategory = null;
 
         for (const row of rawData) {
-            if (!currentCategory || currentCategory.category !== row['Category']) {
-                currentCategory = {category: row['Category'], items: []};
-                structure.push(currentCategory);
+            // FIX: Handle missing Category -> Use "Hạng mục chung"
+            const categoryName = row['Category'] || 'Hạng mục chung';
+
+            if (!currentCategory || currentCategory.category !== categoryName) {
+                // Check if category already exists in structure to avoid duplicates if rows are not sorted
+                const existingCategory = structure.find(c => c.category === categoryName);
+                if (existingCategory) {
+                    currentCategory = existingCategory;
+                } else {
+                    currentCategory = {category: categoryName, items: []};
+                    structure.push(currentCategory);
+                }
             }
+            // Helper: Find value by key (Case Insensitive & Trimmed)
+            const getValue = (r: any, keys: string[]) => {
+                const rowKeys = Object.keys(r);
+                for (const key of keys) {
+                    // 1. Try exact match
+                    if (r[key] !== undefined) return r[key];
+                    // 2. Try case-insensitive + trim match
+                    const normalize = (s: string) => s.trim().toUpperCase();
+                    const foundKey = rowKeys.find(k => normalize(k) === normalize(key));
+                    if (foundKey && r[foundKey] !== undefined) return r[foundKey];
+                }
+                return undefined;
+            };
+
             currentCategory.items.push({
                 code: row['Code'] || `ITEM_${Date.now()}_${Math.random()}`,
                 task: row['Task'],
                 type: row['Type'] === 'M' ? 'input_number' : 'checkbox',
-                requirements: {'1M': row['1M'], '3M': row['3M'], '6M': row['6M'], '1Y': row['1Y'], '2Y': row['2Y']},
+                requirements: {
+                    'Tuần': getValue(row, ['Tuần', 'Weekly', 'Week']), 
+                    '1M': getValue(row, ['1M', '1 Tháng', 'Month']), 
+                    '3M': getValue(row, ['3M', '3 Tháng']), 
+                    '6M': getValue(row, ['6M', '6 Tháng']), 
+                    '1Y': getValue(row, ['1Y', '1 Năm', 'Year']), 
+                    '2Y': getValue(row, ['2Y', '2 Năm'])
+                },
             });
         }
 
@@ -422,7 +516,11 @@ export class MaintenanceService {
 
             // Lấy tháng (0-11) -> cộng 1 thành (1-12)
             const month = p.next_maintenance_date.getMonth() + 1;
-            deviceMap.get(dId).monthlyData[month] = p;
+            
+            if (!deviceMap.get(dId).monthlyData[month]) {
+                deviceMap.get(dId).monthlyData[month] = [];
+            }
+            deviceMap.get(dId).monthlyData[month].push(p);
         }
 
         return result;
@@ -439,6 +537,201 @@ export class MaintenanceService {
         });
 
         return plans;
+    }
+    // =================================================================
+    // 5. IMPORT WITH PRIORITY & WEEKLY CONSTRAINT
+    // =================================================================
+
+    async importMaintenanceWithPriority(fileBuffer: Buffer) {
+        const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' }) as any[][];
+
+        // 1. Tìm Header
+        let headerRowIdx = -1, colNameIdx = -1, dateColIdx = -1, modelColIdx = -1;
+        for (let i = 0; i < Math.min(rawRows.length, 20); i++) {
+            const rowStr = rawRows[i].map(c => String(c).trim().toUpperCase());
+            if (rowStr.findIndex(s => s.includes('TÊN') && (s.includes('THIẾT BỊ') || s.includes('TB'))) !== -1) {
+                headerRowIdx = i;
+                colNameIdx = rowStr.findIndex(s => s.includes('TÊN') && (s.includes('THIẾT BỊ') || s.includes('TB')));
+                dateColIdx = rowStr.findIndex(s => s.includes('NGÀY') && (s.includes('BD') || s.includes('GẦN')));
+                modelColIdx = rowStr.findIndex(s => (s.includes('KÝ HIỆU') || s.includes('MODEL')) && !s.includes('SỐ'));
+                break;
+            }
+        }
+
+        if (headerRowIdx === -1) return { message: 'Lỗi: Không tìm thấy dòng tiêu đề' };
+        
+        const headers = rawRows[headerRowIdx].map(h => String(h).trim());
+        const dataRows = rawRows.slice(headerRowIdx + 1);
+        const results = [];
+
+        for (const rowArray of dataRows) {
+            if (!rowArray || rowArray.length === 0) continue;
+            const deviceName = rowArray[colNameIdx];
+            if (!deviceName) continue;
+
+            const device = await this.deviceRepo.findOne({
+                where: [
+                    { name: ILike(`%${deviceName}%`) },
+                    { serial_number: ILike(`%${deviceName}%`) }
+                ]
+            });
+
+            if (!device) {
+                results.push({ name: deviceName, status: 'Skipped (Device Not Found)' });
+                continue;
+            }
+
+            // Cập nhật Model (Brand) nếu có trong Excel
+            if (modelColIdx !== -1 && rowArray[modelColIdx]) {
+                device.brand = String(rowArray[modelColIdx]).trim();
+                await this.deviceRepo.save(device);
+            }
+
+            // Xóa dữ liệu cũ
+            await this.maintenanceRepo.delete({ device: { device_id: device.device_id } });
+
+            // Base Date & First Month Logic
+            const excelDate = dateColIdx !== -1 ? this.excelDateToJSDate(rowArray[dateColIdx]) : null;
+            // Nếu không có ngày excel -> lấy ngày 1 của tháng hiện tại làm mốc
+            const rawBaseDate = excelDate ? dayjs(excelDate) : dayjs().startOf('month');
+            
+            // LOGIC THÁNG ĐẦU TIÊN
+            let startMonthDate = rawBaseDate.startOf('month');
+            // Nếu ngày import > 20 -> Bắt đầu tính từ tháng sau
+            if (rawBaseDate.date() > 20) {
+                startMonthDate = startMonthDate.add(1, 'month');
+            }
+
+            // Detect Config
+            const checkHeader = (key: string) => {
+                const idx = headers.findIndex(h => h.toUpperCase().includes(key.toUpperCase()));
+                return idx !== -1 && String(rowArray[idx] || '').toLowerCase().includes('x');
+            };
+
+            const config = {
+                hasWeekly: checkHeader('Tuần') || checkHeader('Weekly'),
+                has1M: checkHeader('1 Tháng') || checkHeader('1M'),
+                has3M: checkHeader('3 Tháng') || checkHeader('3M'),
+                has6M: checkHeader('6 Tháng') || checkHeader('6M'),
+                has9M: checkHeader('9 Tháng') || checkHeader('9M'),
+                has1Y: checkHeader('1 Năm') || checkHeader('1Y'),
+                has2Y: checkHeader('2 Năm') || checkHeader('2Y'),
+            };
+
+            const jobCycles = [];
+            if (config.hasWeekly) jobCycles.push('Tuần');
+            if (config.has1M) jobCycles.push('1M');
+            if (config.has3M) jobCycles.push('3M');
+            if (config.has6M) jobCycles.push('6M');
+            if (config.has9M) jobCycles.push('9M');
+            if (config.has1Y) jobCycles.push('1Y');
+            if (config.has2Y) jobCycles.push('2Y');
+
+            const plansToSave = [];
+            let hasSetFirstActive = false; // Cờ để đánh dấu phiếu đầu tiên là Active
+
+            // VÒNG LẶP CHÍNH: DUYỆT 24 THÁNG (2 NĂM)
+            for (let m = 0; m < 24; m++) {
+                const currentMonth = startMonthDate.add(m, 'month');
+                const monthIndex = m + 1; // Tháng thứ 1, 2, 3...
+
+                // --- BƯỚC 1: LỚP NỀN (MANDATORY LAYER) ---
+                
+                // 1.1 Weekly (Luôn sinh 4 phiếu cố định: 1, 8, 15, 22)
+                if (config.hasWeekly) {
+                    const days = [1, 8, 15, 22];
+                    for (const d of days) {
+                        const wDate = currentMonth.date(d).toDate();
+                        
+                        // Xác định status: Nếu chưa có phiếu Active nào -> Phiếu này Active
+                        let status = MaintenanceStatus.INACTIVE;
+                        if (!hasSetFirstActive) {
+                            status = MaintenanceStatus.ACTIVE;
+                            hasSetFirstActive = true;
+                        }
+
+                        plansToSave.push(this.maintenanceRepo.create({
+                            device,
+                            level: 'Tuần',
+                            status: status,
+                            scheduled_date: wDate,
+                            next_maintenance_date: wDate,
+                            last_maintenance_date: (status === MaintenanceStatus.ACTIVE && excelDate) ? excelDate : null, // Set ngày cơ sở cho lần đầu
+                            cycle_config: jobCycles, // Gắn full config để hiển thị đúng trên bảng View
+                            description: `Bảo dưỡng Tuần - Ngày ${d}/${currentMonth.format('MM/YYYY')}`
+                        }));
+                    }
+                }
+
+                // 1.2 Monthly (Luôn sinh 1 phiếu cuối tháng)
+                if (config.has1M) {
+                    const mDate = currentMonth.endOf('month').toDate();
+                    
+                    let status = MaintenanceStatus.INACTIVE;
+                    // Nếu chưa có active (ví dụ không có Weekly), thì Monthly đầu tiên sẽ Active
+                    // Tuy nhiên nếu có Weekly rồi, thì Monthly vẫn cứ Inactive, chờ đến lượt (Rolling Wave)
+                    // Hoặc nếu muốn Monthly ưu tiên hơn?
+                    // Theo logic "Sắp tới" thì ngày nào đến trước sẽ Active.
+                    // Ở đây ta cứ gán active cho phiếu ĐẦU TIÊN được tạo ra trong hệ thống.
+                    if (!hasSetFirstActive) {
+                        status = MaintenanceStatus.ACTIVE;
+                        hasSetFirstActive = true;
+                    }
+
+                    // Fix: Truyền excelDate nếu status là ACTIVE để hiển thị trên bảng View
+                    const lastDate = (status === MaintenanceStatus.ACTIVE && excelDate) ? excelDate : null;
+                    
+                    // Note: createPlanEntity có logic riêng, nhưng ta sẽ override last_maintenance_date ở đây nếu cần thiết
+                    // Tuy nhiên createPlanEntity đang dùng tham số cuối isFirstActive để set.
+                    // Ta cần update createPlanEntity để nhận param lastDate cụ thể hoặc tự xử lý.
+                    // NHƯNG để an toàn và nhanh, ta sửa trực tiếp createPlanEntity hoặc sửa cách gọi.
+                    // Ở đây gọi createPlanEntity với isFirstActive=true sẽ gán date hiện tại làm last_date.
+                    // Cần sửa createPlanEntity để hỗ trợ custom lastDate.
+                    
+                    // Thay vì sửa createPlanEntity (ảnh hưởng chỗ khác), ta copy logic ra hoặc sửa createPlanEntity.
+                    // Phương án: Sửa createPlanEntity để nhận lastMaintenanceDate optional.
+                    plansToSave.push(this.createPlanEntity(device, '1M', mDate, jobCycles, status === MaintenanceStatus.ACTIVE, status === MaintenanceStatus.ACTIVE ? excelDate : null));
+                }
+
+                // --- BƯỚC 2: LỚP ƯU TIÊN (PRIORITY LAYER - EXCLUSIVE) ---
+                let priorityLevel = null;
+                
+                if (config.has2Y && monthIndex % 24 === 0) {
+                    priorityLevel = '2Y';
+                } else if (config.has1Y && monthIndex % 12 === 0) {
+                    priorityLevel = '1Y';
+                } else if (config.has9M && monthIndex % 9 === 0) {
+                    priorityLevel = '9M';
+                } else if (config.has6M && monthIndex % 6 === 0) {
+                    priorityLevel = '6M';
+                } else if (config.has3M && monthIndex % 3 === 0) {
+                    priorityLevel = '3M';
+                }
+
+                if (priorityLevel) {
+                    const pDate = currentMonth.endOf('month').toDate(); // Trùng ngày với Monthly
+                    // Đây là phiếu riêng biệt theo yêu cầu "2 dòng riêng biệt"
+
+                    let status = MaintenanceStatus.INACTIVE;
+                    // Nếu trùng ngày với Monthly, ta có 2 phiếu cùng ngày.
+                    // Phiếu nào Active? Thường là phiếu to hơn quan trọng hơn?
+                    // Nhưng ở đây logic simple: Cái nào đến lượt thì Active. 
+                    // Nếu chưa set Active thì cái này Active.
+                    if (!hasSetFirstActive) {
+                        status = MaintenanceStatus.ACTIVE;
+                        hasSetFirstActive = true;
+                    }
+
+                    plansToSave.push(this.createPlanEntity(device, priorityLevel, pDate, jobCycles, status === MaintenanceStatus.ACTIVE, status === MaintenanceStatus.ACTIVE ? excelDate : null));
+                }
+            }
+
+            await this.maintenanceRepo.save(plansToSave);
+            results.push({ name: deviceName, status: `Đã sinh lịch 2 năm (${plansToSave.length} phiếu). Bắt đầu: ${startMonthDate.format('MM/YYYY')}` });
+        }
+        return { message: 'Import Priority Full Schedule Success', details: results };
     }
 }
 

@@ -47,6 +47,20 @@ export class MaintenanceTicketService {
         // Lấy ngày thực hiện từ Form
         const actualDate = data.execution_date ? new Date(data.execution_date) : new Date();
 
+        // --- VALIDATION: CHECK SEQUENTIAL (Không cho làm phiếu mới nếu phiếu cũ chưa xong) ---
+        // Tìm phiếu BẤT KỲ của thiết bị này có ngày kế hoạch TRƯỚC ngày này mà chưa DONE
+        const overdueTickets = await this.ticketRepo.createQueryBuilder('t')
+            .where('t.device_id = :dId', { dId: data.device_id })
+            .andWhere('t.status != :done', { done: 'done' })
+            .andWhere('t.status != :cancel', { cancel: 'canceled' })
+            .andWhere('t.scheduled_at < :date', { date: actualDate })
+            .getCount();
+
+        if (overdueTickets > 0) {
+             throw new ForbiddenException(`Không thể tạo phiếu mới! Còn ${overdueTickets} phiếu cũ chưa hoàn thành.`);
+        }
+        // -----------------------------------------------------------------------------------
+
         const ticket = this.ticketRepo.create({
             device: {device_id: data.device_id} as any,
             user: user,

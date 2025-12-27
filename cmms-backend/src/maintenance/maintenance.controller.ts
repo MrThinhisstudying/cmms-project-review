@@ -39,6 +39,12 @@ export class MaintenanceController {
         }
     }
 
+    @Get('dashboard')
+    async getDashboardOverview() {
+        const data = await this.maintenanceService.getDashboardOverview();
+        return { message: 'Dashboard Overview', data };
+    }
+
     @Get(':id')
     async findOne(@Param('id', ParseIntPipe) id: number) {
         try {
@@ -138,6 +144,13 @@ export class MaintenanceController {
     async getOriginalPlanView() {
         const data = await this.maintenanceService.getOriginalPlanView();
         return {message: 'Dữ liệu kế hoạch gốc', data};
+    }
+
+    @Post('import-priority')
+    @UseInterceptors(FileInterceptor('file'))
+    async importMaintenancePriority(@UploadedFile() file: Express.Multer.File) {
+        if (!file) throw new HttpException('File is required', HttpStatus.BAD_REQUEST);
+        return await this.maintenanceService.importMaintenanceWithPriority(file.buffer);
     }
 }
 

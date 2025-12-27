@@ -10,7 +10,7 @@ import { IMaintenance } from "../../../../types/maintenance.types";
 import dayjs from "dayjs";
 import { useNavigate } from "react-router-dom";
 // Import Modal xem chi tiết
-import DeviceMaintenanceDetail from "../DeviceMaintenanceDetail";
+import MaintenanceDetailModal from "../MaintenanceDetailModal";
 import { Modal } from "antd";
 import { StopOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
 import { cancelMaintenancePlan } from "../../../../apis/maintenance";
@@ -274,15 +274,17 @@ const MaintenanceTable: React.FC<Props> = ({
         style={{ marginTop: 16, background: "#fff", borderRadius: 8 }}
       />
 
-      <DeviceMaintenanceDetail
+      <MaintenanceDetailModal
         open={isDetailOpen}
-        device={selectedDevice}
-        onCancel={() => {
-          setIsDetailOpen(false);
-          setSelectedDevice(null);
+        deviceId={selectedDevice?.device_id}
+        deviceName={selectedDevice?.name}
+        onClose={() => {
+            setIsDetailOpen(false);
+            setSelectedDevice(null);
         }}
-        onSuccess={() => {
-          if (onRefresh) onRefresh();
+        onPerformMaintenance={(record) => {
+             // Pass callback to parent if needed, or handle directly
+             if (onCreateTicket) onCreateTicket(record);
         }}
       />
     </>
