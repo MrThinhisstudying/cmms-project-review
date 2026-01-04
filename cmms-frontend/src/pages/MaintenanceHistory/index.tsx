@@ -70,7 +70,7 @@ const MaintenanceHistoryPage: React.FC = () => {
     fetchData();
   }, []);
 
-  // Hàm tải PDF
+  // Hàm xem PDF (Mở tab mới)
   const handleDownloadPdf = async (ticketId: number) => {
     try {
       message.loading({ content: "Đang tạo PDF...", key: "pdf_loading" });
@@ -84,16 +84,17 @@ const MaintenanceHistoryPage: React.FC = () => {
       if (!response.ok) throw new Error("Lỗi tải file");
 
       const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.download = `Phieu_Bao_Duong_${ticketId}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(downloadUrl);
+      const fileURL = window.URL.createObjectURL(blob);
+      
+      // Mở tab mới
+      const newWindow = window.open(fileURL, "_blank");
+      if (newWindow) {
+         newWindow.focus();
+      } else {
+         message.warning("Vui lòng cho phép popup để xem PDF");
+      }
 
-      message.success({ content: "Tải xong!", key: "pdf_loading" });
+      message.success({ content: "Đã mở xem trước!", key: "pdf_loading" });
     } catch (e) {
       message.error({ content: "Không thể tải file PDF", key: "pdf_loading" });
     }

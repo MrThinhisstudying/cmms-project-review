@@ -332,6 +332,7 @@ const MaintenanceProcedurePage: React.FC = () => {
             onChange={setPreviewLevel}
             style={{ width: 120 }}
           >
+            <Option value="Tuần">Tuần</Option>
             <Option value="1M">1 Tháng</Option>
             <Option value="3M">3 Tháng</Option>
             <Option value="6M">6 Tháng</Option>

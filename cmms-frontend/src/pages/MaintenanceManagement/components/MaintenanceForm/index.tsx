@@ -13,8 +13,9 @@ import {
   DatePicker,
   Radio,
   Divider,
+  Modal,
 } from "antd";
-import { PlusOutlined, DeleteOutlined } from "@ant-design/icons";
+import { PlusOutlined, DeleteOutlined, ExclamationCircleOutlined, CheckSquareOutlined } from "@ant-design/icons";
 import ChecklistExecutor from "../ChecklistExecutor/index";
 import {
   getAllTemplates,
@@ -179,6 +180,51 @@ const MaintenanceForm: React.FC<Props> = ({
     }));
   };
 
+
+  const handleSelectAllAcceptance = () => {
+    Modal.confirm({
+      title: (
+        <span style={{ color: "red", fontWeight: "bold" }}>
+          <ExclamationCircleOutlined /> CẢNH BÁO QUAN TRỌNG
+        </span>
+      ),
+      icon: null,
+      width: 600,
+      content: (
+        <div style={{ fontSize: 16, marginTop: 10, textAlign: "justify" }}>
+          Bằng việc sử dụng chức năng này, bạn xác nhận đã kiểm tra đầy đủ các
+          hạng mục nghiệm thu.
+          <br />
+          <br />
+          <b>
+            Bạn sẽ chịu hoàn toàn trách nhiệm về tính chính xác của kết quả kiểm
+            tra cũng như các vấn đề phát sinh liên quan trong hiện tại và tương
+            lai.
+          </b>
+        </div>
+      ),
+      okText: "Chấp nhận (Đồng ý tích Đạt)",
+      cancelText: "Từ chối",
+      okButtonProps: { danger: true, size: "large" },
+      cancelButtonProps: { size: "large" },
+      onOk: () => {
+        const newResults = { ...acceptanceResults };
+        let count = 0;
+
+        ACCEPTANCE_DATA.forEach((row) => {
+          newResults[row.label] = {
+            status: "pass",
+            note: newResults[row.label]?.note || "",
+          };
+          count++;
+        });
+
+        setAcceptanceResults(newResults);
+        message.success(`Đã tích ĐẠT cho toàn bộ ${count} hạng mục nghiệm thu`);
+      },
+    });
+  };
+
   const onFinish = async (values: any) => {
     if (!currentTemplateJson) return message.warning("Chưa chọn quy trình!");
 
@@ -192,7 +238,8 @@ const MaintenanceForm: React.FC<Props> = ({
         `Vui lòng đánh giá Đạt/Không cho mục: "${missingItems[0].label}"`
       );
     }
-
+    
+    // ... rest of onFinish
     const acceptanceFinal = ACCEPTANCE_DATA.map((row) => {
       const result = acceptanceResults[row.label] || {
         status: "pass",
@@ -223,6 +270,7 @@ const MaintenanceForm: React.FC<Props> = ({
       final_conclusion: values.final_conclusion,
       leader_user_id: values.leader_user_id,
       operator_user_id: values.operator_user_id,
+      // ... rest of payload
     };
 
     try {
@@ -317,6 +365,7 @@ const MaintenanceForm: React.FC<Props> = ({
                   onChange={setCurrentLevel}
                   size="large"
                 >
+                  <Option value="Tuần">1 tuần</Option>
                   <Option value="1M">01 Tháng</Option>
                   <Option value="3M">03 Tháng</Option>
                   <Option value="6M">06 Tháng</Option>
@@ -451,7 +500,7 @@ const MaintenanceForm: React.FC<Props> = ({
             <TextArea rows={3} placeholder="Nhập nội dung phát sinh..." />
           </Form.Item>
         </Card>
-
+        
         {/* --- 5. NGHIỆM THU --- */}
         <Card
           title="5. NGHIỆM THU & KẾT LUẬN / CHECK AND TAKE OVER"
@@ -496,47 +545,93 @@ const MaintenanceForm: React.FC<Props> = ({
             </Form.Item>
           </div>
 
-          <div style={{ fontWeight: "bold", marginBottom: 10 }}>
-            5.2. Xác nhận của đơn vị sử dụng / Approved by using unit:
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontWeight: "bold" }}>
+              5.2. Xác nhận của đơn vị sử dụng / Approved by using unit:
+            </div>
+            <Button
+              size="small"
+              type="dashed"
+              danger
+              icon={<CheckSquareOutlined />}
+              onClick={handleSelectAllAcceptance}
+            >
+              Chọn tất cả (Đạt)
+            </Button>
           </div>
           <table
             style={{
               width: "100%",
               borderCollapse: "collapse",
-              border: "1px solid #d9d9d9",
+              border: "1px solid #000",
+              fontSize: 14,
             }}
           >
-            <thead style={{ background: "#fafafa" }}>
+            <thead>
               <tr>
                 <th
                   style={{
-                    padding: 8,
-                    borderBottom: "1px solid #d9d9d9",
-                    textAlign: "left",
+                    border: "1px solid #000",
+                    padding: "8px 4px",
+                    textAlign: "center",
+                    width: 50,
+                    background: "#f0f0f0",
                   }}
                 >
-                  Nội dung
+                  STT/
+                  <br />
+                  No.
                 </th>
                 <th
                   style={{
-                    width: 80,
-                    borderBottom: "1px solid #d9d9d9",
+                    border: "1px solid #000",
+                    padding: "8px",
                     textAlign: "center",
+                    background: "#f0f0f0",
                   }}
                 >
-                  Đạt
+                  Nội dung/
+                  <br />
+                  Content
                 </th>
                 <th
                   style={{
-                    width: 80,
-                    borderBottom: "1px solid #d9d9d9",
+                    border: "1px solid #000",
+                    padding: "8px 4px",
                     textAlign: "center",
+                    width: 60,
+                    background: "#f0f0f0",
                   }}
                 >
-                  Không Đạt
+                  Đạt/
+                  <br />
+                  OK
                 </th>
-                <th style={{ width: 150, borderBottom: "1px solid #d9d9d9" }}>
-                  Ghi chú
+                <th
+                  style={{
+                    border: "1px solid #000",
+                    padding: "8px 4px",
+                    textAlign: "center",
+                    width: 90,
+                    background: "#f0f0f0",
+                  }}
+                >
+                  Không đạt/
+                  <br />
+                  Not good
+                </th>
+                <th
+                  style={{
+                    border: "1px solid #000",
+                    padding: "8px",
+                    textAlign: "center",
+                    width: 150,
+                    background: "#f0f0f0",
+                  }}
+                >
+                  Ghi chú/
+                  <br />
+                  Note
                 </th>
               </tr>
             </thead>
@@ -547,20 +642,34 @@ const MaintenanceForm: React.FC<Props> = ({
                   note: "",
                 };
                 return (
-                  <tr
-                    key={row.id}
-                    style={{ borderBottom: "1px solid #f0f0f0" }}
-                  >
+                  <tr key={row.id}>
                     <td
                       style={{
-                        padding: 8,
-                        paddingLeft: row.isSub ? 32 : 8,
-                        fontWeight: row.isSub ? 400 : 500,
+                        border: "1px solid #000",
+                        textAlign: "center",
+                        padding: 4,
                       }}
                     >
-                      {row.label}
+                      {row.id}
                     </td>
-                    <td style={{ textAlign: "center" }}>
+                    <td
+                      style={{
+                        border: "1px solid #000",
+                        padding: "8px",
+                        fontWeight: row.isSub ? 400 : 600,
+                        paddingLeft: row.isSub ? 24 : 8,
+                      }}
+                    >
+                      {row.label.replace(/^[0-9.-]+\s*/, "")}{" "}
+                      {/* Remove numbering from label if present to avoid dup */}
+                    </td>
+                    <td
+                      style={{
+                        border: "1px solid #000",
+                        textAlign: "center",
+                        verticalAlign: "middle",
+                      }}
+                    >
                       <input
                         type="radio"
                         name={`acc_${row.id}`}
@@ -568,10 +677,21 @@ const MaintenanceForm: React.FC<Props> = ({
                         onChange={() =>
                           handleAcceptanceUpdate(row.label, "status", "pass")
                         }
-                        style={{ transform: "scale(1.2)", cursor: "pointer" }}
+                        style={{
+                          width: 20,
+                          height: 20,
+                          cursor: "pointer",
+                          accentColor: "green",
+                        }}
                       />
                     </td>
-                    <td style={{ textAlign: "center" }}>
+                    <td
+                      style={{
+                        border: "1px solid #000",
+                        textAlign: "center",
+                        verticalAlign: "middle",
+                      }}
+                    >
                       <input
                         type="radio"
                         name={`acc_${row.id}`}
@@ -579,10 +699,15 @@ const MaintenanceForm: React.FC<Props> = ({
                         onChange={() =>
                           handleAcceptanceUpdate(row.label, "status", "fail")
                         }
-                        style={{ transform: "scale(1.2)", cursor: "pointer" }}
+                        style={{
+                          width: 20,
+                          height: 20,
+                          cursor: "pointer",
+                          accentColor: "red",
+                        }}
                       />
                     </td>
-                    <td style={{ padding: 4 }}>
+                    <td style={{ border: "1px solid #000", padding: 4 }}>
                       <Input
                         bordered={false}
                         size="small"
@@ -602,44 +727,97 @@ const MaintenanceForm: React.FC<Props> = ({
               })}
             </tbody>
           </table>
-          <Divider />
-          <Form.Item
-            name="final_conclusion"
-            label={
-              <span style={{ fontWeight: "bold" }}>KẾT LUẬN / CONCLUSION:</span>
-            }
-            valuePropName="checked"
+
+          {/* KẾT LUẬN */}
+          <div
+            style={{
+              border: "1px solid #000",
+              borderTop: "none", // Liền mạch với bảng
+              padding: "12px 16px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
           >
-            <Radio.Group>
-              <Radio
-                value={true}
-                style={{ color: "green", fontWeight: "bold" }}
-              >
-                ĐẠT YCKT - Đưa vào khai thác
-              </Radio>
-              <Radio
-                value={false}
-                style={{ color: "red", fontWeight: "bold", marginLeft: 20 }}
-              >
-                KHÔNG ĐẠT
-              </Radio>
-            </Radio.Group>
-          </Form.Item>
+            <div style={{ fontWeight: "bold", fontSize: 15 }}>
+              Kết luận / Conclusion:
+            </div>
+            <Form.Item name="final_conclusion" noStyle valuePropName="checked">
+              <Radio.Group style={{ display: "flex", gap: 30 }}>
+                <Radio
+                  value={true}
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 600,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <span style={{ marginLeft: 4 }}>
+                    Đạt YCKT, đưa TTB vào khai thác
+                    <br />
+                    <i
+                      style={{
+                        fontWeight: "normal",
+                        fontSize: 13,
+                        color: "#666",
+                      }}
+                    >
+                      (Equipment is ready for operation)
+                    </i>
+                  </span>
+                </Radio>
+                <Radio
+                  value={false}
+                  style={{
+                    fontSize: 15,
+                    fontWeight: 600,
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                >
+                  <span style={{ marginLeft: 4 }}>
+                    Không đạt
+                    <br />
+                    <i
+                      style={{
+                        fontWeight: "normal",
+                        fontSize: 13,
+                        color: "#666",
+                      }}
+                    >
+                      (Not good)
+                    </i>
+                  </span>
+                </Radio>
+              </Radio.Group>
+            </Form.Item>
+          </div>
         </Card>
 
         {/* --- 6. KÝ TÊN --- */}
         <div style={{ marginTop: 30, marginBottom: 20 }}>
-          <div
-            style={{
-              textAlign: "right",
-              fontStyle: "italic",
-              marginBottom: 20,
-              fontSize: 15,
-            }}
+          <Form.Item
+            noStyle
+            shouldUpdate={(prev, curr) => prev.execution_date !== curr.execution_date}
           >
-            Côn Đảo, ngày {dayjs().format("DD")} tháng {dayjs().format("MM")}{" "}
-            năm {dayjs().format("YYYY")}
-          </div>
+            {({ getFieldValue }) => {
+              const date = getFieldValue("execution_date") || dayjs();
+              return (
+                <div
+                  style={{
+                    textAlign: "right",
+                    fontStyle: "italic",
+                    marginBottom: 20,
+                    fontSize: 15,
+                  }}
+                >
+                  Côn Đảo, ngày {dayjs(date).format("DD")} tháng{" "}
+                  {dayjs(date).format("MM")} năm {dayjs(date).format("YYYY")}
+                </div>
+              );
+            }}
+          </Form.Item>
           <Row gutter={48}>
             <Col span={12} style={{ textAlign: "center" }}>
               <div style={{ fontWeight: "bold", marginBottom: 5 }}>

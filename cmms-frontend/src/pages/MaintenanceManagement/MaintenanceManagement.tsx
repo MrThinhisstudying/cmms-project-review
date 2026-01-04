@@ -21,7 +21,8 @@ import MaintenanceHeader from "./components/MaintenanceHeader";
 import MaintenanceTable from "./components/MaintenanceTable";
 import MaintenanceForm from "./components/MaintenanceForm";
 import EditPlanModal from "./components/EditPlanModal";
-import { getAllMaintenances } from "../../apis/maintenance";
+import MaintenanceImportModal from "./components/MaintenanceImportModal";
+import { getAllMaintenances, getDashboardOverview } from "../../apis/maintenance";
 import moment from "moment";
 
 const { Content } = Layout;
@@ -34,6 +35,7 @@ const MaintenanceManagement: React.FC = () => {
   const [initialData, setInitialData] = useState<any>(null);
 
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<any>(null);
 
   // --- STATE DỮ LIỆU ---
@@ -53,7 +55,7 @@ const MaintenanceManagement: React.FC = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const res = await getAllMaintenances();
+      const res = await getDashboardOverview(null);
       const data = Array.isArray(res) ? res : [];
       setAllData(data);
       setFilteredData(data); // Mới vào chưa lọc thì bằng data gốc
@@ -155,7 +157,11 @@ const MaintenanceManagement: React.FC = () => {
       }}
     >
       {/* Header */}
-      <MaintenanceHeader onCreate={handleCreateNew} onRefresh={fetchData} />
+      <MaintenanceHeader 
+        onCreate={handleCreateNew} 
+        onRefresh={fetchData} 
+        onImport={() => setIsImportOpen(true)} // Pass trigger
+      />
 
       {/* Filter Bar */}
       <Card
@@ -178,6 +184,7 @@ const MaintenanceManagement: React.FC = () => {
               allowClear
               onChange={setFilterLevel}
             >
+              <Option value="Tuần">1 tuần</Option>
               <Option value="1M">01 Tháng</Option>
               <Option value="3M">03 Tháng</Option>
               <Option value="6M">06 Tháng</Option>
@@ -249,6 +256,13 @@ const MaintenanceManagement: React.FC = () => {
         open={isEditOpen}
         data={editingRecord}
         onCancel={() => setIsEditOpen(false)}
+        onSuccess={handleRefresh}
+      />
+
+      {/* Modal Import */}
+      <MaintenanceImportModal
+        open={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
         onSuccess={handleRefresh}
       />
     </div>

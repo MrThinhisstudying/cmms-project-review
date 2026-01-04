@@ -24,8 +24,8 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
     const checkedBox = '<span style="font-family: DejaVu Sans, sans-serif; font-size: 14px;">☑</span>';
     const unCheckedBox = '<span style="font-family: DejaVu Sans, sans-serif; font-size: 14px;">☐</span>';
 
-    const renderOk = (status: string) => (status === 'pass' ? tickSymbol : '');
-    const renderNg = (status: string) => (status === 'fail' ? tickSymbol : '');
+    const renderOk = (status: string) => '';
+    const renderNg = (status: string) => '';
 
     // Hàm làm sạch văn bản
     const cleanText = (text: any) => {
@@ -48,8 +48,8 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
         const isCurrentLevel = ticket.maintenance_level === colLevel;
         if (isCurrentLevel) {
             if (item.type === 'input_number' && item.value) return `<b>${cleanText(item.value)}</b>`;
-            if (item.status === 'pass') return tickSymbol;
-            if (item.status === 'fail') return '<b>X</b>';
+            if (item.status === 'pass') return ''; // Removed tickSymbol
+            if (item.status === 'fail') return ''; // Removed fail mark
         }
         return '';
     };
@@ -196,7 +196,7 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
                 <td width="40%">Số GHĐ / Working hours: <b>${ticket.working_hours ? ticket.working_hours.toLocaleString() : '...'}</b></td>
             </tr>
             <tr>
-                <td>1.3. Phiếu công tác số / Checklist No.: <b>#${ticket.ticket_id}</b></td>
+                <td>1.3. Phiếu công tác số / Checklist No.: <b></b></td>
                 <td>Ngày / Date: <b>${formatDate(ticket.execution_date)}</b></td>
             </tr>
             <tr>
@@ -260,10 +260,14 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
             <strong>5.2. Xác nhận của đơn vị sử dụng / Approved by using unit:</strong>
         </div>
         
-        <table class="compact-td">
+        <table style="width: 100%; border-collapse: collapse; border: 1px solid black; font-size: 10.5pt; table-layout: fixed;">
             <thead>
-                <tr class="bg-header">
-                    <th width="5%">STT</th><th width="55%">Nội dung / Content</th><th width="10%">Đạt</th><th width="10%">K.Đạt</th><th width="20%">Ghi chú</th>
+                <tr style="background-color: #ffffff;">
+                    <th style="width: 6%; border: 1px solid black; text-align: center; font-weight: bold;">STT/<br>No.</th>
+                    <th style="border: 1px solid black; text-align: center; font-weight: bold;">Nội dung/<br>Content</th>
+                    <th style="width: 8%; border: 1px solid black; text-align: center; font-weight: bold;">Đạt/<br>OK</th>
+                    <th style="width: 10%; border: 1px solid black; text-align: center; font-weight: bold;">Không đạt/<br>Not good</th>
+                    <th style="width: 20%; border: 1px solid black; text-align: center; font-weight: bold;">Ghi chú/<br>Note</th>
                 </tr>
             </thead>
             <tbody>
@@ -271,35 +275,62 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
                     Array.isArray(ticket.acceptance_result) && ticket.acceptance_result.length > 0
                         ? ticket.acceptance_result
                               .map((acc: any, idx: number) => {
-                                  const isSubItem = acc.id && acc.id.includes('.');
-                                  const paddingLeft = isSubItem ? '25px' : '5px';
-                                  const fontWeight = isSubItem ? 'normal' : 'bold';
+                                  const idStr = String(acc.id);
+                                  const isSubItem = idStr.includes('.') || !Number.isInteger(Number(idStr));
+                                  
+                                  // STT Logic: Main items get "1.", Sub items get empty
+                                  const sttDisplay = isSubItem ? '' : `${idStr}.`;
+                                  
+                                  // Content Logic: Sub items get indented bullet
+                                  const cleanContent = cleanText(acc.item).replace(/^[0-9.-]+\s*/, '');
+                                  const contentDisplay = isSubItem 
+                                      ? `<div style="padding-left: 20px;">○ ${cleanContent.replace(/^[-\s]+/, '')}</div>` // Bullet circle
+                                      : `<b>${cleanContent}</b>`;
+
+                                  // Checkmark Logic
+                                  const okMark = ''; 
+                                  const ngMark = '';
+
                                   return `
                         <tr>
-                            <td class="text-center">${acc.id || idx + 1}</td>
-                            <td style="padding-left: ${paddingLeft}; font-weight: ${fontWeight};">${cleanText(acc.item)}</td>
-                            <td class="text-center">${renderOk(acc.status)}</td>
-                            <td class="text-center">${renderNg(acc.status)}</td>
-                            <td>${cleanText(acc.note)}</td>
+                            <td style="border: 1px solid black; text-align: center; vertical-align: top; padding: 5px;">${sttDisplay}</td>
+                            <td style="border: 1px solid black; padding: 5px; vertical-align: top; text-align: left;">
+                                ${contentDisplay}
+                            </td>
+                            <td style="border: 1px solid black; text-align: center; vertical-align: middle;">${okMark}</td>
+                            <td style="border: 1px solid black; text-align: center; vertical-align: middle;">${ngMark}</td>
+                            <td style="border: 1px solid black; padding: 5px; vertical-align: middle;">${cleanText(acc.note)}</td>
                         </tr>`;
                               })
                               .join('')
-                        : '<tr><td colspan="5"></td></tr>'
+                        : '<tr><td colspan="5" style="border: 1px solid black;"></td></tr>'
                 }
             </tbody>
         </table>
 
-        <div style="border: 1px solid black; padding: 5px; margin-top: -1px; display: flex; align-items: center; font-size: 10.5pt;">
-            <strong style="margin-right: 15px;">Kết luận / Conclusion:</strong>
-            <div style="margin-right: 30px;">
-                ${ticket.final_conclusion ? checkedBox : unCheckedBox} <strong>Đạt YCKT</strong> <i style="margin-left: 3px;">(Ready)</i>
+        <div style="border: 1px solid black; border-top: none; padding: 8px 10px; font-size: 10.5pt;">
+            <div style="display: flex; align-items: flex-start;">
+                <div style="font-weight: bold; width: 160px;">Kết luận: <br><i>Conclusion:</i></div>
+                <div style="flex: 1; display: flex; justify-content: space-around;">
+                    <div style="display: flex; align-items: center;">
+                        <span style="font-weight: bold; margin-right: 5px;">- Đạt YCKT, đưa TTB vào khai thác</span>
+                        ${ticket.final_conclusion ? checkedBox : unCheckedBox}
+                    </div>
+                    <div style="display: flex; align-items: center;">
+                        <span style="font-weight: bold; margin-right: 5px;">- Không đạt</span>
+                        ${!ticket.final_conclusion ? checkedBox : unCheckedBox}
+                    </div>
+                </div>
             </div>
-            <div>
-                ${!ticket.final_conclusion ? checkedBox : unCheckedBox} <strong>Không đạt</strong> <i style="margin-left: 3px;">(Not good)</i>
+             <div style="display: flex; align-items: flex-start; margin-left: 160px; margin-top: -15px;">
+                 <div style="flex: 1; display: flex; justify-content: space-around;">
+                     <div style="font-style: italic; font-size: 10pt; width: 250px;">- Equipment is ready for operation</div>
+                     <div style="font-style: italic; font-size: 10pt;">- Not good</div>
+                 </div>
             </div>
         </div>
 
-        <table class="sign-table">
+        <table class="sign-table" style="margin-top: 20px;">
             <tr><td width="50%"></td><td width="50%" class="italic">Côn Đảo, ngày ${day} tháng ${month} năm ${year}</td></tr>
             <tr>
                 <td>
@@ -319,28 +350,82 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
 
         <div class="page-break"></div>
 
-        
-        
-       <table style="width: 100%;">
-            <col style="width: 5%">  <col style="width: 35%"> <col style="width: 7.5%"><col style="width: 7.5%"> <col style="width: 7.5%"><col style="width: 7.5%"> <col style="width: 7.5%"><col style="width: 7.5%"> <col style="width: 7.5%"><col style="width: 7.5%"> <thead>
-                <tr class="bg-header">
-                    <th rowspan="2">STT<br>No.</th>
-                    <th rowspan="2">NỘI DUNG BẢO DƯỠNG<br>MAINTENANCE TASKS</th>
-                    <th colspan="8" style="padding: 5px;">CHU KỲ BẢO DƯỠNG ĐỊNH KỲ / PERIODIC MAINTENANCE CYCLE</th>
-                </tr>
-                
-                <tr class="bg-header">
-                    <th colspan="2">1T/250G<br>1M/250G</th>
-                    <th colspan="2">6T/500G<br>6M/500G</th>
-                    <th colspan="2">1Y/1000G<br>1Y/1000H</th>
-                    <th colspan="2">2Y/2000H<br>2Y/2000H</th>
-                </tr>
-            </thead>
-            <tbody>${checklistHtml}</tbody>
+            <table style="width: 100%;">
+            ${
+                ['Tuần', 'Weekly', 'Week'].includes(ticket.maintenance_level)
+                    ? `
+                <col style="width: 5%"> <col style="width: 65%"> <col style="width: 15%"> <col style="width: 15%">
+                <thead>
+                    <tr class="bg-header">
+                        <th>STT<br>No.</th>
+                        <th>NỘI DUNG BẢO DƯỠNG<br>MAINTENANCE TASKS</th>
+                        <th colspan="2">WEEKLY MAINTENANCE</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${(() => {
+                        let html = '';
+                        if (Array.isArray(ticket.checklist_result) && ticket.checklist_result.length > 0) {
+                            // 1. Flatten and Filter: Collect all valid Weekly items across all categories
+                            const allWeeklyItems: any[] = [];
+                            ticket.checklist_result.forEach((item: any) => {
+                                 const reqChar = getReqChar(item, ticket.maintenance_level) || getReqChar(item, 'Tuần') || getReqChar(item, 'Weekly');
+                                 if (reqChar) {
+                                     allWeeklyItems.push(item);
+                                 }
+                            });
+
+                            // 2. Render flat list with continuous numbering
+                            if (allWeeklyItems.length > 0) {
+                                allWeeklyItems.forEach((item: any, idx: number) => {
+                                    const stt = idx + 1; // Continuous numbering: 1, 2, 3...
+                                    const reqChar = getReqChar(item, ticket.maintenance_level) || getReqChar(item, 'Tuần') || getReqChar(item, 'Weekly');
+                                    
+                                    html += `
+                                        <tr>
+                                            <td class="text-center" style="padding: 3px;">${stt}</td>
+                                            <td style="padding-left: 5px; padding-right: 2px;">
+                                                ${cleanText(item.task)}
+                                                ${item.type === 'input_number' ? '<br><i>(Đo thông số/Measure)</i>' : ''}
+                                                ${item.note ? `<br><i>Ghi chú: ${cleanText(item.note)}</i>` : ''}
+                                            </td>
+                                            <td class="text-center">${reqChar}</td>
+                                            <td class="text-center"></td>
+                                        </tr>
+                                    `;
+                                });
+                            } else {
+                                html = '<tr><td colspan="4" class="text-center italic">Không có dữ liệu checklist tuần</td></tr>';
+                            }
+                        } else {
+                             html = '<tr><td colspan="4" class="text-center italic">Không có dữ liệu checklist</td></tr>';
+                        }
+                        return html;
+                    })()}
+                </tbody>
+                `
+                    : `
+                <col style="width: 5%">  <col style="width: 35%"> <col style="width: 7.5%"><col style="width: 7.5%"> <col style="width: 7.5%"><col style="width: 7.5%"> <col style="width: 7.5%"><col style="width: 7.5%"> <col style="width: 7.5%"><col style="width: 7.5%"> 
+                <thead>
+                    <tr class="bg-header">
+                        <th rowspan="2">STT<br>No.</th>
+                        <th rowspan="2">NỘI DUNG BẢO DƯỠNG<br>MAINTENANCE TASKS</th>
+                        <th colspan="8" style="padding: 5px;">CHU KỲ BẢO DƯỠNG ĐỊNH KỲ / PERIODIC MAINTENANCE CYCLE</th>
+                    </tr>
+                    
+                    <tr class="bg-header">
+                        <th colspan="2">1T/250G<br>1M/250G</th>
+                        <th colspan="2">6T/500G<br>6M/500G</th>
+                        <th colspan="2">1Y/1000G<br>1Y/1000H</th>
+                        <th colspan="2">2Y/2000H<br>2Y/2000H</th>
+                    </tr>
+                </thead>
+                <tbody>${checklistHtml}</tbody>
+                `
+            }
         </table>
 ${notesHtml}
     </body>
     </html>
     `;
 };
-

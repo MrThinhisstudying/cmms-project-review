@@ -67,31 +67,36 @@ const MasterPlanModal: React.FC<Props> = ({ open, onCancel }) => {
       key: `month_${i}`,
       align: "center",
       width: 80,
-      render: (plan: any) => {
-        if (!plan) return null;
+      render: (plans: any[]) => {
+        if (!plans || plans.length === 0) return null;
 
-        // Màu sắc dựa theo cấp độ
-        let color = "blue";
-        if (plan.level === "6M") color = "orange";
-        if (plan.level === "1Y") color = "purple";
-        if (plan.level === "2Y") color = "red";
-
-        // Kiểm tra trạng thái để làm mờ nếu đã xong
-        const isDone = plan.status === "inactive" && plan.last_maintenance_date;
-        const style = isDone
-          ? { opacity: 0.5, textDecoration: "line-through" }
-          : {};
-
+        // Deduplicate levels
+        const uniqueLevels = Array.from(new Set(plans.map((p) => p.level)));
+        
         return (
-          <Tooltip
-            title={`Ngày dự kiến: ${dayjs(plan.next_maintenance_date).format(
-              "DD/MM/YYYY"
-            )}`}
-          >
-            <Tag color={color} style={style}>
-              {plan.level}
-            </Tag>
-          </Tooltip>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "center" }}>
+            {uniqueLevels.map((level) => {
+              let color = "blue";
+              if (level === "Weekly" || level === "Tuần") color = "cyan"; 
+              if (level === "1M" || level === "1 Tháng") color = "blue";
+              if (level === "3M" || level === "3 Tháng") color = "green";
+              if (level === "6M" || level === "6 Tháng") color = "orange";
+              if (level === "9M" || level === "9 Tháng") color = "geekblue";
+              if (level === "1Y" || level === "1 Năm") color = "purple";
+              if (level === "2Y" || level === "2 Năm") color = "red";
+
+              // Find first plan with this level to check status (optional logic)
+              const plan = plans.find(p => p.level === level);
+              const isDone = plan?.status === "inactive" && plan?.last_maintenance_date;
+              const style = isDone ? { opacity: 0.5, textDecoration: "line-through" } : {};
+
+              return (
+                <Tag key={level} color={color} style={{ ...style, width: '100%', textAlign: 'center', margin: 0 }}>
+                  {level === 'Weekly' ? 'Tuần' : level}
+                </Tag>
+              );
+            })}
+          </div>
         );
       },
     });

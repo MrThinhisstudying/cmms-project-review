@@ -8,7 +8,6 @@ import {
   TableOutlined,
 } from "@ant-design/icons";
 import {
-  importMaintenancePlan,
   importTemplate,
 } from "../../../../apis/maintenance";
 import { getToken } from "../../../../utils/auth";
@@ -20,12 +19,12 @@ const { Title } = Typography;
 interface Props {
   onCreate: () => void; // Hàm callback mở Modal tạo phiếu
   onRefresh?: () => void; // Hàm callback reload lại dữ liệu
+  onImport?: () => void; // Hàm mở modal import
 }
 
-const MaintenanceHeader: React.FC<Props> = ({ onCreate, onRefresh }) => {
+const MaintenanceHeader: React.FC<Props> = ({ onCreate, onRefresh, onImport }) => {
   // State loading riêng cho từng nút để UX tốt hơn
   const [uploadingTemplate, setUploadingTemplate] = useState(false);
-  const [uploadingPlan, setUploadingPlan] = useState(false);
   const [isMasterOpen, setIsMasterOpen] = useState(false);
   const [isOriginalViewOpen, setIsOriginalViewOpen] = useState(false);
   // 1. Xử lý Import QUY TRÌNH (Template)
@@ -55,29 +54,6 @@ const MaintenanceHeader: React.FC<Props> = ({ onCreate, onRefresh }) => {
     return false; // Chặn hành vi upload mặc định của Antd
   };
 
-  // 2. Xử lý Import KẾ HOẠCH (Plan)
-  const handleImportPlan = async (file: File) => {
-    const token = getToken(); // Luôn lấy token mới nhất
-    if (!token) {
-      message.error("Vui lòng đăng nhập lại!");
-      return false;
-    }
-
-    setUploadingPlan(true); // Bắt đầu loading
-    try {
-      await importMaintenancePlan(file, token);
-      message.success("Đã nạp kế hoạch bảo dưỡng thành công!");
-
-      if (onRefresh) onRefresh(); // Reload bảng danh sách bên ngoài
-    } catch (error) {
-      console.error(error);
-      message.error("Lỗi import kế hoạch. Vui lòng kiểm tra file Excel.");
-    } finally {
-      setUploadingPlan(false); // Tắt loading
-    }
-    return false;
-  };
-
   return (
     <div
       style={{
@@ -101,45 +77,16 @@ const MaintenanceHeader: React.FC<Props> = ({ onCreate, onRefresh }) => {
       </div>
 
       <Space>
-        {/* Nút 1: Import Quy trình 
-        <Upload
-          beforeUpload={handleImportTemplate}
-          showUploadList={false}
-          accept=".xlsx, .xls"
+        {/* Nút 1: Import Quy trình - Tạm ẩn theo code gốc hoặc để nguyên nếu cần */}
+        
+        {/* Nút 2: Import Kế hoạch (Mới) */}
+        <Button
+          icon={<CalendarOutlined />}
+          onClick={onImport} // Gọi hàm mở modal
         >
-          <Button
-            icon={
-              uploadingTemplate ? (
-                <div className="ant-upload-text-icon" />
-              ) : (
-                <FileExcelOutlined />
-              )
-            }
-            loading={uploadingTemplate}
-          >
-            {uploadingTemplate ? "Đang tải..." : "Import Quy trình"}
-          </Button>
-        </Upload>*/}
+          Import Kế hoạch (Excel)
+        </Button>
 
-        {/* Nút 2: Import Kế hoạch */}
-        <Upload
-          beforeUpload={handleImportPlan}
-          showUploadList={false}
-          accept=".xlsx, .xls"
-        >
-          <Button
-            icon={
-              uploadingPlan ? (
-                <div className="ant-upload-text-icon" />
-              ) : (
-                <CalendarOutlined />
-              )
-            }
-            loading={uploadingPlan}
-          >
-            {uploadingPlan ? "Đang nạp..." : "Import Kế hoạch"}
-          </Button>
-        </Upload>
         <Button
           icon={<TableOutlined />}
           onClick={() => setIsOriginalViewOpen(true)}

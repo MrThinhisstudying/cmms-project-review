@@ -22,7 +22,26 @@ const OriginalPlanModal: React.FC<Props> = ({ open, onCancel }) => {
         headers: { Authorization: `Bearer ${token}` },
       });
       const json = await res.json();
-      setData(json.data || []);
+      const uniqueData = Object.values(
+        (json.data || []).reduce((acc: any, cur: any) => {
+          if (cur.device && cur.device.device_id) {
+            // Logic deduplicate: Gộp cycle_config của các dòng trùng thiết bị
+            if (!acc[cur.device.device_id]) {
+              // Nếu chưa có, clone object ra để không sửa trực tiếp vào cur
+              acc[cur.device.device_id] = { ...cur, cycle_config: [...(cur.cycle_config || [])] };
+            } else {
+              // Nếu đã có, gộp cycle_config vào
+              if (cur.cycle_config && Array.isArray(cur.cycle_config)) {
+                const existingConfig = new Set(acc[cur.device.device_id].cycle_config || []);
+                cur.cycle_config.forEach((c: string) => existingConfig.add(c));
+                acc[cur.device.device_id].cycle_config = Array.from(existingConfig);
+              }
+            }
+          }
+          return acc;
+        }, {})
+      );
+      setData(uniqueData as any[]);
     } catch (error) {
       console.error(error);
     } finally {
@@ -36,13 +55,13 @@ const OriginalPlanModal: React.FC<Props> = ({ open, onCancel }) => {
 
   // --- HÀM KIỂM TRA DẤU X ---
   const renderCheck = (cycles: string[], target: string) => {
-    // cycles là mảng ['1M', '6M', ...] từ DB
+    // cycles là mảng gộp ['1M', '6M', ...]
     if (Array.isArray(cycles) && cycles.includes(target)) {
       return (
         <Tag color="green" style={{ margin: 0 }}>
           x
         </Tag>
-      ); // Hoặc dùng dấu ✓
+      );
     }
     return "";
   };
@@ -62,10 +81,16 @@ const OriginalPlanModal: React.FC<Props> = ({ open, onCancel }) => {
       render: (text: string) => <b>{text}</b>,
     },
     {
-      title: "Model / Biển số",
-      dataIndex: ["device", "serial_number"],
-      key: "model",
+      title: "Ký hiệu/ Model",
+      dataIndex: ["device", "brand"],
+      key: "brand",
       width: 120,
+    },
+    {
+      title: "Serial Number",
+      dataIndex: ["device", "serial_number"],
+      key: "serial_number",
+      width: 150,
     },
     {
       title: "Ngày BD Gần Nhất",
@@ -76,6 +101,13 @@ const OriginalPlanModal: React.FC<Props> = ({ open, onCancel }) => {
       render: (date: string) => (date ? dayjs(date).format("DD/MM/YYYY") : "-"),
     },
     // --- CÁC CỘT CHU KỲ (GIỐNG FILE EXCEL) ---
+    {
+      title: "Tuần",
+      dataIndex: "cycle_config",
+      align: "center" as const,
+      width: 80,
+      render: (cycles: string[]) => renderCheck(cycles, "Tuần"),
+    },
     {
       title: "1 Tháng",
       dataIndex: "cycle_config",
@@ -96,13 +128,6 @@ const OriginalPlanModal: React.FC<Props> = ({ open, onCancel }) => {
       align: "center" as const,
       width: 80,
       render: (cycles: string[]) => renderCheck(cycles, "6M"),
-    },
-    {
-      title: "9 Tháng",
-      dataIndex: "cycle_config",
-      align: "center" as const,
-      width: 80,
-      render: (cycles: string[]) => renderCheck(cycles, "9M"),
     },
     {
       title: "1 Năm",

@@ -28,6 +28,17 @@ interface AuthContextValue {
   loading: boolean;
 }
 
+interface DecodedToken {
+  id: number;
+  sub: string;
+  email: string;
+  role: string;
+  department?: IDepartment;
+  avatar?: string;
+  permissions?: string[];
+  exp: number;
+}
+
 const AuthContext = createContext<AuthContextValue>({
   user: null,
   updateUser: () => {},
@@ -49,13 +60,16 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
     setLoading(true);
     if (token) {
       try {
-        const decodedToken: any = jwtDecode(token);
+        const decodedToken = jwtDecode<DecodedToken>(token);
 
         setUser({
           id: decodedToken.id,
           name: decodedToken.sub,
           email: decodedToken.email,
-          role: decodedToken.role,
+          role:
+            decodedToken.role === "Administrator"
+              ? "admin"
+              : decodedToken.role?.toLowerCase(),
           department: decodedToken.department,
           avatar: decodedToken.avatar || "",
           permissions: decodedToken.permissions || [],
@@ -84,7 +98,7 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     if (token) {
       try {
-        const decodedToken: any = jwtDecode(token);
+        const decodedToken = jwtDecode<DecodedToken>(token);
         const currentTime = Math.floor(Date.now() / 1000);
 
         if (decodedToken.exp > currentTime) {

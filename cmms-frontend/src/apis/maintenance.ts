@@ -20,6 +20,15 @@ export const getAllMaintenances = async (): Promise<IMaintenance[]> => {
   return (j?.data ?? j) as IMaintenance[];
 };
 
+export const getDashboardOverview = async (token: string | null) => {
+  const res = await fetch(`${BASE}/maintenance/dashboard`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  });
+  if (!res.ok) throw new Error("Lấy dữ liệu Dashboard thất bại");
+  const j = await res.json();
+  return (j?.data ?? j) as IMaintenance[];
+};
+
 // Thêm hàm API này vào src/apis/maintenance.ts
 export const getMaintenancesByDevice = async (
   deviceId: number,
@@ -170,31 +179,28 @@ export const createMaintenanceTicket = async (
   return data;
 };
 
-// Import Kế hoạch (Plan) - Khác với Import Quy trình (Template)
-export const importMaintenancePlan = async (
+// Import Priority (Excel)
+export const importMaintenancePriority = async (
   file: File,
   token: string | null
 ) => {
   const formData = new FormData();
   formData.append("file", file);
 
-  const res = await fetch(`${BASE}/maintenance/plans/import`, {
+  const res = await fetch(`${BASE}/maintenance/import-priority`, {
     method: "POST",
     headers: { Authorization: token ? `Bearer ${token}` : "" },
     body: formData,
   });
 
-  // --- SỬA ĐOẠN NÀY ĐỂ BẮT LỖI TỐT HƠN ---
-  const text = await res.text(); // Đọc dạng text trước
-
+  const text = await res.text();
   try {
-    const data = text ? JSON.parse(text) : {}; // Thử parse JSON
+    const data = text ? JSON.parse(text) : {};
     if (!res.ok) {
       throw new Error(data.message || `Lỗi server (${res.status})`);
     }
     return data;
   } catch (err) {
-    // Nếu không phải JSON (VD: Server trả về lỗi HTML 500 hoặc rỗng)
     console.error("Raw Server Response:", text);
     throw new Error(`Import thất bại: Server trả về lỗi ${res.status}`);
   }
