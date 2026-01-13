@@ -8,11 +8,20 @@ import {setupSwagger} from './setup-swagger';
 import {ValidationPipe} from '@nestjs/common';
 import bodyParser from 'body-parser';
 
+import {NestExpressApplication} from '@nestjs/platform-express';
+import {join} from 'path';
+
 async function bootstrap() {
-    const app = await NestFactory.create(AppModule);
+    const app = await NestFactory.create<NestExpressApplication>(AppModule);
     app.use(bodyParser.json({limit: '20mb'}));
     app.use(bodyParser.urlencoded({limit: '20mb', extended: true}));
     app.use(compression());
+    
+    // Serve static files from uploads directory
+    app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+        prefix: '/uploads/',
+    });
+
     app.setGlobalPrefix('api');
     app.enableCors();
     app.useGlobalPipes(new ValidationPipe());

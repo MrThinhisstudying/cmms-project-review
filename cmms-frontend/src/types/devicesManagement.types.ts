@@ -29,6 +29,7 @@ export interface IDevice {
   created_at?: Date;
   updated_at?: Date;
   users?: IUser[];
+  device_group?: { id: number; name: string };
 }
 
 export interface DevicesContextValue {

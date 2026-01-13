@@ -50,6 +50,31 @@ export const DEPARTMENT_PERMISSIONS = [
         name: 'Được xuất báo cáo tổng hợp',
         description: 'Cho phép xuất các báo cáo tổng hợp liên quan đến tình trạng thiết bị, công tác bảo dưỡng, sửa chữa và kiểm định trong đơn vị.',
     },
+    {
+        code: 'can_approve_request',
+        name: 'Duyệt yêu cầu ban đầu',
+        description: 'Cho phép duyệt yêu cầu sửa chữa (Bước 1 -> Bước 2)',
+    },
+    {
+        code: 'can_create_inspection',
+        name: 'Lập phiếu kiểm tra',
+        description: 'Cho phép kỹ thuật viên lập phiếu kiểm tra tình trạng (Bước 3)',
+    },
+    {
+        code: 'can_sign_technical',
+        name: 'Ký duyệt kỹ thuật',
+        description: 'Cho phép Tổ kỹ thuật ký xác nhận phương án (Bước 3 -> Bước 4)',
+    },
+    {
+        code: 'can_sign_operation',
+        name: 'Ký duyệt vận hành',
+        description: 'Cho phép Tổ VHTTBMĐ ký xác nhận (Bước 3 -> Bước 4)',
+    },
+    {
+        code: 'can_final_approve',
+        name: 'Phê duyệt cuối cùng',
+        description: 'Cho phép Ban giám đốc phê duyệt phiếu sửa chữa (Bước 4 -> Bước 5)',
+    },
 ];
 
 export const DEPARTMENT_PERMISSION_CODES = DEPARTMENT_PERMISSIONS.map((p) => p.code);

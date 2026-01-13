@@ -1,4 +1,9 @@
-import {Body, Controller, Delete, Get, HttpCode, HttpException, HttpStatus, Param, Post, Put, Query, UseGuards} from '@nestjs/common';
+import {Body, Controller, Delete, Get, HttpCode, HttpException, HttpStatus, Param, Post, Put, Patch, Query, UseGuards, UseInterceptors, UploadedFile} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
+import {AuthUser} from './user.decorator';
+import {User} from './user.entity';
 import {UserService} from './user.service';
 import {CreateUserDto} from './dto/user-create.dto';
 import {ApiTags} from '@nestjs/swagger';
@@ -23,11 +28,42 @@ export class UserController {
         }
     }
 
-    @Get()
+    @Get('profile')
+    @UseGuards(JWTAuthGuard)
     @HttpCode(HttpStatus.OK)
-    async getAll() {
+    async getProfile(@AuthUser() user: User) {
         try {
-            const users = await this.userService.findAll();
+            const profile = await this.userService.getProfile(user.user_id);
+            return {
+                message: 'Lấy thông tin cá nhân thành công',
+                data: profile,
+            };
+        } catch (error: any) {
+            throw new HttpException(error.message || 'Lấy thông tin cá nhân thất bại', error.status || HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @Patch('profile')
+    @UseGuards(JWTAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async updateProfile(@AuthUser() user: User, @Body() data: Partial<User>) {
+        try {
+            const updated = await this.userService.updateProfile(user.user_id, data);
+            return {
+                message: 'Cập nhật thông tin cá nhân thành công',
+                data: updated,
+            };
+        } catch (error: any) {
+            throw new HttpException(error.message || 'Cập nhật thông tin cá nhân thất bại', error.status || HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @Get()
+    @UseGuards(JWTAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async getAll(@AuthUser() currentUser: User) {
+        try {
+            const users = await this.userService.findAll(currentUser);
             return {
                 message: 'Lấy danh sách người dùng thành công',
                 data: users,
@@ -89,6 +125,42 @@ export class UserController {
             return {message: 'Xoá người dùng thành công'};
         } catch (error: any) {
             throw new HttpException(error.message || 'Xoá người dùng thất bại', error.status || HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @Post(':id/signature')
+    @UseGuards(JWTAuthGuard)
+    @UseInterceptors(
+        FileInterceptor('file', {
+            storage: diskStorage({
+                destination: './uploads/signatures',
+                filename: (req, file, cb) => {
+                    const randomName = Array(32)
+                        .fill(null)
+                        .map(() => Math.round(Math.random() * 16).toString(16))
+                        .join('');
+                    cb(null, `${randomName}${extname(file.originalname)}`);
+                },
+            }),
+            fileFilter: (req, file, cb) => {
+                if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
+                    return cb(new Error('Only image files are allowed!'), false);
+                }
+                cb(null, true);
+            },
+        }),
+    )
+    async uploadSignature(@Param('id') id: number, @UploadedFile() file: Express.Multer.File) {
+        try {
+             if (!file) throw new HttpException('File is required', HttpStatus.BAD_REQUEST);
+             const signatureUrl = `/uploads/signatures/${file.filename}`;
+             await this.userService.updateProfile(id, { signature_url: signatureUrl });
+             return {
+                 message: 'Cập nhật chữ ký thành công',
+                 data: { signature_url: signatureUrl }
+             };
+        } catch (error: any) {
+            throw new HttpException(error.message || 'Updated signature failed', HttpStatus.BAD_REQUEST);
         }
     }
 }

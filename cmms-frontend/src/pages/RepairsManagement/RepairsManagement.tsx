@@ -1,20 +1,21 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  Box,
+  Button,
+  Select,
   Typography,
-  CircularProgress,
-  TextField,
-  Autocomplete,
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import { CustomButton } from "../../components/Button";
-import Toast from "../../components/Toast";
-import Pagination from "../../components/Pagination/Pagination";
+  Space,
+  Row,
+  Col,
+  message,
+  Card,
+  Spin
+} from "antd";
+import { PlusOutlined } from "@ant-design/icons";
 import { useRepairsContext } from "../../context/RepairsContext/RepairsContext";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
 import RepairForm from "./components/RepairForm";
 import RepairsTable from "./components/RepairsTable";
-import RepairDetailDialog from "./components/RepairDetailDialog";
+import RepairDetailDrawer from "./components/RepairDetailDrawer";
 import RepairInspectionForm from "./components/RepairInspectionForm";
 import RepairAcceptanceForm from "./components/RepairAcceptanceForm";
 import { useDevicesContext } from "../../context/DevicesContext/DevicesContext";
@@ -24,6 +25,9 @@ import {
   RepairInspectionPayload,
   RepairAcceptancePayload,
 } from "../../types/repairs.types";
+
+const { Title } = Typography;
+const { Option } = Select;
 
 const RepairsManagement: React.FC = () => {
   const {
@@ -37,12 +41,12 @@ const RepairsManagement: React.FC = () => {
     requestStockOutForRepair,
     exportRepairItem,
     deleteRepairItem,
+    reload,
   } = useRepairsContext();
 
   const { user } = useAuthContext();
   const role = user?.role ?? "";
   const perms = user?.permissions ?? [];
-  // Lấy danh sách thiết bị giống như trong RepairForm
   const { devices } = useDevicesContext();
 
   const availableDevices = useMemo(
@@ -55,7 +59,19 @@ const RepairsManagement: React.FC = () => {
     [devices]
   );
 
-  const [searchDevice, setSearchDevice] = useState<any | null>(null);
+  const [filterDevice, setFilterDevice] = useState<number | undefined>(undefined);
+  const [filterStatusRequest, setFilterStatusRequest] = useState<string | undefined>(undefined);
+  // Separate states for inspection status could be added if needed, or combined
+  
+  // Trigger server-side fetch when filters change
+  useEffect(() => {
+    reload({
+      device_id: filterDevice,
+      status_request: filterStatusRequest,
+      // Add status_inspection if we want to filter by that too
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterDevice, filterStatusRequest]); // removed reload from dependencies to avoid loop if reload isn't stable
 
   const canCreate = role === "admin" || perms.includes("CREATE_REPAIR");
   const canUpdate = role === "admin" || perms.includes("UPDATE_REPAIR");
@@ -63,57 +79,35 @@ const RepairsManagement: React.FC = () => {
   const canDelete = role === "admin" || perms.includes("DELETE_REPAIR");
   const canExport = role === "admin" || perms.includes("EXPORT_REPAIR");
 
-  const [page, setPage] = useState(1);
+  const checkPermission = (permissionCode: string) => {
+    return role === "admin" || perms.includes(permissionCode);
+  };
+
+
   const [openForm, setOpenForm] = useState(false);
-  const [openDetail, setOpenDetail] = useState(false);
   const [openInspection, setOpenInspection] = useState(false);
   const [openAcceptance, setOpenAcceptance] = useState(false);
   const [selectedRepair, setSelectedRepair] = useState<IRepair | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const toast = useRef<{ type: "success" | "error"; content: string }>({
-    type: "success",
-    content: "",
-  });
-
-  const [openToast, setOpenToast] = useState(false);
-
-  const filteredData = useMemo(() => {
-    let data = repairs;
-
-    if (searchDevice) {
-      data = data.filter((r) => r.device?.device_id === searchDevice.device_id);
-    }
-
-    return data;
-  }, [repairs, searchDevice]);
-
+  // No more client-side filtering needed!
+  
   const handleSubmit = async (data: RepairUpsertPayload) => {
     try {
       setSaving(true);
       if (selectedRepair) {
         await updateRepairItem(selectedRepair.repair_id, data);
-        toast.current = {
-          type: "success",
-          content: "Cập nhật phiếu thành công",
-        };
+        message.success("Cập nhật phiếu thành công");
       } else {
         await createRepairItem(data);
-        toast.current = {
-          type: "success",
-          content: "Tạo phiếu mới thành công",
-        };
+        message.success("Tạo phiếu mới thành công");
       }
+      setOpenForm(false);
+      setSelectedRepair(null);
     } catch (e) {
-      toast.current = {
-        type: "error",
-        content: e instanceof Error ? e.message : "Thao tác thất bại",
-      };
+      message.error(e instanceof Error ? e.message : "Thao tác thất bại");
     } finally {
       setSaving(false);
-      setSelectedRepair(null);
-      setOpenForm(false);
-      setOpenToast(true);
     }
   };
 
@@ -126,15 +120,11 @@ const RepairsManagement: React.FC = () => {
     try {
       setSaving(true);
       await reviewRepairItem(id, { action, reason, phase });
-      toast.current = { type: "success", content: "Cập nhật duyệt thành công" };
+      message.success("Cập nhật duyệt thành công");
     } catch (e) {
-      toast.current = {
-        type: "error",
-        content: e instanceof Error ? e.message : "Duyệt thất bại",
-      };
+      message.error(e instanceof Error ? e.message : "Duyệt thất bại");
     } finally {
       setSaving(false);
-      setOpenToast(true);
     }
   };
 
@@ -157,21 +147,13 @@ const RepairsManagement: React.FC = () => {
       }
 
       await submitInspectionStep(selectedRepair.repair_id, payload);
-
-      toast.current = {
-        type: "success",
-        content: "Đã cập nhật & duyệt kiểm nghiệm",
-      };
+      message.success("Đã cập nhật & duyệt kiểm nghiệm");
+      setOpenInspection(false);
+      setSelectedRepair(null);
     } catch (e) {
-      toast.current = {
-        type: "error",
-        content: e instanceof Error ? e.message : "Kiểm nghiệm thất bại",
-      };
+      message.error(e instanceof Error ? e.message : "Kiểm nghiệm thất bại");
     } finally {
       setSaving(false);
-      setSelectedRepair(null);
-      setOpenInspection(false);
-      setOpenToast(true);
     }
   };
 
@@ -179,24 +161,36 @@ const RepairsManagement: React.FC = () => {
     if (!selectedRepair) return;
     try {
       setSaving(true);
-
       await submitAcceptanceStep(selectedRepair.repair_id, payload);
-      toast.current = {
-        type: "success",
-        content: "Đã cập nhật & duyệt nghiệm thu",
-      };
+      message.success("Đã cập nhật & duyệt nghiệm thu");
+      setOpenAcceptance(false);
+      setSelectedRepair(null);
     } catch (e) {
-      toast.current = {
-        type: "error",
-        content: e instanceof Error ? e.message : "Nghiệm thu thất bại",
-      };
+      message.error(e instanceof Error ? e.message : "Nghiệm thu thất bại");
     } finally {
       setSaving(false);
-      setSelectedRepair(null);
-      setOpenAcceptance(false);
-      setOpenToast(true);
     }
   };
+
+  const handlePrev = () => {
+    if (!selectedRepair) return;
+    const currentIndex = repairs.findIndex(r => r.repair_id === selectedRepair.repair_id);
+    if (currentIndex > 0) {
+        setSelectedRepair(repairs[currentIndex - 1]);
+    }
+  };
+
+  const handleNext = () => {
+    if (!selectedRepair) return;
+    const currentIndex = repairs.findIndex(r => r.repair_id === selectedRepair.repair_id);
+    if (currentIndex !== -1 && currentIndex < repairs.length - 1) {
+        setSelectedRepair(repairs[currentIndex + 1]);
+    }
+  };
+
+  const currentRepairIndex = selectedRepair ? repairs.findIndex(r => r.repair_id === selectedRepair.repair_id) : -1;
+  const hasPrev = currentRepairIndex > 0;
+  const hasNext = currentRepairIndex !== -1 && currentRepairIndex < repairs.length - 1;
 
   const handleExport = async (
     id: number,
@@ -204,123 +198,119 @@ const RepairsManagement: React.FC = () => {
   ) => {
     try {
       await exportRepairItem(id, type);
-      toast.current = { type: "success", content: "Đã xuất file Word" };
+      message.success("Đã xuất file Word");
     } catch {
-      toast.current = { type: "error", content: "Xuất file thất bại" };
-    } finally {
-      setOpenToast(true);
+      message.error("Xuất file thất bại");
     }
   };
 
   const handleDelete = async (id: number) => {
     try {
       await deleteRepairItem(id);
-      toast.current = { type: "success", content: "Đã xóa phiếu" };
+      message.success("Đã xóa phiếu");
     } catch {
-      toast.current = { type: "error", content: "Xóa phiếu thất bại" };
-    } finally {
-      setOpenToast(true);
+      message.error("Xóa phiếu thất bại");
     }
   };
 
+  if (loading && !repairs.length) {
+    return <Spin size="large" />;
+  }
+
   return (
-    <>
-      {loading ? (
-        <Box textAlign="center" mt={4}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <Box display="flex" flexDirection="column" height="calc(100vh - 130px)">
-          <Box
-            display="flex"
-            justifyContent="space-between"
-            alignItems="center"
-            pb={2}
-          >
-            <Box display="flex" flexDirection="column">
-              <Typography variant="h6" fontWeight="bold" mb={1}>
+    <div style={{ padding: 24, minHeight: "100vh", backgroundColor: "#f0f2f5" }}>
+      <Space direction="vertical" size="large" style={{ width: "100%" }}>
+        <Card>
+          <Row justify="space-between" align="middle" gutter={[16, 16]}>
+            <Col>
+              <Title level={4} style={{ margin: 0 }}>
                 Quản lý quy trình phiếu sửa chữa
-              </Typography>
+              </Title>
+            </Col>
+            <Col>
+              <Space>
+                 <Select
+                    placeholder="Lọc theo thiết bị"
+                    allowClear
+                    showSearch
+                    optionFilterProp="children"
+                    style={{ width: 250 }}
+                    value={filterDevice}
+                    onChange={(val) => setFilterDevice(val)}
+                 >
+                    {availableDevices.map((d: any) => (
+                        <Option key={d.device_id} value={d.device_id}>
+                            {d.name} ({d.brand})
+                        </Option>
+                    ))}
+                 </Select>
+                 
+                 <Select
+                    placeholder="Lọc theo trạng thái yêu cầu"
+                    allowClear
+                    style={{ width: 200 }}
+                    value={filterStatusRequest}
+                    onChange={(val) => setFilterStatusRequest(val)}
+                  >
+                    <Option value="pending">Chờ phê duyệt</Option>
+                    <Option value="manager_approved">Bộ phận đã duyệt</Option>
+                    <Option value="admin_approved">Admin đã duyệt</Option>
+                    <Option value="rejected">Từ chối</Option>
+                  </Select>
 
-              <Autocomplete
-                options={availableDevices}
-                getOptionLabel={(d: any) => `${d.name} (${d.brand || ""})`}
-                value={searchDevice}
-                onChange={(_, newValue) => setSearchDevice(newValue)}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    size="small"
-                    label="Tìm theo thiết bị"
-                    placeholder="Nhập tên TTB..."
-                  />
-                )}
-                sx={{ width: 320, background: "#fff" }}
-              />
-            </Box>
+                 {canCreate && (
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                            setSelectedRepair(null);
+                            setOpenForm(true);
+                        }}
+                    >
+                        Lập phiếu
+                    </Button>
+                 )}
+              </Space>
+            </Col>
+          </Row>
+        </Card>
 
-            {canCreate && (
-              <CustomButton
-                variant="contained"
-                startIcon={<AddIcon />}
-                padding="6px 16px"
-                onClick={() => {
-                  setSelectedRepair(null);
-                  setOpenForm(true);
-                }}
-              >
-                Lập phiếu
-              </CustomButton>
-            )}
-          </Box>
-
-          <Box sx={{ flex: 1, overflow: "auto" }}>
-            <RepairsTable
-              rows={filteredData}
-              rowsPerPage={10}
-              page={page}
-              onReview={handleReview}
-              onDelete={handleDelete}
-              onEdit={(r) => {
-                setSelectedRepair(r);
-                setOpenForm(true);
-              }}
-              onView={(r) => {
-                setSelectedRepair(r);
-                setOpenDetail(true);
-              }}
-              onOpenInspection={(r) => {
-                setSelectedRepair(r);
-                setOpenInspection(true);
-              }}
-              onOpenAcceptance={(r) => {
-                setSelectedRepair(r);
-                setOpenAcceptance(true);
-              }}
-              onExport={(r, t) => handleExport(r.repair_id, t)}
-              canReview={canReview}
-              canDelete={canDelete}
-              canUpdate={canUpdate}
-              userRole={role}
-              hasPermission={(code) => perms.includes(code)}
-            />
-          </Box>
-
-          <Pagination
-            data={filteredData}
-            rowsPerPage={10}
-            page={page}
-            onPageChange={setPage}
-          />
-        </Box>
-      )}
-
-      <Toast
-        content={toast.current.content}
-        variant={toast.current.type}
-        open={openToast}
-        onClose={() => setOpenToast(false)}
-      />
+        <Card bodyStyle={{ padding: 0 }}>
+             <Spin spinning={loading}>
+                <RepairsTable
+                    rows={repairs} // Now using direct data from context, filtered by backend
+                    rowsPerPage={10} // Client-side pagination for remaining set (or implement server pagination later)
+                    page={1}
+                    onReview={handleReview}
+                    onDelete={handleDelete}
+                    onEdit={(r) => {
+                        setSelectedRepair(r);
+                        setOpenForm(true);
+                    }}
+                    onView={(r) => {
+                        setSelectedRepair(r);
+                        // Drawer opens when selectedRepair is set
+                    }}
+                    onOpenInspection={(r) => {
+                        setSelectedRepair(r);
+                        setOpenInspection(true);
+                    }}
+                    onOpenAcceptance={(r) => {
+                        setSelectedRepair(r);
+                        setOpenAcceptance(true);
+                    }}
+                    onExport={(r, t) => handleExport(r.repair_id, t)}
+                    canReview={canReview}
+                    canDelete={canDelete}
+                    canUpdate={canUpdate}
+                    canExport={canExport}
+                    userRole={role}
+                    currentUser={user}
+                    hasPermission={(code) => perms.includes(code)}
+                />
+            </Spin>
+        </Card>
+      </Space>
 
       <RepairForm
         open={openForm}
@@ -333,17 +323,21 @@ const RepairsManagement: React.FC = () => {
         initialData={selectedRepair}
       />
 
-      {selectedRepair && openDetail && (
-        <RepairDetailDialog
-          open={openDetail}
-          data={selectedRepair}
-          onClose={() => {
-            setOpenDetail(false);
-            setSelectedRepair(null);
-          }}
-          onExport={(type) => handleExport(selectedRepair.repair_id, type)}
-          canExport={canExport}
-        />
+      {selectedRepair && (
+        <RepairDetailDrawer
+        open={Boolean(selectedRepair) && !openForm && !openInspection && !openAcceptance}
+        data={selectedRepair}
+        onClose={() => setSelectedRepair(null)}
+        onExport={(type) => selectedRepair && handleExport(selectedRepair.repair_id, type)}
+        canExport={checkPermission("EXPORT_REPAIR")}
+        onPrev={handlePrev}
+        onNext={handleNext}
+        hasPrev={hasPrev}
+        hasNext={hasNext}
+        onEdit={() => setOpenForm(true)}
+        currentUser={user}
+        onReview={(action, reason) => selectedRepair && handleReview(selectedRepair.repair_id, action, reason, 'request')}
+      />
       )}
 
       {selectedRepair && openInspection && (
@@ -371,7 +365,7 @@ const RepairsManagement: React.FC = () => {
           initialData={selectedRepair}
         />
       )}
-    </>
+    </div>
   );
 };
 

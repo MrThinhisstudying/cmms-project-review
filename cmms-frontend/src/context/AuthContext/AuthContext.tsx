@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useCallback,
 } from "react";
 import Toast from "../../components/Toast";
 import { jwtDecode } from "jwt-decode";
@@ -12,17 +13,19 @@ import { getToken, removeToken } from "../../utils/auth";
 import { IDepartment } from "../../types/user.types";
 
 interface User {
-  id: number;
+  user_id: number;
   name: string;
   email: string;
   role: string;
   department?: IDepartment;
   avatar: string;
+  signature_url?: string;
   permissions: string[];
 }
 
 interface AuthContextValue {
   user: User | null;
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
   updateUser: (token: string) => void;
   logoutUser: () => void;
   loading: boolean;
@@ -35,12 +38,14 @@ interface DecodedToken {
   role: string;
   department?: IDepartment;
   avatar?: string;
+  signature_url?: string;
   permissions?: string[];
   exp: number;
 }
 
 const AuthContext = createContext<AuthContextValue>({
   user: null,
+  setUser: () => {},
   updateUser: () => {},
   logoutUser: () => {},
   loading: false,
@@ -56,14 +61,24 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
     content: "",
   });
 
-  const updateUser = (token: string) => {
+  const clearUserLoginState = useCallback(() => {
+    setUser(null);
+    setLoading(false);
+  }, []);
+
+  const logoutUser = useCallback(() => {
+    removeToken();
+    clearUserLoginState();
+  }, [clearUserLoginState]);
+
+  const updateUser = useCallback((token: string) => {
     setLoading(true);
     if (token) {
       try {
         const decodedToken = jwtDecode<DecodedToken>(token);
 
         setUser({
-          id: decodedToken.id,
+          user_id: decodedToken.id,
           name: decodedToken.sub,
           email: decodedToken.email,
           role:
@@ -72,6 +87,7 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
               : decodedToken.role?.toLowerCase(),
           department: decodedToken.department,
           avatar: decodedToken.avatar || "",
+          signature_url: decodedToken.signature_url,
           permissions: decodedToken.permissions || [],
         });
       } catch (error) {
@@ -80,17 +96,7 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     }
     setLoading(false);
-  };
-
-  const logoutUser = () => {
-    removeToken();
-    clearUserLoginState();
-  };
-
-  const clearUserLoginState = () => {
-    setUser(null);
-    setLoading(false);
-  };
+  }, [clearUserLoginState]);
 
   useEffect(() => {
     setLoading(true);
@@ -112,7 +118,7 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
     } else {
       logoutUser();
     }
-  }, []);
+  }, [updateUser, logoutUser]);
 
   return (
     <>
@@ -125,6 +131,7 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
       <AuthContext.Provider
         value={{
           user,
+          setUser, // Expose setUser
           updateUser,
           logoutUser,
           loading,

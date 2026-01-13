@@ -1,21 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-  FormHelperText,
-  Box,
-  FormGroup,
-  FormControlLabel,
-  Checkbox,
-  Typography,
-  Divider,
-} from "@mui/material";
-import { CustomButton } from "../../../../components/Button";
+import React, { useEffect, useState } from "react";
+import { Modal, Form, Input, Button, Checkbox, Row, Col, Typography, message, Select, Space } from "antd";
 import { useDepartmentsContext } from "../../../../context/DepartmentsContext/DepartmentsContext";
-import Toast from "../../../../components/Toast";
+import { useUsersContext } from "../../../../context/UsersContext/UsersContext";
 import { DEPARTMENT_PERMISSIONS } from "../../../../constants/user";
 
 interface Props {
@@ -25,175 +11,151 @@ interface Props {
 }
 
 const DepartmentFormModal: React.FC<Props> = ({ open, onClose, editingId }) => {
-  const { departments, addDepartment, editDepartment } =
-    useDepartmentsContext();
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [permissions, setPermissions] = useState<string[]>([]);
-
-  const [error, setError] = useState("");
-
-  const toast = useRef<{ type: "error" | "success"; content: string }>({
-    type: "success",
-    content: "",
-  });
-  const [openToast, setOpenToast] = useState(false);
+  const { departments, addDepartment, editDepartment } = useDepartmentsContext();
+  const { users, fetchUsers } = useUsersContext(); // Use users context to get list of potential managers
+  const [form] = Form.useForm();
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (editingId) {
-      const dept = departments.find((d) => d.dept_id === editingId);
-      setName(dept?.name || "");
-      setDescription(dept?.description || "");
-      setPermissions(dept?.permissions || []);
-    } else {
-      setName("");
-      setDescription("");
-      setPermissions([]);
+    if (open) {
+        // Ensure users are loaded
+        if (users.length === 0) fetchUsers();
+
+        if (editingId) {
+            const dept = departments.find((d) => d.dept_id === editingId);
+            if (dept) {
+                form.setFieldsValue({
+                    name: dept.name,
+                    description: dept.description,
+                    permissions: dept.permissions || [],
+                    manager_id: dept.manager_id || (dept.manager as any)?.user_id // Handle both potential structures
+                });
+            }
+        } else {
+            form.resetFields();
+        }
     }
-    setError("");
-  }, [editingId, departments, open]);
+  }, [open, editingId, departments, form, users.length]);
 
-  const handleTogglePermission = (code: string) => {
-    setPermissions((prev) =>
-      prev.includes(code) ? prev.filter((p) => p !== code) : [...prev, code]
-    );
-  };
-
-  const handleSave = async () => {
-    if (!name.trim()) {
-      setError("Tên phòng ban là bắt buộc");
-      return;
-    }
-
+  const handleFinish = async (values: any) => {
+    setLoading(true);
     try {
+      const payload = {
+          name: values.name,
+          description: values.description,
+          permissions: values.permissions,
+          manager_id: values.manager_id
+      };
+
       if (editingId) {
-        await editDepartment(editingId, {
-          name: name.trim(),
-          description: description.trim() || undefined,
-          permissions,
-        });
-        toast.current = {
-          type: "success",
-          content: "Cập nhật phòng ban thành công",
-        };
+        await editDepartment(editingId, payload);
+        message.success("Cập nhật phòng ban thành công");
       } else {
-        await addDepartment({
-          name: name.trim(),
-          description: description.trim() || undefined,
-          permissions,
-        });
-        toast.current = {
-          type: "success",
-          content: "Thêm phòng ban thành công",
-        };
+        await addDepartment(payload);
+        message.success("Thêm phòng ban thành công");
       }
-      setOpenToast(true);
       onClose(true);
     } catch (e) {
-      toast.current = { type: "error", content: "Lưu phòng ban thất bại" };
-      setOpenToast(true);
+      message.error("Thao tác thất bại");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <>
-      <Dialog
-        open={open}
-        onClose={() => onClose(false)}
-        fullWidth
-        maxWidth="sm"
-      >
-        <DialogTitle>
-          {editingId ? "Cập nhật phòng ban" : "Thêm phòng ban"}
-        </DialogTitle>
-        <DialogContent sx={{ paddingTop: "20px !important" }}>
-          <TextField
-            label="Tên phòng ban"
-            fullWidth
-            required
-            value={name}
-            onChange={(e) => {
-              setName(e.target.value);
-              if (error) setError("");
-            }}
-            error={!!error}
-            autoFocus
-          />
-          {error && (
-            <Box mt={1}>
-              <FormHelperText error>{error}</FormHelperText>
-            </Box>
-          )}
+    <Modal
+      title={editingId ? "Cập nhật phòng ban" : "Thêm phòng ban"}
+      open={open}
+      onCancel={() => onClose(false)}
+      footer={null}
+      width={700}
+    >
+      <Form form={form} layout="vertical" onFinish={handleFinish}>
+        <Form.Item name="name" label="Tên phòng ban" rules={[{ required: true, message: 'Nhập tên phòng ban' }]}>
+          <Input placeholder="Tên phòng ban" />
+        </Form.Item>
 
-          <Box mt={2}>
-            <TextField
-              label="Mô tả"
-              fullWidth
-              multiline
-              minRows={2}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </Box>
+        <Form.Item name="description" label="Mô tả">
+          <Input.TextArea placeholder="Mô tả phòng ban" rows={3} />
+        </Form.Item>
 
-          <Box mt={3}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>
-              Phân quyền cho phòng ban
-            </Typography>
-            <Divider sx={{ mb: 1 }} />
-            <FormGroup sx={{ gap: "8px" }}>
-              {DEPARTMENT_PERMISSIONS.map((perm) => (
-                <FormControlLabel
-                  key={perm.code}
-                  control={
-                    <Checkbox
-                      checked={permissions.includes(perm.code)}
-                      onChange={() => handleTogglePermission(perm.code)}
-                    />
-                  }
-                  label={
-                    <Box>
-                      <Typography variant="body1" sx={{ fontWeight: 500 }}>
-                        {perm.name}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {perm.description}
-                      </Typography>
-                    </Box>
-                  }
-                />
-              ))}
-            </FormGroup>
-          </Box>
-        </DialogContent>
+        <Form.Item name="manager_id" label="Trưởng phòng">
+            <Select 
+                placeholder="Chọn trưởng phòng" 
+                allowClear 
+                showSearch
+                optionFilterProp="children"
+            >
+                {users.map(u => (
+                    <Select.Option key={u.user_id} value={u.user_id}>
+                        {u.name} ({u.email})
+                    </Select.Option>
+                ))}
+            </Select>
+        </Form.Item>
 
-        <DialogActions>
-          <CustomButton
-            color="secondary"
-            variant="outlined"
-            padding="4px 12px"
-            onClick={() => onClose(false)}
-          >
-            Hủy
-          </CustomButton>
-          <CustomButton
-            color="primary"
-            variant="contained"
-            padding="4px 12px"
-            onClick={handleSave}
-          >
-            {editingId ? "Cập nhật" : "Thêm"}
-          </CustomButton>
-        </DialogActions>
-      </Dialog>
+        <Form.Item name="scope" label="Phạm vi hoạt động" initialValue="DEPARTMENT">
+            <Select>
+                <Select.Option value="PERSONAL">Cá nhân (Chỉ thấy phiếu mình tạo)</Select.Option>
+                <Select.Option value="GROUP">Theo nhóm (Thấy phiếu cùng nhóm thiết bị)</Select.Option>
+                <Select.Option value="DEPARTMENT">Theo phòng ban (Thấy phiếu cùng phòng)</Select.Option>
+                <Select.Option value="ALL">Toàn hệ thống (Admin/Director)</Select.Option>
+            </Select>
+        </Form.Item>
 
-      <Toast
-        content={toast.current?.content}
-        variant={toast.current?.type}
-        open={openToast}
-        onClose={() => setOpenToast(false)}
-      />
-    </>
+        <Typography.Title level={5}>Phân quyền</Typography.Title>
+        <Form.Item name="permissions">
+           <Checkbox.Group style={{ width: '100%' }}>
+              <Row gutter={[16, 16]}>
+                  <Col span={24}>
+                      <Typography.Text strong>Quản lý thiết bị</Typography.Text>
+                      <Row>
+                        {DEPARTMENT_PERMISSIONS.filter(p => p.code.includes('DEVICE')).map(perm => (
+                            <Col span={12} key={perm.code}>
+                                <Checkbox value={perm.code}>{perm.name}</Checkbox>
+                            </Col>
+                        ))}
+                      </Row>
+                  </Col>
+                   <Col span={24}>
+                      <Typography.Text strong>Quy trình sửa chữa</Typography.Text>
+                      <Row>
+                        {DEPARTMENT_PERMISSIONS.filter(p => p.code.includes('REPAIR') || p.code.includes('approve') || p.code.includes('sign') || p.code.includes('create_inspection')).map(perm => (
+                            <Col span={12} key={perm.code}>
+                                <Checkbox value={perm.code}>
+                                    <div style={{display: 'flex', flexDirection: 'column'}}>
+                                        <span>{perm.name}</span>
+                                        <Typography.Text type="secondary" style={{fontSize: '11px'}}>{perm.description}</Typography.Text>
+                                    </div>
+                                </Checkbox>
+                            </Col>
+                        ))}
+                      </Row>
+                  </Col>
+                   <Col span={24}>
+                      <Typography.Text strong>Báo cáo & Khác</Typography.Text>
+                      <Row>
+                        {DEPARTMENT_PERMISSIONS.filter(p => !p.code.includes('DEVICE') && !p.code.includes('REPAIR') && !p.code.includes('approve') && !p.code.includes('sign') && !p.code.includes('create_inspection')).map(perm => (
+                            <Col span={12} key={perm.code}>
+                                <Checkbox value={perm.code}>{perm.name}</Checkbox>
+                            </Col>
+                        ))}
+                      </Row>
+                  </Col>
+              </Row>
+           </Checkbox.Group>
+        </Form.Item>
+
+        <div style={{ textAlign: 'right', marginTop: 16 }}>
+          <Space>
+            <Button onClick={() => onClose(false)}>Hủy</Button>
+            <Button type="primary" htmlType="submit" loading={loading}>
+              {editingId ? "Cập nhật" : "Thêm mới"}
+            </Button>
+          </Space>
+        </div>
+      </Form>
+    </Modal>
   );
 };
 

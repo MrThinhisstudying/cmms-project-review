@@ -30,8 +30,8 @@ export class Repair {
     @Column({nullable: true})
     note?: string;
 
-    @Column({default: 'pending'})
-    status_request: 'pending' | 'manager_approved' | 'admin_approved' | 'rejected';
+    @Column({default: 'WAITING_TECH'})
+    status_request: 'WAITING_TECH' | 'WAITING_TEAM_LEAD' | 'WAITING_DIRECTOR' | 'REJECTED' | 'COMPLETED';
 
     @ManyToOne(() => User, {eager: true, nullable: true})
     @JoinColumn({name: 'approved_by_manager_request'})

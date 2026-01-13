@@ -8,9 +8,24 @@ import {
 const BASE_URL = `${process.env.REACT_APP_BASE_URL}/repairs`;
 
 export const getAllRepairs = async (
-  token: string | null
+  token: string | null,
+  params?: {
+    status_request?: string;
+    status_inspection?: string;
+    device_id?: number;
+  }
 ): Promise<IRepair[]> => {
-  const res = await fetch(BASE_URL, {
+  const url = new URL(BASE_URL);
+  if (params) {
+    if (params.status_request)
+      url.searchParams.append("status_request", params.status_request);
+    if (params.status_inspection)
+      url.searchParams.append("status_inspection", params.status_inspection);
+    if (params.device_id)
+      url.searchParams.append("device_id", params.device_id.toString());
+  }
+
+  const res = await fetch(url.toString(), {
     headers: {
       Authorization: token ? `Bearer ${token}` : "",
       "Content-Type": "application/json",

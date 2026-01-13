@@ -2,6 +2,7 @@ import {Controller, Get, Param, ParseIntPipe, Post, Body, Put, Delete, Query, Ht
 import {JWTAuthGuard} from 'src/auth/guards/jwt-auth.guard';
 import {CurrentUser} from 'src/auth/current-user.decorator';
 import {User} from 'src/user/user.entity';
+import {UserRole} from 'src/user/user-role.enum';
 import {ApiTags} from '@nestjs/swagger';
 import {MaintenanceTicketService} from './maintenance-ticket.service';
 import {TicketStatus} from './enum/ticket.enum';
@@ -41,7 +42,7 @@ export class MaintenanceTicketController {
         try {
             if (userId || deptId) {
                 if (!user) throw new HttpException('Chưa xác thực', HttpStatus.UNAUTHORIZED);
-                if (user.role !== 'admin' && user.role !== 'manager') throw new HttpException('Bạn không có quyền', HttpStatus.FORBIDDEN);
+                if (user.role !== UserRole.ADMIN && user.role !== UserRole.UNIT_HEAD) throw new HttpException('Bạn không có quyền', HttpStatus.FORBIDDEN);
                 const data = await this.ticketService.listForAssignee(userId ? Number(userId) : undefined, deptId ? Number(deptId) : undefined);
                 return {message: 'Danh sách phiếu', data};
             }

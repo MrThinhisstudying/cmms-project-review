@@ -1,29 +1,22 @@
-import React, { useMemo, useState } from "react";
-import {
-  Box,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  TextField,
-  TableBody,
-  TableCell,
-  TableHead,
-  Chip,
-} from "@mui/material";
-import {
-  CustomTable,
-  TableCellHeader,
-  TableRowBody,
-  TableRowContainer,
-} from "./style";
-import { CustomButton } from "../../../../components/Button";
+import React, { useState } from "react";
+import { Table, Button, Tag, Space, Modal, Input, Tooltip, Popconfirm } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { IRepair } from "../../../../types/repairs.types";
+import {
+  EyeOutlined,
+  EditOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  FileSearchOutlined,
+  FileDoneOutlined,
+  DeleteOutlined,
+  ExportOutlined,
+} from "@ant-design/icons";
 
 interface RepairsTableProps {
   rows: IRepair[];
-  rowsPerPage: number;
-  page: number;
+  rowsPerPage: number; // Ignored for AntD table with internal pagination or keep if external
+  page: number; // Ignored if using internal pagination
   onReview?: (
     id: number,
     action: "approve" | "reject",
@@ -44,13 +37,12 @@ interface RepairsTableProps {
   canDelete?: boolean;
   canExport?: boolean;
   userRole?: string;
+  currentUser?: any;
   hasPermission: (code: string) => boolean;
 }
 
 const RepairsTable: React.FC<RepairsTableProps> = ({
   rows,
-  rowsPerPage,
-  page,
   onReview,
   onEdit,
   onView,
@@ -63,451 +55,219 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
   canDelete,
   canExport,
   userRole,
+  currentUser,
   hasPermission,
 }) => {
-  const [openReject, setOpenReject] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [selectedPhase, setSelectedPhase] = useState<
-    "request" | "inspection" | "acceptance"
-  >("request");
-
-  const paginated = useMemo(() => {
-    const start = (page - 1) * rowsPerPage;
-    return rows.slice(start, start + rowsPerPage);
-  }, [rows, page, rowsPerPage]);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  const [selectedAction, setSelectedAction] = useState<{
+    id: number;
+    phase: "request" | "inspection" | "acceptance";
+  } | null>(null);
 
   const getPhase = (r: IRepair) => {
     const rejected =
-      r.status_request === "rejected" ||
+      r.status_request === "REJECTED" ||
       r.status_inspection === "inspection_rejected" ||
       r.status_acceptance === "acceptance_rejected";
     const done = r.status_acceptance === "acceptance_admin_approved";
     const canceled = r.canceled;
     if (rejected || done || canceled) return "done";
-    if (r.status_request !== "admin_approved") return "request";
+    if (r.status_request !== "COMPLETED") return "request";
     if (r.status_inspection !== "inspection_admin_approved")
       return "inspection";
     return "acceptance";
   };
 
-  const canDeleteRepair = (r: IRepair) => {
-    if (!canDelete || !hasPermission("DELETE_REPAIR")) return false;
-
-    const hasAnyApproval =
-      r.approved_by_manager_request ||
-      r.approved_by_admin_request ||
-      r.approved_by_manager_inspection ||
-      r.approved_by_admin_inspection ||
-      r.approved_by_manager_acceptance ||
-      r.approved_by_admin_acceptance;
-
-    return !hasAnyApproval;
-  };
-
-  const getStatusLabel = (r: IRepair) => {
-    if (r.canceled) return "Đã hủy phiếu";
-    if (r.status_acceptance === "acceptance_rejected")
-      return "Bước 3 - Nghiệm thu: Đã từ chối";
-    if (r.status_acceptance === "acceptance_admin_approved")
-      return "Bước 3 - Nghiệm thu: Hoàn tất quy trình";
-    if (r.status_acceptance === "acceptance_manager_approved")
-      return "Bước 3 - Nghiệm thu: Chờ Ban Giám đốc duyệt";
+  const getStatusTag = (r: IRepair) => {
+    if (r.canceled) return <Tag color="default">Đã hủy</Tag>;
+    if (r.status_acceptance === "acceptance_rejected") return <Tag color="error">Nghiệm thu: Từ chối</Tag>;
+    if (r.status_acceptance === "acceptance_admin_approved") return <Tag color="success">Hoàn tất quy trình</Tag>;
+    if (r.status_acceptance === "acceptance_manager_approved") return <Tag color="processing">Nghiệm thu: Chờ GĐ duyệt</Tag>;
     const hasAcceptanceData = r.failure_description || r.acceptance_note;
-    if (r.status_acceptance === "acceptance_pending" && hasAcceptanceData)
-      return "Bước 3 - Nghiệm thu: Chờ Trưởng phòng duyệt";
-    if (
-      r.status_inspection === "inspection_admin_approved" &&
-      r.status_acceptance === "acceptance_pending" &&
-      !hasAcceptanceData
-    )
-      return "Bước 3 - Nghiệm thu: Chờ lập biên bản";
+    if (r.status_acceptance === "acceptance_pending" && hasAcceptanceData) return <Tag color="warning">Nghiệm thu: Chờ TP duyệt</Tag>;
+    if (r.status_inspection === "inspection_admin_approved" && !hasAcceptanceData) return <Tag color="cyan">Chờ nghiệm thu</Tag>;
 
-    if (r.status_inspection === "inspection_rejected")
-      return "Bước 2 - Kiểm nghiệm: Đã từ chối";
-    if (r.status_inspection === "inspection_admin_approved")
-      return "Bước 2 - Kiểm nghiệm: Hoàn tất kiểm nghiệm";
-    if (r.status_inspection === "inspection_manager_approved")
-      return "Bước 2 - Kiểm nghiệm: Chờ Ban Giám đốc duyệt";
+    if (r.status_inspection === "inspection_rejected") return <Tag color="error">Kiểm nghiệm: Từ chối</Tag>;
+    if (r.status_inspection === "inspection_admin_approved") return <Tag color="blue">Hoàn tất kiểm nghiệm</Tag>;
+    if (r.status_inspection === "inspection_manager_approved") return <Tag color="processing">Kiểm nghiệm: Chờ GĐ duyệt</Tag>;
     const hasInspectionData = r.inspection_items && r.inspection_items.length > 0;
-    if (r.status_inspection === "inspection_pending" && hasInspectionData)
-      return "Bước 2 - Kiểm nghiệm: Chờ Trưởng phòng duyệt";
-    if (
-      r.status_request === "admin_approved" &&
-      r.status_inspection === "inspection_pending" &&
-      !hasInspectionData
-    )
-      return "Bước 2 - Kiểm nghiệm: Chờ lập biên bản";
+    if (r.status_inspection === "inspection_pending" && hasInspectionData) return <Tag color="warning">Kiểm nghiệm: Chờ TP duyệt</Tag>;
+    if (r.status_request === "COMPLETED" && !hasInspectionData) return <Tag color="cyan">Chờ kiểm nghiệm</Tag>;
 
-    if (r.status_request === "rejected") return "Bước 1 - Yêu cầu: Đã từ chối";
-    if (r.status_request === "admin_approved")
-      return "Bước 1 - Yêu cầu: Đã duyệt – Sang kiểm nghiệm";
-    if (r.status_request === "manager_approved")
-      return "Bước 1 - Yêu cầu: Chờ Ban Giám đốc duyệt";
+    if (r.status_request === "REJECTED") return <Tag color="error">Yêu cầu: Từ chối</Tag>;
+    if (r.status_request === "COMPLETED") return <Tag color="blue">Yêu cầu: Đã duyệt</Tag>;
+    if (r.status_request === "WAITING_DIRECTOR") return <Tag color="processing">Yêu cầu: Chờ GĐ duyệt</Tag>;
+    if (r.status_request === "WAITING_TEAM_LEAD") return <Tag color="blue">Yêu cầu: Chờ Đội duyệt</Tag>;
 
-    return "Bước 1 - Yêu cầu: Chờ Trưởng phòng duyệt";
+    return <Tag color="warning">Yêu cầu: Chờ KT duyệt</Tag>;
   };
 
-  const openRejectDialog = (
-    id: number,
-    phase: "request" | "inspection" | "acceptance"
-  ) => {
-    setSelectedId(id);
-    setSelectedPhase(phase);
+  const handleOpenReject = (id: number, phase: "request" | "inspection" | "acceptance") => {
+    setSelectedAction({ id, phase });
     setRejectReason("");
-    setOpenReject(true);
+    setRejectModalOpen(true);
   };
+
+  const submitReject = () => {
+    if (selectedAction && onReview) {
+      onReview(selectedAction.id, "reject", rejectReason, selectedAction.phase);
+    }
+    setRejectModalOpen(false);
+  };
+
+  const columns: ColumnsType<IRepair> = [
+    {
+      title: "#",
+      key: "index",
+      width: 60,
+      render: (_, __, index) => index + 1,
+    },
+    {
+      title: "Thiết bị",
+      dataIndex: ["device", "name"],
+      key: "device",
+      render: (text, record) => (
+        <div>
+          <div style={{ fontWeight: 500 }}>{text}</div>
+          <div style={{ fontSize: 12, color: "#888" }}>{record.device?.serial_number}</div>
+        </div>
+      ),
+    },
+    {
+      title: "Đơn vị",
+      dataIndex: ["created_department", "name"],
+      key: "department",
+    },
+    {
+      title: "Người lập",
+      dataIndex: ["created_by", "name"],
+      key: "creator",
+    },
+    {
+      title: "Trạng thái",
+      key: "status",
+      render: (_, record) => getStatusTag(record),
+      filters: [
+        { text: "Pending", value: "WAITING_TECH" },
+        { text: "Approved", value: "COMPLETED" },
+        { text: "Rejected", value: "REJECTED" },
+      ],
+      onFilter: (value, record) => {
+        // Simple client-side filtering logic for display purposes if needed
+        // Ideally backend filtering is preferred
+        const status = JSON.stringify(record).toLowerCase();
+        return status.includes((value as string).toLowerCase());
+      },
+    },
+    {
+      title: "Thao tác",
+      key: "actions",
+      fixed: "right",
+      width: 300,
+      render: (_, record) => {
+        const phase = getPhase(record);
+        const isStaff = userRole === "staff"; // Assuming role usage from props
+        const isManager = userRole === "manager";
+        const isAdmin = userRole === "admin";
+        
+        // Logic copied from original component
+        const locked = record.canceled || record.status_acceptance === "acceptance_admin_approved";
+        const canEdit = canUpdate && !locked && (record.status_request === "WAITING_TECH" || record.status_request === "REJECTED");
+
+        // Approval Logic
+        const canApproveReq = canReview && !locked && (
+            (record.status_request === "WAITING_TECH") ||
+            (isManager && record.status_request === "WAITING_TEAM_LEAD") ||
+            (isAdmin && record.status_request === "WAITING_DIRECTOR")
+        );
+
+        const inspectionDone = record.inspection_items && record.inspection_items.length > 0;
+        const canCreateInsp = !locked && isStaff && hasPermission("CREATE_REPAIR") && record.status_request === "COMPLETED" && record.status_inspection === "inspection_pending" && !inspectionDone;
+        const managerApproveInsp = canReview && isManager && hasPermission("APPROVE_REPAIR") && !locked && record.status_inspection === "inspection_pending" && inspectionDone;
+        const adminApproveInsp = canReview && isAdmin && !locked && record.status_inspection === "inspection_manager_approved";
+
+        const acceptanceDone = !!(record.failure_description || record.acceptance_note);
+        const canCreateAcc = !locked && (isStaff || isAdmin) && hasPermission("CREATE_REPAIR") && record.status_inspection === "inspection_admin_approved" && record.status_acceptance === "acceptance_pending" && !acceptanceDone;
+        const managerApproveAcc = canReview && isManager && hasPermission("APPROVE_REPAIR") && !locked && record.status_acceptance === "acceptance_pending" && acceptanceDone;
+        const adminApproveAcc = canReview && isAdmin && !locked && record.status_acceptance === "acceptance_manager_approved";
+
+        const showDelete = canDelete && hasPermission("DELETE_REPAIR") && (!record.approved_by_manager_request && !record.approved_by_admin_request);
+
+        return (
+          <Space size="small" wrap>
+             <Tooltip title="Xem chi tiết">
+                <Button icon={<EyeOutlined />} size="small" onClick={() => onView?.(record)} />
+             </Tooltip>
+
+             {canEdit && (userRole === "admin" || (record.created_by?.user_id === currentUser?.user_id)) && (
+               <Tooltip title="Chỉnh sửa">
+                 <Button icon={<EditOutlined />} type="primary" ghost size="small" onClick={() => onEdit?.(record)} />
+               </Tooltip>
+             )}
+
+            {/* Hidden approval actions as requested to simplify UI. Approval is now done via Detail Drawer. */}
+
+            {phase === "inspection" && (
+                <>
+                    {canCreateInsp && (
+                         <Tooltip title="Tạo kiểm nghiệm">
+                            <Button icon={<FileSearchOutlined />} color="default" variant="solid" style={{background: '#722ed1', color: 'white'}} size="small" onClick={() => onOpenInspection?.(record)} />
+                         </Tooltip>
+                    )}
+                </>
+            )}
+
+            {phase === "acceptance" && (
+                <>
+                    {canCreateAcc && (
+                        <Tooltip title="Tạo nghiệm thu">
+                            <Button icon={<FileDoneOutlined />} style={{background: '#006d75', color: 'white'}} size="small" onClick={() => onOpenAcceptance?.(record)} />
+                        </Tooltip>
+                    )}
+                </>
+            )}
+
+             {canExport && (
+                <Tooltip title="Xuất file">
+                    <Button icon={<ExportOutlined />} size="small" onClick={() => onExport?.(record, phase as any)} />
+                </Tooltip>
+             )}
+
+             {showDelete && (
+                <Popconfirm title="Bạn có chắc chắn muốn xóa phiếu này?" onConfirm={() => onDelete?.(record.repair_id)}>
+                    <Button icon={<DeleteOutlined />} size="small" danger />
+                </Popconfirm>
+             )}
+          </Space>
+        );
+      },
+    },
+  ];
 
   return (
     <>
-      <CustomTable stickyHeader>
-        <TableHead>
-          <TableRowContainer>
-            <TableCellHeader>#</TableCellHeader>
-            <TableCellHeader>Thiết bị</TableCellHeader>
-            <TableCellHeader>Đơn vị</TableCellHeader>
-            <TableCellHeader>Người lập</TableCellHeader>
-            <TableCellHeader>Trạng thái</TableCellHeader>
-            <TableCellHeader align="center">Thao tác</TableCellHeader>
-          </TableRowContainer>
-        </TableHead>
-
-        <TableBody>
-          {paginated.map((item, idx) => {
-            const phase = getPhase(item);
-            const isStaff = userRole === "staff";
-            const isManager = userRole === "manager";
-            const isAdmin = userRole === "admin";
-
-            const rejected =
-              item.status_request === "rejected" ||
-              item.status_inspection === "inspection_rejected" ||
-              item.status_acceptance === "acceptance_rejected";
-
-            const completed =
-              item.status_acceptance === "acceptance_admin_approved";
-            const canceled = item.canceled;
-            const locked = rejected || completed || canceled;
-
-            const inspectionDone = item.inspection_items && item.inspection_items.length > 0;
-            const acceptanceDone = !!(item.failure_description || item.acceptance_note);
-
-            const canEdit =
-              canUpdate && !locked && item.status_request === "pending";
-
-            const managerCanApproveRequest =
-              canReview &&
-              isManager &&
-              hasPermission("APPROVE_REPAIR") &&
-              !locked &&
-              item.status_request === "pending";
-
-            const adminCanApproveRequest =
-              canReview &&
-              isAdmin &&
-              !locked &&
-              item.status_request === "manager_approved";
-
-            const canCreateInspection =
-              !locked &&
-              isStaff &&
-              hasPermission("CREATE_REPAIR") &&
-              item.status_request === "admin_approved" &&
-              item.status_inspection === "inspection_pending" &&
-              !inspectionDone;
-
-            const managerCanApproveInspection =
-              canReview &&
-              isManager &&
-              hasPermission("APPROVE_REPAIR") &&
-              !locked &&
-              item.status_inspection === "inspection_pending" &&
-              inspectionDone;
-
-            const adminCanApproveInspection =
-              canReview &&
-              isAdmin &&
-              !locked &&
-              item.status_inspection === "inspection_manager_approved";
-
-            const canCreateAcceptance =
-              !locked &&
-              (isStaff || isAdmin) &&
-              hasPermission("CREATE_REPAIR") &&
-              item.status_inspection === "inspection_admin_approved" &&
-              item.status_acceptance === "acceptance_pending" &&
-              !acceptanceDone;
-
-            const managerCanApproveAcceptance =
-              canReview &&
-              isManager &&
-              hasPermission("APPROVE_REPAIR") &&
-              !locked &&
-              item.status_acceptance === "acceptance_pending" &&
-              acceptanceDone;
-
-            const adminCanApproveAcceptance =
-              canReview &&
-              isAdmin &&
-              !locked &&
-              item.status_acceptance === "acceptance_manager_approved";
-
-            return (
-              <TableRowBody key={item.repair_id} index={idx}>
-                <TableCell>{(page - 1) * rowsPerPage + idx + 1}</TableCell>
-                <TableCell>{item.device?.name}</TableCell>
-                <TableCell>{item.created_department?.name}</TableCell>
-                <TableCell>{item.created_by?.name}</TableCell>
-                <TableCell>
-                  <Chip
-                    label={getStatusLabel(item)}
-                    sx={{
-                      fontSize: "0.8rem",
-                      fontWeight: 600,
-                      borderRadius: "8px",
-                      backgroundColor: "#e3f2fd",
-                      color: "#0d47a1",
-                    }}
-                  />
-                </TableCell>
-
-                <TableCell align="center">
-                  <Box display="flex" gap={1} justifyContent="center">
-                    <CustomButton
-                      variant="contained"
-                      padding="4px 12px"
-                      bgrColor="#0288d1"
-                      onClick={() => onView?.(item)}
-                    >
-                      Xem
-                    </CustomButton>
-
-                    <CustomButton
-                      variant="contained"
-                      padding="4px 12px"
-                      bgrColor="#1976d2"
-                      disabled={!canEdit}
-                      onClick={() => onEdit?.(item)}
-                    >
-                      Sửa
-                    </CustomButton>
-
-                    {phase === "request" && canReview && (
-                      <>
-                        <CustomButton
-                          variant="contained"
-                          padding="4px 12px"
-                          bgrColor="#2e7d32"
-                          disabled={
-                            !managerCanApproveRequest && !adminCanApproveRequest
-                          }
-                          onClick={() =>
-                            onReview?.(item.repair_id, "approve", "", "request")
-                          }
-                        >
-                          Duyệt yêu cầu
-                        </CustomButton>
-
-                        <CustomButton
-                          variant="contained"
-                          padding="4px 12px"
-                          bgrColor="#d32f2f"
-                          disabled={
-                            !managerCanApproveRequest && !adminCanApproveRequest
-                          }
-                          onClick={() =>
-                            openRejectDialog(item.repair_id, "request")
-                          }
-                        >
-                          Từ chối yêu cầu
-                        </CustomButton>
-                      </>
-                    )}
-
-                    {phase === "inspection" && (
-                      <>
-                        <CustomButton
-                          variant="contained"
-                          padding="4px 12px"
-                          bgrColor="#8e24aa"
-                          disabled={!canCreateInspection}
-                          onClick={() => onOpenInspection?.(item)}
-                        >
-                          Tạo kiểm nghiệm
-                        </CustomButton>
-
-                        {canReview && (
-                          <>
-                            <CustomButton
-                              variant="contained"
-                              padding="4px 12px"
-                              bgrColor="#2e7d32"
-                              disabled={
-                                !managerCanApproveInspection &&
-                                !adminCanApproveInspection
-                              }
-                              onClick={() =>
-                                onReview?.(
-                                  item.repair_id,
-                                  "approve",
-                                  "",
-                                  "inspection"
-                                )
-                              }
-                            >
-                              Duyệt kiểm nghiệm
-                            </CustomButton>
-
-                            <CustomButton
-                              variant="contained"
-                              padding="4px 12px"
-                              bgrColor="#d32f2f"
-                              disabled={
-                                !managerCanApproveInspection &&
-                                !adminCanApproveInspection
-                              }
-                              onClick={() =>
-                                openRejectDialog(item.repair_id, "inspection")
-                              }
-                            >
-                              Từ chối kiểm nghiệm
-                            </CustomButton>
-                          </>
-                        )}
-                      </>
-                    )}
-
-                    {phase === "acceptance" && (
-                      <>
-                        <CustomButton
-                          variant="contained"
-                          padding="4px 12px"
-                          bgrColor="#00796b"
-                          disabled={!canCreateAcceptance}
-                          onClick={() => onOpenAcceptance?.(item)}
-                        >
-                          Tạo nghiệm thu
-                        </CustomButton>
-
-                        {canReview && (
-                          <>
-                            <CustomButton
-                              variant="contained"
-                              padding="4px 12px"
-                              bgrColor="#2e7d32"
-                              disabled={
-                                !managerCanApproveAcceptance &&
-                                !adminCanApproveAcceptance
-                              }
-                              onClick={() =>
-                                onReview?.(
-                                  item.repair_id,
-                                  "approve",
-                                  "",
-                                  "acceptance"
-                                )
-                              }
-                            >
-                              Duyệt nghiệm thu
-                            </CustomButton>
-
-                            <CustomButton
-                              variant="contained"
-                              padding="4px 12px"
-                              bgrColor="#d32f2f"
-                              disabled={
-                                !managerCanApproveAcceptance &&
-                                !adminCanApproveAcceptance
-                              }
-                              onClick={() =>
-                                openRejectDialog(item.repair_id, "acceptance")
-                              }
-                            >
-                              Từ chối nghiệm thu
-                            </CustomButton>
-                          </>
-                        )}
-                      </>
-                    )}
-
-                    {canDeleteRepair(item) && (
-                      <CustomButton
-                        variant="contained"
-                        padding="4px 12px"
-                        bgrColor="#9e9e9e"
-                        onClick={() => onDelete?.(item.repair_id)}
-                        title="Chỉ có thể xóa phiếu chưa được duyệt"
-                      >
-                        Xóa
-                      </CustomButton>
-                    )}
-
-                    {canExport && (
-                      <CustomButton
-                        variant="contained"
-                        padding="4px 12px"
-                        bgrColor="#455a64"
-                        onClick={() => {
-                          if (
-                            phase === "request" ||
-                            phase === "inspection" ||
-                            phase === "acceptance"
-                          ) {
-                            onExport?.(item, phase);
-                          }
-                        }}
-                      >
-                        Xuất file
-                      </CustomButton>
-                    )}
-                  </Box>
-                </TableCell>
-              </TableRowBody>
-            );
-          })}
-        </TableBody>
-      </CustomTable>
-
-      <Dialog
-        open={openReject}
-        onClose={() => setOpenReject(false)}
-        maxWidth="sm"
-        fullWidth
+      <Table
+        columns={columns}
+        dataSource={rows}
+        rowKey="repair_id"
+        scroll={{ x: 'max-content' }}
+        pagination={{ pageSize: 10 }}
+        sticky
+      />
+      <Modal
+        title="Lý do từ chối"
+        open={rejectModalOpen}
+        onCancel={() => setRejectModalOpen(false)}
+        onOk={submitReject}
       >
-        <DialogTitle fontWeight="bold">Lý do từ chối</DialogTitle>
-        <DialogContent>
-          <TextField
-            fullWidth
-            multiline
-            minRows={3}
-            value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
+          <Input.TextArea 
+            rows={4} 
+            value={rejectReason} 
+            onChange={(e) => setRejectReason(e.target.value)} 
+            placeholder="Nhập lý do từ chối..."
           />
-        </DialogContent>
-        <DialogActions>
-          <CustomButton
-            bgrColor="#757575"
-            variant="contained"
-            padding="4px 12px"
-            onClick={() => setOpenReject(false)}
-          >
-            Hủy
-          </CustomButton>
-
-          <CustomButton
-            bgrColor="#d32f2f"
-            variant="contained"
-            padding="4px 12px"
-            onClick={() => {
-              if (selectedId)
-                onReview?.(selectedId, "reject", rejectReason, selectedPhase);
-              setOpenReject(false);
-            }}
-          >
-            Xác nhận
-          </CustomButton>
-        </DialogActions>
-      </Dialog>
+      </Modal>
     </>
   );
 };

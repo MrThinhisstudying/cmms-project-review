@@ -26,7 +26,8 @@ export const getAllDevices = async (
     // Đảm bảo backend trả về đúng cấu trúc này (res.data.result)
     return res.data.result;
   } catch (error) {
-    return [];
+    console.error("Get all devices failed:", error);
+    throw error;
   }
 };
 

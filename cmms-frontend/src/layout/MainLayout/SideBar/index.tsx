@@ -1,117 +1,84 @@
-import React, { useEffect, useMemo, useState } from "react";
-import {
-  List,
-  ListItem,
-  ListItemIcon,
-  ListItemText,
-  Drawer,
-} from "@mui/material";
+import React, { useEffect, useState } from "react";
+import { Layout, Menu } from "antd";
 import { Link, useLocation } from "react-router-dom";
 import { useAuthContext } from "../../../context/AuthContext/AuthContext";
 import { SIDEBAR_MENU } from "../../../constants/sidebarMenu";
+import LOGO_ACV from "../../../assets/images/acv-logo.png";
+
+const { Sider } = Layout;
 
 interface SidebarProps {
-  mobileOpen: boolean;
-  onClose: () => void;
-  isMobile: boolean;
+  collapsed: boolean;
+  onCollapse: (collapsed: boolean) => void;
+  isMobile?: boolean; // Keep for compatibility if we want drawer on mobile later, but mostly Desktop focus now
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onClose, isMobile }) => {
-  const { logoutUser, user } = useAuthContext();
-  const [activeItem, setActiveItem] = useState<string | null>(null);
+const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse }) => {
+  const { user, logoutUser } = useAuthContext();
   const location = useLocation();
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
 
   useEffect(() => {
     const currentPath = location.pathname;
     const activeMenu = SIDEBAR_MENU.find((item) => item.path === currentPath);
     if (activeMenu) {
-      setActiveItem(activeMenu.name);
+        // We use path as key if name is not unique or just cleaner
+        // But original code used name. Let's stick to path for uniqueness or index.
+        // Actually name is fine if unique.
+        // Let's use path if avail, else name.
+        setSelectedKeys([activeMenu.path]);
     }
   }, [location]);
 
-  const filteredMenu = useMemo(() => {
-    return SIDEBAR_MENU.filter(
-      (item) =>
-        item.roles?.includes(user?.role ?? "") ||
-        (user?.role === "Administrator" && item.roles?.includes("admin"))
-    );
-  }, [user?.role]);
-
-  const drawerContent = (
-    <List>
-      {filteredMenu.map((item, index) => (
-        <ListItem
-          key={index}
-          button
-          component={item.logout ? "button" : Link}
-          to={!item.logout ? item.path : undefined}
-          onClick={() => {
-            if (item.logout) {
-              logoutUser();
-            } else {
-              setActiveItem(item.name);
-            }
-            if (isMobile) onClose();
-          }}
-          sx={{
-            gap: "16px",
-            backgroundColor:
-              activeItem === item.name ? "#3f3f3f" : "transparent",
-            borderLeft:
-              activeItem === item.name
-                ? `4px solid ${item.color || "#FFC900"}`
-                : "none",
-            "&:hover": {
-              backgroundColor: "#444",
-            },
-          }}
-        >
-          <ListItemIcon sx={{ color: item.color || "#FFC900", minWidth: "" }}>
-            {item.icon}
-          </ListItemIcon>
-          <ListItemText
-            primary={item.name}
-            sx={{ color: item.textColor || "#fff" }}
-          />
-        </ListItem>
-      ))}
-    </List>
+  const filteredMenu = SIDEBAR_MENU.filter(
+    (item) =>
+      item.roles?.includes(user?.role ?? "") ||
+      (user?.role === "Administrator" && item.roles?.includes("admin"))
   );
 
-  return isMobile ? (
-    <Drawer
-      anchor="left"
-      open={mobileOpen}
-      onClose={onClose}
-      ModalProps={{ keepMounted: true }}
-      sx={{
-        "& .MuiDrawer-paper": {
-          width: 240,
-          background: "#2d2d2d",
-          top: "70px",
-          height: "calc(100vh - 70px)",
-        },
+  const menuItems = filteredMenu.map((item) => ({
+    key: item.path,
+    icon: item.icon, // Needs to be compatible. If it's MUI icon, it renders fine in ReactNode.
+    label: item.logout ? (
+        <span onClick={() => logoutUser()} style={{ color: item.textColor }}>{item.name}</span>
+    ) : (
+        <Link to={item.path} style={{ color: item.textColor }}>{item.name}</Link>
+    ),
+    // Antd Menu Item style overrides if needed
+    style: {
+        color: item.textColor
+    }
+  }));
+
+  return (
+    <Sider
+      trigger={null}
+      collapsible
+      collapsed={collapsed}
+      width={260}
+      style={{
+        background: "#001529", // Dark theme standard or keeping #2d2d2d
+        // Original was #2d2d2d. Antd dark is #001529. Let's use #001529 for "Antd feel" or stick to user preference.
+        // User asked to "convert to Antd", assuming standard Antd look is acceptable or preferred.
+        // Let's stick to a clean dark theme.
+        minHeight: "100vh",
       }}
     >
-      {drawerContent}
-    </Drawer>
-  ) : (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: 240,
-        flexShrink: 0,
-        "& .MuiDrawer-paper": {
-          width: 240,
-          background: "#2d2d2d",
-          top: "70px",
-          height: "calc(100vh - 70px)",
-        },
-      }}
-      open
-    >
-      {drawerContent}
-    </Drawer>
+      <div style={{ height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 255, 255, 0.1)', margin: 16, borderRadius: 6 }}>
+           {collapsed ? (
+                <img src={LOGO_ACV} alt="Logo" style={{ width: 30, height: 30, objectFit: 'contain' }} />
+           ) : (
+                <img src={LOGO_ACV} alt="Logo" style={{ width: '80%', height: 40, objectFit: 'contain' }} />
+           )}
+      </div>
+      <Menu
+        theme="dark"
+        mode="inline"
+        selectedKeys={selectedKeys}
+        items={menuItems}
+        style={{ background: 'transparent' }} // Let Sider bg show
+      />
+    </Sider>
   );
 };
 

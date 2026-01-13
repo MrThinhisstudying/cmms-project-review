@@ -33,12 +33,16 @@ const DevicesProvider = ({ children }: { children: ReactNode }) => {
   const fetchDevices = useCallback(async () => {
     if (!user) return;
 
-    setLoading(true);
     try {
-      const devicesData = await getAllDevices();
-      setDevices(devicesData || []);
+      const token = getToken();
+      const devicesData = await getAllDevices(token);
+      if (devicesData) {
+        setDevices(devicesData);
+      }
     } catch (error) {
-      setDevices([]);
+      console.error("Failed to load devices", error);
+      // Keep previous devices if fetch fails (e.g. 304 or network error)
+      if (devices.length === 0) setDevices([]);
     } finally {
       setLoading(false);
     }

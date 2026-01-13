@@ -4,6 +4,7 @@ import {HistoryQueryDto} from './dto/history.dto';
 import {RollbackDto} from './dto/rollback.dto';
 import {CurrentUser} from '../auth/current-user.decorator';
 import {User} from '../user/user.entity';
+import {UserRole} from '../user/user-role.enum';
 import {AuditService} from './audit-log.service';
 import {JWTAuthGuard} from 'src/auth/guards/jwt-auth.guard';
 
@@ -33,7 +34,7 @@ export class AuditController {
         @Query('page') page: any = 1,
         @Query('limit') limit: any = 20,
     ) {
-        if (user.role !== 'admin') throw new ForbiddenException('Chỉ admin mới xem full log');
+        if (user.role !== UserRole.ADMIN) throw new ForbiddenException('Chỉ admin mới xem full log');
         return this.auditService.getAllLogs({actorUserId, entity, entityId}, Number(page), Number(limit));
     }
 
@@ -47,7 +48,7 @@ export class AuditController {
     @Post('rollback/:logId')
     @ApiOperation({summary: 'Rollback record to BEFORE snapshot (admin only)'})
     async rollbackLog(@Param('logId', ParseIntPipe) logId: number, @Body() body: RollbackDto, @CurrentUser() user: User) {
-        if (user.role !== 'admin') throw new ForbiddenException('Chỉ admin được phép rollback');
+        if (user.role !== UserRole.ADMIN) throw new ForbiddenException('Chỉ admin được phép rollback');
         return this.auditService.rollbackToLog(logId, body?.reason);
     }
 
@@ -55,7 +56,7 @@ export class AuditController {
     @Post('rollback/transaction/:id')
     @ApiOperation({summary: 'Rollback an entire audit transaction (admin only)'})
     async rollbackTransaction(@Param('id', ParseIntPipe) id: number, @Body() body: RollbackDto, @CurrentUser() user: User) {
-        if (user.role !== 'admin') throw new ForbiddenException('Chỉ admin được phép rollback');
+        if (user.role !== UserRole.ADMIN) throw new ForbiddenException('Chỉ admin được phép rollback');
         return this.auditService.rollbackTransaction(id, body?.reason);
     }
 }

@@ -1,4 +1,4 @@
-import {Controller, Get, Post, Body, Param, Delete, Patch, Req, Res, UseGuards} from '@nestjs/common';
+import {Controller, Get, Post, Body, Param, Delete, Patch, Req, Res, UseGuards, Query} from '@nestjs/common';
 import {RepairsService} from './repairs.service';
 import {CreateRepairDto} from './dto/create-repair.dto';
 import {ReviewRepairDto} from './dto/review-repair.dto';
@@ -26,8 +26,9 @@ export class RepairsController {
     @UseGuards(JWTAuthGuard, PermissionsGuard)
     @RequirePermissions('UPDATE_REPAIR')
     @Patch(':id')
-    async update(@Param('id') id: string, @Body() dto: CreateRepairDto) {
-        const repair = await this.repairService.update(+id, dto);
+    async update(@Param('id') id: string, @Body() dto: CreateRepairDto, @Req() req) {
+        // Enforce user ownership check in service
+        const repair = await this.repairService.update(+id, dto, req.user.user_id, req.user.role);
         return {message: 'Cập nhật phiếu sửa chữa thành công', data: repair};
     }
 
@@ -72,8 +73,19 @@ export class RepairsController {
     }
 
     @Get()
-    async findAll() {
-        const data = await this.repairService.findAll();
+    @Get()
+    async findAll(
+        @Query('status_request') status_request?: string,
+        @Query('status_inspection') status_inspection?: string,
+        @Query('device_id') device_id?: string,
+        @Req() req?,
+    ) {
+        const filters = {
+            status_request,
+            status_inspection,
+            device_id: device_id ? +device_id : undefined,
+        };
+        const data = await this.repairService.findAll(req?.user, filters);
         return {message: 'Lấy danh sách phiếu thành công', data};
     }
 

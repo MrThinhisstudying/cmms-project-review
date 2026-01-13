@@ -33,10 +33,14 @@ export const RepairsProvider = ({
   const [userRole, setUserRole] = useState<Role>("viewer");
   const token = getToken();
 
-  const fetchData = async () => {
+  const fetchData = async (params?: {
+    status_request?: string;
+    status_inspection?: string;
+    device_id?: number;
+  }) => {
     setLoading(true);
     try {
-      const data = await getAllRepairs(token);
+      const data = await getAllRepairs(token, params);
       setRepairs(data);
     } finally {
       setLoading(false);

@@ -3,10 +3,11 @@ import { IDepartment } from "./user.types";
 import { IDevice } from "./devicesManagement.types";
 
 export type RequestStatus =
-  | "pending"
-  | "manager_approved"
-  | "admin_approved"
-  | "rejected";
+  | "WAITING_TECH"
+  | "WAITING_TEAM_LEAD"
+  | "WAITING_DIRECTOR"
+  | "REJECTED"
+  | "COMPLETED";
 
 export type InspectionStatus =
   | "inspection_pending"

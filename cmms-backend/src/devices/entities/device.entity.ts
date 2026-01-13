@@ -2,7 +2,8 @@ import {ApiProperty} from '@nestjs/swagger';
 import {User} from 'src/user/user.entity';
 import {Repair} from 'src/repairs/entities/repair.entity';
 import {DeviceStatus} from '../enums/device-status.enum';
-import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToMany, OneToMany} from 'typeorm';
+import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToMany, OneToMany, ManyToOne, JoinColumn} from 'typeorm';
+import { DeviceGroup } from '../../device-groups/entities/device-group.entity';
 
 @Entity()
 export class Device {
@@ -114,6 +115,10 @@ export class Device {
 
     @ManyToMany(() => User, (user) => user.devices)
     users?: User[];
+
+    @ManyToOne(() => DeviceGroup, (deviceGroup) => deviceGroup.devices, { nullable: true })
+    @JoinColumn({ name: 'group_id' })
+    device_group?: DeviceGroup;
 
     @OneToMany(() => Repair, (repair) => repair.device, {cascade: true})
     repairs?: Repair[];

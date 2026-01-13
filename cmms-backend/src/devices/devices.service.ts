@@ -138,7 +138,7 @@ export class DevicesService {
     async findAll(): Promise<{result: Device[]}> {
         try {
             const devices = await this.deviceRepository.find({
-                relations: ['users'],
+                relations: ['users', 'device_group'],
                 order: {
                     updated_at: 'DESC',
                 },
