@@ -8,9 +8,10 @@ import {
   Col,
   message,
   Card,
-  Spin
+  Spin,
+  Statistic
 } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
+import { PlusOutlined, FileTextOutlined, ToolOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
 import { useRepairsContext } from "../../context/RepairsContext/RepairsContext";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
 import RepairForm from "./components/RepairForm";
@@ -61,28 +62,18 @@ const RepairsManagement: React.FC = () => {
 
   const [filterDevice, setFilterDevice] = useState<number | undefined>(undefined);
   const [filterStatusRequest, setFilterStatusRequest] = useState<string | undefined>(undefined);
-  // Separate states for inspection status could be added if needed, or combined
-  
-  // Trigger server-side fetch when filters change
+
   useEffect(() => {
     reload({
       device_id: filterDevice,
       status_request: filterStatusRequest,
-      // Add status_inspection if we want to filter by that too
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterDevice, filterStatusRequest]); // removed reload from dependencies to avoid loop if reload isn't stable
+  }, [filterDevice, filterStatusRequest]);
 
-  const canCreate = role === "admin" || perms.includes("CREATE_REPAIR");
-  const canUpdate = role === "admin" || perms.includes("UPDATE_REPAIR");
-  const canReview = role === "admin" || perms.includes("APPROVE_REPAIR");
-  const canDelete = role === "admin" || perms.includes("DELETE_REPAIR");
-  const canExport = role === "admin" || perms.includes("EXPORT_REPAIR");
-
-  const checkPermission = (permissionCode: string) => {
-    return role === "admin" || perms.includes(permissionCode);
-  };
-
+  // Strict Role Check: Only Admin, Technician, Operator can create (Unit Head/Director only approve)
+  const canCreate = role === "ADMIN" || role === "TECHNICIAN" || role === "OPERATOR";
+  // Assuming strict RBAC logic for button visibility is handled here or in children.
 
   const [openForm, setOpenForm] = useState(false);
   const [openInspection, setOpenInspection] = useState(false);
@@ -90,8 +81,16 @@ const RepairsManagement: React.FC = () => {
   const [selectedRepair, setSelectedRepair] = useState<IRepair | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // No more client-side filtering needed!
-  
+  // Stats Calculation
+  const stats = useMemo(() => {
+    const total = repairs.length;
+    const requests = repairs.filter(r => r.status_request !== 'COMPLETED' && r.status_request !== 'REJECTED' && !r.canceled).length;
+    const inspections = repairs.filter(r => r.status_request === 'COMPLETED' && r.status_inspection !== 'inspection_admin_approved' && !r.canceled).length;
+    const acceptances = repairs.filter(r => r.status_inspection === 'inspection_admin_approved' && r.status_acceptance !== 'acceptance_admin_approved' && !r.canceled).length;
+    const cancelled = repairs.filter(r => r.canceled).length;
+    return { total, requests, inspections, acceptances, cancelled };
+  }, [repairs]);
+
   const handleSubmit = async (data: RepairUpsertPayload) => {
     try {
       setSaving(true);
@@ -120,9 +119,10 @@ const RepairsManagement: React.FC = () => {
     try {
       setSaving(true);
       await reviewRepairItem(id, { action, reason, phase });
-      message.success("Cập nhật duyệt thành công");
+      message.success(action === 'approve' ? "Đã duyệt phiếu thành công" : "Đã từ chối phiếu");
+      setSelectedRepair(null); // Close Drawer/Modal
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "Duyệt thất bại");
+      message.error(e instanceof Error ? e.message : "Thao tác thất bại");
     } finally {
       setSaving(false);
     }
@@ -132,7 +132,6 @@ const RepairsManagement: React.FC = () => {
     if (!selectedRepair) return;
     try {
       setSaving(true);
-
       if (payload.inspection_materials?.length) {
         for (const m of payload.inspection_materials) {
           if (m.item_id) {
@@ -141,13 +140,14 @@ const RepairsManagement: React.FC = () => {
               quantity: m.quantity,
               purpose: "Sửa chữa",
               repair_id: selectedRepair.repair_id,
+              // Using helper which mimics context logic? 
+              // RepairsContext likely wraps api calls.
             });
           }
         }
       }
-
       await submitInspectionStep(selectedRepair.repair_id, payload);
-      message.success("Đã cập nhật & duyệt kiểm nghiệm");
+      message.success("Đã cập nhật kiểm nghiệm");
       setOpenInspection(false);
       setSelectedRepair(null);
     } catch (e) {
@@ -162,7 +162,7 @@ const RepairsManagement: React.FC = () => {
     try {
       setSaving(true);
       await submitAcceptanceStep(selectedRepair.repair_id, payload);
-      message.success("Đã cập nhật & duyệt nghiệm thu");
+      message.success("Đã cập nhật nghiệm thu");
       setOpenAcceptance(false);
       setSelectedRepair(null);
     } catch (e) {
@@ -188,19 +188,21 @@ const RepairsManagement: React.FC = () => {
     }
   };
 
-  const currentRepairIndex = selectedRepair ? repairs.findIndex(r => r.repair_id === selectedRepair.repair_id) : -1;
-  const hasPrev = currentRepairIndex > 0;
-  const hasNext = currentRepairIndex !== -1 && currentRepairIndex < repairs.length - 1;
+  const hasPrev = selectedRepair ? repairs.findIndex(r => r.repair_id === selectedRepair.repair_id) > 0 : false;
+  const hasNext = selectedRepair ? repairs.findIndex(r => r.repair_id === selectedRepair.repair_id) < repairs.length - 1 : false;
 
-  const handleExport = async (
-    id: number,
-    type: "request" | "inspection" | "acceptance"
-  ) => {
+  /* New state for export loading */
+  const [exportLoading, setExportLoading] = useState(false);
+
+  const handleExport = async (id: number, type: "request" | "inspection" | "acceptance") => {
     try {
+      setExportLoading(true);
       await exportRepairItem(id, type);
-      message.success("Đã xuất file Word");
+      message.success("Tải xuống thành công");
     } catch {
       message.error("Xuất file thất bại");
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -213,24 +215,50 @@ const RepairsManagement: React.FC = () => {
     }
   };
 
-  if (loading && !repairs.length) {
-    return <Spin size="large" />;
-  }
-
   return (
     <div style={{ padding: 24, minHeight: "100vh", backgroundColor: "#f0f2f5" }}>
       <Space direction="vertical" size="large" style={{ width: "100%" }}>
+        
+        {/* Stats Bar */}
+        <Row gutter={[16, 16]}>
+            <Col span={5}>
+                <Card bordered={false}>
+                    <Statistic title="Tổng phiếu" value={stats.total} prefix={<FileTextOutlined />} />
+                </Card>
+            </Col>
+            <Col span={5}>
+                <Card bordered={false}>
+                    <Statistic title="Yêu cầu sửa chữa" value={stats.requests} valueStyle={{ color: '#faad14' }} prefix={<ToolOutlined />} />
+                </Card>
+            </Col>
+            <Col span={5}>
+                <Card bordered={false}>
+                    <Statistic title="Đang kiểm nghiệm" value={stats.inspections} valueStyle={{ color: '#1890ff' }} prefix={<CheckCircleOutlined />} />
+                </Card>
+            </Col>
+            <Col span={5}>
+                <Card bordered={false}>
+                    <Statistic title="Đang nghiệm thu" value={stats.acceptances} valueStyle={{ color: '#52c41a' }} prefix={<CheckCircleOutlined />} />
+                </Card>
+            </Col>
+            <Col span={4}>
+                <Card bordered={false}>
+                    <Statistic title="Đã hủy / Từ chối" value={stats.cancelled} valueStyle={{ color: '#cf1322' }} prefix={<CloseCircleOutlined />} />
+                </Card>
+            </Col>
+        </Row>
+
         <Card>
           <Row justify="space-between" align="middle" gutter={[16, 16]}>
             <Col>
               <Title level={4} style={{ margin: 0 }}>
-                Quản lý quy trình phiếu sửa chữa
+                Quản lý sửa chữa
               </Title>
             </Col>
             <Col>
               <Space>
                  <Select
-                    placeholder="Lọc theo thiết bị"
+                    placeholder="Lọc thiết bị"
                     allowClear
                     showSearch
                     optionFilterProp="children"
@@ -240,22 +268,24 @@ const RepairsManagement: React.FC = () => {
                  >
                     {availableDevices.map((d: any) => (
                         <Option key={d.device_id} value={d.device_id}>
-                            {d.name} ({d.brand})
+                            {d.name} ({d.reg_number || d.serial_number})
                         </Option>
                     ))}
                  </Select>
                  
                  <Select
-                    placeholder="Lọc theo trạng thái yêu cầu"
+                    placeholder="Trạng thái"
                     allowClear
-                    style={{ width: 200 }}
+                    style={{ width: 180 }}
                     value={filterStatusRequest}
                     onChange={(val) => setFilterStatusRequest(val)}
                   >
-                    <Option value="pending">Chờ phê duyệt</Option>
-                    <Option value="manager_approved">Bộ phận đã duyệt</Option>
-                    <Option value="admin_approved">Admin đã duyệt</Option>
-                    <Option value="rejected">Từ chối</Option>
+                    <Option value="WAITING_TECH">Chờ tiếp nhận</Option>
+                    <Option value="WAITING_MANAGER">Chờ QL duyệt</Option>
+                    <Option value="WAITING_DIRECTOR">Chờ GĐ duyệt</Option>
+                    <Option value="COMPLETED">Đã duyệt YC</Option>
+                    <Option value="CANCELED">Đã hủy</Option>
+                    <Option value="REJECTED">Đã từ chối</Option>
                   </Select>
 
                  {canCreate && (
@@ -278,8 +308,8 @@ const RepairsManagement: React.FC = () => {
         <Card bodyStyle={{ padding: 0 }}>
              <Spin spinning={loading}>
                 <RepairsTable
-                    rows={repairs} // Now using direct data from context, filtered by backend
-                    rowsPerPage={10} // Client-side pagination for remaining set (or implement server pagination later)
+                    rows={repairs}
+                    rowsPerPage={10}
                     page={1}
                     onReview={handleReview}
                     onDelete={handleDelete}
@@ -289,7 +319,6 @@ const RepairsManagement: React.FC = () => {
                     }}
                     onView={(r) => {
                         setSelectedRepair(r);
-                        // Drawer opens when selectedRepair is set
                     }}
                     onOpenInspection={(r) => {
                         setSelectedRepair(r);
@@ -300,10 +329,10 @@ const RepairsManagement: React.FC = () => {
                         setOpenAcceptance(true);
                     }}
                     onExport={(r, t) => handleExport(r.repair_id, t)}
-                    canReview={canReview}
-                    canDelete={canDelete}
-                    canUpdate={canUpdate}
-                    canExport={canExport}
+                    canReview={perms.includes("APPROVE_REPAIR") || role === "ADMIN"}
+                    canDelete={perms.includes("DELETE_REPAIR") || role === "ADMIN"}
+                    canUpdate={perms.includes("UPDATE_REPAIR") || role === "ADMIN"}
+                    canExport={perms.includes("EXPORT_REPAIR") || role === "ADMIN"}
                     userRole={role}
                     currentUser={user}
                     hasPermission={(code) => perms.includes(code)}
@@ -329,14 +358,16 @@ const RepairsManagement: React.FC = () => {
         data={selectedRepair}
         onClose={() => setSelectedRepair(null)}
         onExport={(type) => selectedRepair && handleExport(selectedRepair.repair_id, type)}
-        canExport={checkPermission("EXPORT_REPAIR")}
+        canExport={role === "ADMIN" || perms.includes("EXPORT_REPAIR")}
         onPrev={handlePrev}
         onNext={handleNext}
         hasPrev={hasPrev}
         hasNext={hasNext}
         onEdit={() => setOpenForm(true)}
+        onEditInspection={() => setOpenInspection(true)}
+        onEditAcceptance={() => setOpenAcceptance(true)}
         currentUser={user}
-        onReview={(action, reason) => selectedRepair && handleReview(selectedRepair.repair_id, action, reason, 'request')}
+        onReview={(action, reason, phase) => { if (selectedRepair) handleReview(selectedRepair.repair_id, action, reason, phase || 'request'); }}
       />
       )}
 
@@ -370,3 +401,4 @@ const RepairsManagement: React.FC = () => {
 };
 
 export default RepairsManagement;
+

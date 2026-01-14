@@ -100,7 +100,7 @@ const RepairForm: React.FC<RepairFormProps> = ({
             showSearch
             optionFilterProp="children"
             filterOption={(input, option) =>
-              (option?.label ?? "").toLowerCase().includes(input.toLowerCase())
+              (String(option?.label ?? "")).toLowerCase().includes(input.toLowerCase())
             }
             options={devices.map((d) => ({
               value: d.device_id,
@@ -117,10 +117,10 @@ const RepairForm: React.FC<RepairFormProps> = ({
             <Descriptions.Item label="Tên thiết bị">
               {selectedDevice.name}
             </Descriptions.Item>
-            <Descriptions.Item label="Mã/Model">
-              {selectedDevice.brand} - {selectedDevice.serial_number}
+            <Descriptions.Item label="Số đăng ký">
+              {selectedDevice.reg_number} - {selectedDevice.brand}
             </Descriptions.Item>
-            <Descriptions.Item label="Đơn vị quản lý">
+            <Descriptions.Item label="Đơn vị quản lý tài sản">
                {selectedDevice.using_department || "Đội Kỹ Thuật"}
             </Descriptions.Item>
           </Descriptions>

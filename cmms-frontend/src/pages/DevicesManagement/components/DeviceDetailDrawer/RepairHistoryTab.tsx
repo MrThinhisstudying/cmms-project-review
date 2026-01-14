@@ -89,10 +89,10 @@ export default function RepairHistoryTab({ loading, repairs }: Props) {
       color: "default" as const,
     };
 
-    const isRejected =
-      r.status_request === "REJECTED" ||
-      r.status_inspection === "inspection_rejected" ||
-      r.status_acceptance === "acceptance_rejected";
+    const isRejected = 
+      r.status_request === "REJECTED_B03" ||
+      r.status_inspection === "REJECTED_B04" ||
+      r.status_acceptance === "REJECTED_B05";
 
     return (
       <TableRow key={r.repair_id || index} hover>

@@ -4,21 +4,26 @@ import { IDevice } from "./devicesManagement.types";
 
 export type RequestStatus =
   | "WAITING_TECH"
-  | "WAITING_TEAM_LEAD"
+  | "WAITING_MANAGER"
   | "WAITING_DIRECTOR"
+  | "REJECTED_B03"
   | "REJECTED"
   | "COMPLETED";
 
 export type InspectionStatus =
   | "inspection_pending"
+  | "inspection_lead_approved"
   | "inspection_manager_approved"
   | "inspection_admin_approved"
+  | "REJECTED_B04"
   | "inspection_rejected";
 
 export type AcceptanceStatus =
   | "acceptance_pending"
+  | "acceptance_lead_approved"
   | "acceptance_manager_approved"
   | "acceptance_admin_approved"
+  | "REJECTED_B05"
   | "acceptance_rejected";
 
 export interface IInspectionMaterial {
@@ -26,6 +31,7 @@ export interface IInspectionMaterial {
   item_name?: string;
   quantity: number;
   unit?: string;
+  specifications?: string;
   is_new: boolean;
   category_name?: string;
   item_code?: string;
@@ -65,6 +71,7 @@ export interface IRepair {
   status_inspection: InspectionStatus;
   approved_by_manager_inspection?: IUser;
   approved_by_admin_inspection?: IUser;
+  approved_by_operator_lead_inspection?: IUser;
 
   inspection_created_by?: IUser;
   inspection_created_at?: string;
@@ -75,9 +82,11 @@ export interface IRepair {
 
   acceptance_note?: string;
   acceptance_committee?: IUser[];
+
   status_acceptance: AcceptanceStatus;
   approved_by_manager_acceptance?: IUser;
   approved_by_admin_acceptance?: IUser;
+  approved_by_operator_lead_acceptance?: IUser;
 
   acceptance_created_by?: IUser;
   acceptance_created_at?: string;
@@ -88,9 +97,15 @@ export interface IRepair {
   recovered_materials?: IMaterial[];
   materials_to_scrap?: IMaterial[];
   acceptance_other_opinions?: string;
+  location_coordinates?: string;
 
   canceled: boolean;
   canceled_at?: string;
+  rejection_reason?: string;
+  rejected_by?: IUser;
+  
+  limited_use_status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+
   created_at: string;
   updated_at?: string;
 }
@@ -121,4 +136,6 @@ export interface RepairAcceptancePayload {
   recovered_materials?: IMaterial[];
   materials_to_scrap?: IMaterial[];
   acceptance_other_opinions?: string;
+  location_coordinates?: string;
+  inspection_materials?: IInspectionMaterial[];
 }

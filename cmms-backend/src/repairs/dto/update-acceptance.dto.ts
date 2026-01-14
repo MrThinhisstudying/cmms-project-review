@@ -51,4 +51,8 @@ export class UpdateAcceptanceDto {
     @IsOptional()
     @IsString()
     acceptance_other_opinions?: string;
+
+    @IsOptional()
+    @IsArray()
+    inspection_materials?: any[]; // Simplified type for brevity, or define full structure
 }

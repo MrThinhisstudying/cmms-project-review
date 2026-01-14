@@ -12,8 +12,16 @@ export class Device {
     device_id: number;
 
     @ApiProperty()
+    @Column({nullable: true, unique: true})
+    device_code?: string; // Mã thiết bị
+
+    @ApiProperty()
     @Column({nullable: true})
     name?: string;
+
+    @ApiProperty()
+    @Column({nullable: true})
+    reg_number?: string; // Biển số đăng ký
 
     @ApiProperty()
     @Column({nullable: true})
@@ -23,9 +31,25 @@ export class Device {
     @Column({
         type: 'enum',
         enum: DeviceStatus,
-        default: DeviceStatus.MOI,
+        default: DeviceStatus.DANG_SU_DUNG,
     })
     status: DeviceStatus;
+
+    @ApiProperty()
+    @Column({type: 'date', nullable: true})
+    inspection_expiry?: Date; // Hạn đăng kiểm
+
+    @ApiProperty()
+    @Column({type: 'date', nullable: true})
+    insurance_expiry?: Date; // Hạn bảo hiểm
+
+    @ApiProperty()
+    @Column({type: 'json', nullable: true})
+    license_info?: any; // Thông tin giấy tờ (JSON)
+
+    @ApiProperty()
+    @Column({type: 'json', nullable: true})
+    assessment_info?: any; // Thông tin đánh giá (JSON)
 
     @ApiProperty()
     @Column({nullable: true})
@@ -89,6 +113,10 @@ export class Device {
 
     @ApiProperty()
     @Column({nullable: true})
+    length?: string;
+
+    @ApiProperty()
+    @Column({nullable: true})
     width?: string;
 
     @ApiProperty()
@@ -106,6 +134,14 @@ export class Device {
     @ApiProperty()
     @Column({nullable: true})
     other_specifications?: string;
+
+    @ApiProperty()
+    @Column({type: 'json', nullable: true})
+    components_inventory?: any; // Danh sách phụ tùng đi kèm
+
+    @ApiProperty()
+    @Column({type: 'json', nullable: true})
+    relocation_history?: any; // Lịch sử di dời
 
     @CreateDateColumn()
     created_at?: Date;

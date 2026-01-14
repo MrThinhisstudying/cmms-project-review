@@ -19,7 +19,7 @@ const DevicesContext = createContext<DevicesContextValue>({
   devices: [],
   setDevices: () => {},
   loading: true,
-  fetchDevices: () => {},
+  fetchDevices: async () => {},
   report: null,
   fetchReport: async () => {},
 });
@@ -30,12 +30,12 @@ const DevicesProvider = ({ children }: { children: ReactNode }) => {
   const [report, setReport] = useState<ReportData | null>(null);
   const { user } = useAuthContext();
 
-  const fetchDevices = useCallback(async () => {
+  const fetchDevices = useCallback(async (filters?: { status?: string; name?: string; groupId?: number }) => {
     if (!user) return;
 
     try {
       const token = getToken();
-      const devicesData = await getAllDevices(token);
+      const devicesData = await getAllDevices(token, filters);
       if (devicesData) {
         setDevices(devicesData);
       }

@@ -156,22 +156,37 @@ export const exportRepair = async (
   token: string | null,
   type: "request" | "inspection" | "acceptance" = "request"
 ) => {
-  const res = await fetch(`${BASE_URL}/${id}/export/${type}`, {
+  const typeMap: Record<string, string> = {
+    request: "B03",
+    inspection: "B04",
+    acceptance: "B05",
+  };
+  const code = typeMap[type] || "B03";
+  // GET /repairs/:id/export?type=...
+  const url = `${BASE_URL}/${id}/export?type=${code}`;
+  
+  const res = await fetch(url, {
     headers: { Authorization: token ? `Bearer ${token}` : "" },
   });
+  
   if (!res.ok) throw new Error("Xuất file thất bại");
+  
   const blob = await res.blob();
-  const url = window.URL.createObjectURL(blob);
+  const downloadUrl = window.URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url;
-  a.download =
-    type === "request"
-      ? `PHIẾU YÊU CẦU KIỂM TRA BẢO DƯỠNG - SỬA CHỮA.docx`
-      : type === "inspection"
-      ? `BIÊN BẢN KIỂM NGHIỆM KỸ THUẬT.docx`
-      : `BIÊN BẢN NGHIỆM THU.docx`;
+  a.href = downloadUrl;
+  
+  const fileNameMap: Record<string, string> = {
+    request: "PHIẾU YÊU CẦU KIỂM TRA BẢO DƯỠNG - SỬA CHỮA",
+    inspection: "BIÊN BẢN KIỂM NGHIỆM KỸ THUẬT",
+    acceptance: "BIÊN BẢN NGHIỆM THU",
+  };
+  
+  a.download = `${fileNameMap[type] || "Export"}.docx`;
+  document.body.appendChild(a);
   a.click();
-  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(downloadUrl);
 };
 
 export const deleteRepair = async (id: number, token: string | null) => {
@@ -181,5 +196,41 @@ export const deleteRepair = async (id: number, token: string | null) => {
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || "Xóa phiếu thất bại");
+  return data;
+};
+
+export const requestLimitedUse = async (
+  id: number,
+  token: string | null,
+  reason: string
+) => {
+  const res = await fetch(`${BASE_URL}/${id}/limited-use`, {
+    method: "POST",
+    headers: {
+      Authorization: token ? `Bearer ${token}` : "",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ reason }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Gửi đề xuất SDHC thất bại");
+  return data;
+};
+
+export const reviewLimitedUse = async (
+  id: number,
+  token: string | null,
+  action: "approve" | "reject"
+) => {
+  const res = await fetch(`${BASE_URL}/${id}/review-limited-use`, {
+    method: "PATCH",
+    headers: {
+      Authorization: token ? `Bearer ${token}` : "",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ action }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Duyệt đề xuất SDHC thất bại");
   return data;
 };

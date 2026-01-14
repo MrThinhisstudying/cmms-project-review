@@ -51,6 +51,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
             const token = getToken();
             const updated = await updateProfile({
                 name: values.name,
+                signature_url: values.signature_url
             }, token);
             message.success('Cập nhật thông tin thành công');
             onUpdateSuccess(updated);

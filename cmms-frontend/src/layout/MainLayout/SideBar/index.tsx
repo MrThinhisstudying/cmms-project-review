@@ -33,7 +33,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse }) => {
   const filteredMenu = SIDEBAR_MENU.filter(
     (item) =>
       item.roles?.includes(user?.role ?? "") ||
-      (user?.role === "Administrator" && item.roles?.includes("admin"))
+      (user?.role === "ADMIN" && item.roles?.includes("ADMIN")) // Redundant if user.role is ADMIN and item.roles includes ADMIN, but keeping for safety.
   );
 
   const menuItems = filteredMenu.map((item) => ({

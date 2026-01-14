@@ -8,8 +8,9 @@ export class DeviceGroupsController {
   constructor(private readonly deviceGroupsService: DeviceGroupsService) {}
 
   @Get()
-  findAll() {
-    return this.deviceGroupsService.findAll();
+  async findAll() {
+    const groups = await this.deviceGroupsService.findAll();
+    return { message: 'Lấy danh sách nhóm thiết bị thành công', data: groups };
   }
 
   @Post()

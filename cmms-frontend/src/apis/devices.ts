@@ -3,10 +3,16 @@ import { IDevice } from "../types/devicesManagement.types";
 type DevicePayload = Partial<IDevice>;
 
 export const getAllDevices = async (
-  token?: string | null
+  token?: string | null,
+  filters?: { status?: string; name?: string; groupId?: number }
 ): Promise<IDevice[]> => {
   try {
-    const response = await fetch(`${process.env.REACT_APP_BASE_URL}/devices`, {
+    const query = new URLSearchParams();
+    if (filters?.status) query.append("status", filters.status);
+    if (filters?.name) query.append("name", filters.name);
+    if (filters?.groupId) query.append("groupId", filters.groupId.toString());
+
+    const response = await fetch(`${process.env.REACT_APP_BASE_URL}/devices?${query.toString()}`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
@@ -158,4 +164,32 @@ export const getDevicesReport = async (
   }
 
   return data;
+};
+export const getDeviceAnalytics = async (token: string | null) => {
+  const response = await fetch(`${process.env.REACT_APP_BASE_URL}/devices/analytics/monthly`, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: token ? `Bearer ${token}` : '',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch analytics');
+  }
+  return response.json();
+};
+
+export const exportDevicesPdf = async (token: string | null) => {
+  const response = await fetch(`${process.env.REACT_APP_BASE_URL}/devices/export/pdf`, {
+    method: 'GET',
+    headers: {
+      Authorization: token ? `Bearer ${token}` : '',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to export PDF');
+  }
+  return response.blob();
 };

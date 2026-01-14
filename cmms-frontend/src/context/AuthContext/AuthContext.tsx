@@ -11,6 +11,7 @@ import Toast from "../../components/Toast";
 import { jwtDecode } from "jwt-decode";
 import { getToken, removeToken } from "../../utils/auth";
 import { IDepartment } from "../../types/user.types";
+import { getProfile } from "../../apis/users";
 
 interface User {
   user_id: number;
@@ -71,25 +72,39 @@ const AuthProvider = ({ children }: { children: ReactNode }) => {
     clearUserLoginState();
   }, [clearUserLoginState]);
 
-  const updateUser = useCallback((token: string) => {
+  const updateUser = useCallback(async (token: string) => {
     setLoading(true);
     if (token) {
       try {
         const decodedToken = jwtDecode<DecodedToken>(token);
 
-        setUser({
+        const initialUser: User = {
           user_id: decodedToken.id,
           name: decodedToken.sub,
           email: decodedToken.email,
-          role:
-            decodedToken.role === "Administrator"
-              ? "admin"
-              : decodedToken.role?.toLowerCase(),
+          role: decodedToken.role === "Administrator" ? "ADMIN" : decodedToken.role?.toUpperCase(),
           department: decodedToken.department,
           avatar: decodedToken.avatar || "",
           signature_url: decodedToken.signature_url,
           permissions: decodedToken.permissions || [],
-        });
+        };
+        
+        setUser(initialUser);
+
+        // Fetch latest profile to get updated signature/info
+        try {
+            const freshProfile = await getProfile(token);
+            if (freshProfile) {
+                setUser(prev => ({
+                    ...prev!,
+                    ...freshProfile,
+                    role: (freshProfile.role || prev?.role || "VIEWER").toUpperCase()
+                }));
+            }
+        } catch (e) {
+            console.error("Failed to refresh profile", e);
+        }
+
       } catch (error) {
         removeToken();
         clearUserLoginState();

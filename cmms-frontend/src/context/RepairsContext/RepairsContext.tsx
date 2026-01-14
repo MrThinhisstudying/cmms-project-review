@@ -8,6 +8,8 @@ import {
   deleteRepair,
   submitInspection,
   submitAcceptance,
+  requestLimitedUse,
+  reviewLimitedUse,
 } from "../../apis/repairs";
 import { requestStockOut } from "../../apis/inventory";
 import { getToken } from "../../utils/auth";
@@ -114,6 +116,18 @@ export const RepairsProvider = ({
     await fetchData();
   };
 
+  const requestLimitedUseItem = async (id: number, reason: string) => {
+    const res = await requestLimitedUse(id, token, reason);
+    await fetchData();
+    return res;
+  };
+
+  const reviewLimitedUseItem = async (id: number, action: "approve" | "reject") => {
+    const res = await reviewLimitedUse(id, token, action);
+    await fetchData();
+    return res;
+  };
+
   return (
     <RepairsContext.Provider
       value={{
@@ -129,6 +143,8 @@ export const RepairsProvider = ({
         requestStockOutForRepair,
         exportRepairItem,
         deleteRepairItem,
+        requestLimitedUseItem,
+        reviewLimitedUseItem,
         reload: fetchData,
       }}
     >

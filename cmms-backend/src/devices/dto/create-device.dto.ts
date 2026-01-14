@@ -22,6 +22,33 @@ export class CreateDeviceDto {
     @ApiPropertyOptional()
     @IsOptional()
     @IsString()
+    device_code?: string;
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    @IsString()
+    reg_number?: string;
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    // Type checking for dates coming from JSON/DTO
+    inspection_expiry?: Date;
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    insurance_expiry?: Date;
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    license_info?: any;
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    assessment_info?: any;
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    @IsString()
     note?: string;
 
     @ApiPropertyOptional()

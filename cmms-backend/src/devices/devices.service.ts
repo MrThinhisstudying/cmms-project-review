@@ -4,9 +4,12 @@ import {Device} from './entities/device.entity';
 import {InjectRepository} from '@nestjs/typeorm';
 import {Repository} from 'typeorm';
 import {User} from 'src/user/user.entity';
-import * as XLSX from 'xlsx';
+import * as ExcelJS from 'exceljs';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const PdfPrinter = require('pdfmake');
 import {columnMapping, DeviceStatus} from './enums/device-status.enum';
 import {DeviceReportSummary} from './types/device-report.type';
+import { UserRole } from 'src/user/user-role.enum';
 
 @Injectable()
 export class DevicesService {
@@ -18,102 +21,83 @@ export class DevicesService {
     ) {}
 
     async importDevicesFromExcel(buffer: Buffer): Promise<Device[]> {
-        const workbook = XLSX.read(buffer, {type: 'buffer', codepage: 65001});
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(sheet, {defval: ''});
-
-        const createdDevices: Device[] = [];
-
-        const normalizedMapping: Record<string, string> = {};
-        for (const [k, v] of Object.entries(columnMapping)) {
-            normalizedMapping[k.trim().toLowerCase()] = v;
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(buffer as any); // Cast to any to avoid type mismatch
+        
+        const worksheet = workbook.getWorksheet(1);
+        if (!worksheet) {
+            throw new HttpException('Worksheet not found in Excel file', HttpStatus.BAD_REQUEST);
         }
+        const createdDevices: Device[] = [];
+        const rows: any[] = [];
 
-        for (const row of rows) {
+        worksheet.eachRow((row, rowNumber) => {
+            if (rowNumber === 1) return; // Skip header
+            const rowValues = row.values as any[];
+            // ExcelJS adds empty item at index 0
+            rows.push(rowValues.slice(1)); 
+        });
+
+        // Mapping logic needs to be robust using Headers. 
+        // For simplicity assuming fixed column order matching the template or mapping by index.
+        // Let's stick to the previous logic of mapping by header name if possible, 
+        // but ExcelJS row iteration by default is clearer.
+        // To map by header name:
+        const headers: string[] = [];
+        worksheet.getRow(1).eachCell((cell) => {
+            headers.push(cell.text?.toString().trim());
+        });
+
+        for (let i = 2; i <= worksheet.rowCount; i++) {
+            const row = worksheet.getRow(i);
             const mapped: Record<string, any> = {};
-            for (const [vnKey, value] of Object.entries(row)) {
-                const key = normalizedMapping[vnKey.trim().toLowerCase()];
-                if (key) mapped[key] = typeof value === 'string' ? value.trim() : value;
-            }
+            
+            row.eachCell((cell, colNumber) => {
+                const header = headers[colNumber - 1]; // 0-indexed array vs 1-indexed Excel
+                const normalizedHeader = header ? header.replace(/\s+/g, ' ').trim() : '';
+                const key = columnMapping[normalizedHeader];
+                if (key) {
+                   mapped[key] = cell.text; // Use text value
+                }
+            });
 
-            const name = String(mapped.name ?? '').trim();
-            const brand = String(mapped.brand ?? '').trim();
-            const serial_number = String(mapped.serial_number ?? '').trim();
+            const name = mapped.name;
             if (!name) continue;
 
-            const deviceDto: CreateDeviceDto = {
+            const deviceDto: Partial<Device> = {
                 name,
-                brand,
-                serial_number,
-                usage_purpose: mapped.usage_purpose ?? '',
-                operating_scope: mapped.operating_scope ?? '',
-                country_of_origin: mapped.country_of_origin ?? '',
+                brand: mapped.brand,
+                serial_number: mapped.serial_number,
+                reg_number: mapped.reg_number,
+                device_code: mapped.device_code, 
+                usage_purpose: mapped.usage_purpose,
+                operating_scope: mapped.operating_scope,
+                country_of_origin: mapped.country_of_origin,
                 manufacture_year: mapped.manufacture_year ? Number(mapped.manufacture_year) : 0,
-                note: mapped.note ?? '',
+                note: mapped.note,
                 usage_start_year: mapped.usage_start_year ? Number(mapped.usage_start_year) : 0,
-                technical_code_address: mapped.technical_code_address ?? '',
-                location_coordinates: mapped.location_coordinates ?? '',
-                daily_operation_time: mapped.daily_operation_time ?? '',
-                relocation_origin: mapped.relocation_origin ?? '',
+                technical_code_address: mapped.technical_code_address,
+                location_coordinates: mapped.location_coordinates,
+                daily_operation_time: mapped.daily_operation_time,
+                relocation_origin: mapped.relocation_origin,
                 relocation_year: mapped.relocation_year ? Number(mapped.relocation_year) : 0,
-                fixed_asset_code: mapped.fixed_asset_code ?? '',
-                using_department: mapped.using_department ?? '',
-                weight: mapped.weight ?? '',
-                width: mapped.width ?? '',
-                height: mapped.height ?? '',
-                power_source: mapped.power_source ?? '',
-                power_consumption: mapped.power_consumption ?? '',
-                other_specifications: mapped.other_specifications ?? '',
-                userIds: Array.isArray(mapped.userIds) ? mapped.userIds : [],
+                fixed_asset_code: mapped.fixed_asset_code,
+                using_department: mapped.using_department,
+                weight: mapped.weight,
+                width: mapped.width,
+                length: mapped.length, // Added length
+                height: mapped.height,
+                power_source: mapped.power_source,
+                power_consumption: mapped.power_consumption,
+                other_specifications: mapped.other_specifications,
+                status: DeviceStatus.MOI // Default for import
             };
 
-            const device = await this.create(deviceDto);
+            const device = await this.create(deviceDto as CreateDeviceDto);
             createdDevices.push(device);
         }
 
         return createdDevices;
-    }
-
-    normalizeHeader(header: string): string {
-        return header.replace(/\s+/g, ' ').trim();
-    }
-
-    async parseExcelBuffer(buffer: Buffer): Promise<{columns: string[]; rows: any[]}> {
-        try {
-            const workbook = XLSX.read(buffer, {
-                type: 'buffer',
-                codepage: 65001,
-            });
-            const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            const data = XLSX.utils.sheet_to_json(sheet, {defval: ''});
-
-            if (data.length === 0) {
-                return {columns: [], rows: []};
-            }
-
-            const mappedRows = data.map((row: any) => {
-                const mapped: any = {};
-                for (const col of Object.keys(row)) {
-                    const normalizedCol = this.normalizeHeader(col);
-                    const engKey = columnMapping[normalizedCol];
-                    if (engKey) {
-                        mapped[engKey] = row[col];
-                    } else {
-                        mapped[normalizedCol] = row[col];
-                    }
-                }
-                return mapped;
-            });
-
-            const columns = Object.keys(mappedRows[0]);
-
-            return {
-                columns,
-                rows: mappedRows,
-            };
-        } catch (err) {
-            throw new HttpException('Không phân tích được tệp', HttpStatus.INTERNAL_SERVER_ERROR);
-        }
     }
 
     async create(createDeviceDto: CreateDeviceDto): Promise<Device> {
@@ -121,7 +105,8 @@ export class DevicesService {
             const {userIds, ...deviceData} = createDeviceDto;
 
             const device = this.deviceRepository.create(deviceData);
-
+            // Validation for enums handled by DTO or database constraints
+            
             if (userIds && userIds.length > 0) {
                 const users = await this.userRepository.findByIds(userIds);
                 device.users = users;
@@ -130,20 +115,53 @@ export class DevicesService {
             const savedDevice = await this.deviceRepository.save(device);
             return this.sanitizeDeviceUsers(savedDevice);
         } catch (error) {
+            console.error(error);
             if (error instanceof HttpException) throw error;
             throw new InternalServerErrorException('Thêm mới trang thiết bị thất bại');
         }
     }
 
-    async findAll(): Promise<{result: Device[]}> {
+    async findAll(
+        filter: { status?: DeviceStatus; name?: string; groupId?: number } = {},
+        user?: User
+    ): Promise<{result: Device[]}> {
         try {
-            const devices = await this.deviceRepository.find({
-                relations: ['users', 'device_group'],
-                order: {
-                    updated_at: 'DESC',
-                },
-            });
+            const query = this.deviceRepository
+                .createQueryBuilder('device')
+                .leftJoinAndSelect('device.users', 'users')
+                .leftJoinAndSelect('device.device_group', 'device_group')
+                .orderBy('device.updated_at', 'DESC');
 
+            if (filter.status) {
+                query.andWhere('device.status = :status', { status: filter.status });
+            }
+
+            if (filter.name) {
+                query.andWhere('LOWER(device.name) LIKE LOWER(:name)', { name: `%${filter.name}%` });
+            }
+
+            if (filter.groupId) {
+                query.andWhere('device.group_id = :groupId', { groupId: filter.groupId });
+            }
+
+            // RBAC: Filter by User's Device Groups if OPERATOR
+            if (user && user.role === UserRole.OPERATOR) {
+                 // Check if user has assigned groups
+                 // We need to fetch user's groups first or join them
+                 // Let's assume user object passed might not have relations loaded, so safe to query or join.
+                 
+                 // Option 1: Subquery
+                 // device.group_id IN (SELECT group_id FROM user_device_group WHERE user_id = :userId)
+                 
+                 query.innerJoin(
+                     'user_device_group', 
+                     'udg', 
+                     'udg.group_id = device.group_id AND udg.user_id = :userId', 
+                     { userId: user.user_id }
+                 );
+            }
+
+            const devices = await query.getMany();
             const sanitized = devices.map(this.sanitizeDeviceUsers);
 
             return {result: sanitized};
@@ -157,7 +175,7 @@ export class DevicesService {
         try {
             const device = await this.deviceRepository.findOne({
                 where: {device_id: id},
-                relations: ['users'],
+                relations: ['users', 'repairs'],
             });
 
             if (!device) {
@@ -169,28 +187,8 @@ export class DevicesService {
             throw new InternalServerErrorException('Tìm kiếm trang thiết bị thất bại');
         }
     }
-
-    async findByUserId(userId: number): Promise<Device[]> {
-        try {
-            const user = await this.userRepository.findOne({
-                where: {user_id: userId},
-                relations: ['devices'],
-            });
-            if (!user) {
-                throw new NotFoundException(`Tìm kiếm trang thiết bị thất bại`);
-            }
-
-            const devices = await this.deviceRepository.find({
-                where: {users: {user_id: userId}},
-                relations: ['users'],
-            });
-
-            return devices.map((device) => this.sanitizeDeviceUsers(device));
-        } catch (error) {
-            if (error instanceof HttpException) throw error;
-            throw new InternalServerErrorException('Tìm kiếm trang thiết bị thất bại');
-        }
-    }
+    
+    // Updated findByUserId similar to previous
 
     async update(id: number, updateDeviceDto: CreateDeviceDto): Promise<Device> {
         try {
@@ -240,30 +238,111 @@ export class DevicesService {
 
     async getReport(): Promise<DeviceReportSummary> {
         const query = this.deviceRepository.createQueryBuilder('device');
-
         const total = await query.getCount();
-
         const counts = await query
             .select('device.status', 'status')
             .addSelect('COUNT(device.device_id)', 'count')
             .groupBy('device.status')
             .getRawMany();
 
-        const summary: DeviceReportSummary = {
+        const summary: any = {
             total,
-            [DeviceStatus.MOI]: 0,
-            [DeviceStatus.DANG_SU_DUNG]: 0,
-            [DeviceStatus.THANH_LY]: 0,
-            [DeviceStatus.HUY_BO]: 0,
         };
+        // Initialize all statuses to 0
+        Object.values(DeviceStatus).forEach(status => {
+            summary[status] = 0;
+        });
 
         for (const item of counts) {
             const status = item.status as DeviceStatus;
-            if (summary.hasOwnProperty(status)) {
-                summary[status] = Number(item.count);
-            }
+             // Safe assignment
+             summary[status] = Number(item.count);
         }
+        return summary as DeviceReportSummary;
+    }
 
-        return summary;
+    async getMonthlyAnalytics() {
+        // Example: Repairs per device, Most frequent cause
+        const devices = await this.deviceRepository.find({
+            relations: ['repairs']
+        });
+
+        const analytics = devices.map(d => {
+            const repairCount = d.repairs?.length || 0;
+            // Simplified fault cause logic (assuming repair object has cause field or similar log)
+            // For now returning basic stats
+            return {
+                id: d.device_id,
+                name: d.name,
+                repairCount
+            };
+        });
+        
+        return analytics.sort((a,b) => b.repairCount - a.repairCount).slice(0, 5); // Top 5
+    }
+
+    async exportDevicesToPdf(): Promise<Buffer> {
+        // Minimal PdfMake implementation
+        const fonts = {
+            Roboto: {
+                normal: 'Helvetica',
+                bold: 'Helvetica-Bold',
+                italics: 'Helvetica-Oblique',
+                bolditalics: 'Helvetica-BoldOblique'
+            }
+        };
+        // In real app, load Roboto font files from assets
+        const printer = new PdfPrinter(fonts);
+        const devices = await this.deviceRepository.find();
+
+        const docDefinition = {
+            content: [
+                { text: 'Danh sách thiết bị', style: 'header' },
+                {
+                    table: {
+                        body: [
+                            ['ID', 'Tên thiết bị', 'Biển số', 'Trạng thái'],
+                            ...devices.map(d => [d.device_id, d.name, d.reg_number || '', d.status])
+                        ]
+                    }
+                }
+            ],
+            styles: {
+                header: {
+                    fontSize: 18,
+                    bold: true,
+                    margin: [0, 0, 0, 10]
+                }
+            },
+            defaultStyle: {
+                font: 'Roboto'
+            }
+        };
+
+        // Create PDF
+        return new Promise((resolve, reject) => {
+             const pdfDoc = printer.createPdfKitDocument(docDefinition);
+             const chunks: any[] = [];
+             pdfDoc.on('data', (chunk) => chunks.push(chunk));
+             pdfDoc.on('end', () => resolve(Buffer.concat(chunks)));
+             pdfDoc.on('error', (err) => reject(err));
+             pdfDoc.end();
+        });
+    }
+
+    // Restore findByUserId if needed or assume standard findOne allows relations
+    async findByUserId(userId: number): Promise<Device[]> {
+        const user = await this.userRepository.findOne({
+            where: {user_id: userId},
+            relations: ['devices'],
+        });
+        if (!user) {
+            throw new NotFoundException(`User not found`);
+        }
+        const devices = await this.deviceRepository.find({
+            where: {users: {user_id: userId}},
+            relations: ['users'],
+        });
+        return devices.map((device) => this.sanitizeDeviceUsers(device));
     }
 }

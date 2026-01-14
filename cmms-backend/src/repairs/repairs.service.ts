@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Brackets } from 'typeorm';
 import { Repair } from './entities/repair.entity';
 import { Device } from 'src/devices/entities/device.entity';
 import { User } from 'src/user/user.entity';
@@ -77,10 +77,10 @@ export class RepairsService {
             throw new ForbiddenException('Bạn không có quyền chỉnh sửa phiếu này (chỉ người tạo mới được sửa)');
         }
 
-        if (repair.canceled && repair.status_request !== 'REJECTED') throw new BadRequestException('Phiếu đã bị hủy');
+        if (repair.canceled && repair.status_request !== 'REJECTED_B03' && (repair.status_request as string) !== 'REJECTED') throw new BadRequestException('Phiếu đã bị hủy');
 
-        // Allow update if WAITING_TECH or REJECTED
-        if (repair.status_request !== 'WAITING_TECH' && repair.status_request !== 'REJECTED') {
+        // Allow update if WAITING_TECH or REJECTED_B03
+        if (repair.status_request !== 'WAITING_TECH' && repair.status_request !== 'REJECTED_B03') {
              throw new BadRequestException('Chỉ phiếu trạng thái chờ duyệt hoặc bị từ chối mới được chỉnh sửa');
         }
 
@@ -95,7 +95,7 @@ export class RepairsService {
         // repair.note = dto.note; // Removed note field support if needed, but keeping it in entity for backward compatibility is fine, just not updating it or updating is fine. DTO still has it.
 
         // If rejected, reset to WAITING_TECH for re-approval
-        if (repair.status_request === 'REJECTED') {
+        if (repair.status_request === 'REJECTED_B03' || (repair.status_request as string) === 'REJECTED') {
             repair.status_request = 'WAITING_TECH';
             repair.canceled = false;
             repair.canceled_at = null;
@@ -111,12 +111,13 @@ export class RepairsService {
         });
 
         if (!repair) throw new NotFoundException('Không tìm thấy phiếu');
-        if (repair.canceled) throw new BadRequestException('Phiếu đã bị hủy');
+        if (repair.canceled && repair.status_inspection !== 'REJECTED_B04' && (repair.status_inspection as string) !== 'inspection_rejected') throw new BadRequestException('Phiếu đã bị hủy');
         if (repair.status_request !== 'COMPLETED') throw new BadRequestException('Phiếu yêu cầu chưa được phê duyệt hoàn tất');
 
-        if (repair.status_inspection === 'inspection_rejected') throw new BadRequestException('Kiểm nghiệm đã bị từ chối, không thể chỉnh sửa');
-
-        if (['inspection_manager_approved', 'inspection_admin_approved'].includes(repair.status_inspection))
+        if (repair.status_inspection === 'REJECTED_B04' || (repair.status_inspection as string) === 'inspection_rejected') {
+             // Allow edit to redo
+             // Reset logic handled at save
+        } else if (['inspection_manager_approved', 'inspection_admin_approved'].includes(repair.status_inspection))
             throw new BadRequestException('Kiểm nghiệm đã được phê duyệt, không thể chỉnh sửa');
 
         if (repair.status_acceptance !== 'acceptance_pending')
@@ -130,6 +131,7 @@ export class RepairsService {
                 unit: m.unit || null,
                 is_new: m.is_new,
                 notes: m.notes || null,
+                specifications: m.specifications || null,
             }));
         }
 
@@ -155,6 +157,14 @@ export class RepairsService {
                 throw new BadRequestException('Một hoặc nhiều người dùng không tồn tại');
             }
             repair.inspection_committee = users;
+        }
+
+
+
+        // If it was rejected, reset to pending
+        if (repair.status_inspection === 'REJECTED_B04' || (repair.status_inspection as string) === 'inspection_rejected') {
+            repair.status_inspection = 'inspection_pending';
+            repair.canceled = false; // Un-cancel if entire flow was canceled (though we keep B03 valid)
         }
 
         const savedRepair = await this.repairRepo.save(repair);
@@ -196,10 +206,13 @@ export class RepairsService {
             relations: ['acceptance_committee'],
         });
         if (!repair) throw new NotFoundException('Không tìm thấy phiếu');
-        if (repair.canceled) throw new BadRequestException('Phiếu đã bị hủy');
+        if (repair.canceled && repair.status_acceptance !== 'REJECTED_B05' && (repair.status_acceptance as string) !== 'acceptance_rejected') throw new BadRequestException('Phiếu đã bị hủy');
         if (repair.status_inspection !== 'inspection_admin_approved') throw new BadRequestException('Kiểm nghiệm chưa hoàn tất');
-        if (['acceptance_manager_approved', 'acceptance_admin_approved', 'acceptance_rejected'].includes(repair.status_acceptance)) {
-            throw new BadRequestException('Nghiệm thu đã được phê duyệt hoặc bị từ chối, không thể chỉnh sửa');
+        
+        if (repair.status_acceptance === 'REJECTED_B05' || (repair.status_acceptance as string) === 'acceptance_rejected') {
+            // Allow edit
+        } else if (['acceptance_manager_approved', 'acceptance_admin_approved'].includes(repair.status_acceptance)) {
+            throw new BadRequestException('Nghiệm thu đã được phê duyệt, không thể chỉnh sửa');
         }
         repair.acceptance_note = dto.acceptance_note ?? repair.acceptance_note;
 
@@ -228,7 +241,32 @@ export class RepairsService {
             repair.acceptance_committee = users;
         }
 
+        if (dto.inspection_materials) {
+             repair.inspection_materials = dto.inspection_materials.map((m: any) => ({
+                item_id: m.item_id ? Number(m.item_id) : undefined,
+                item_name: m.item_name,
+                quantity: Number(m.quantity),
+                unit: m.unit,
+                is_new: !!m.is_new,
+                notes: m.notes,
+                item_code: m.item_code,
+                specifications: m.specifications
+            }));
+        }
+
+        // If it was rejected, reset to pending
+        if (repair.status_acceptance === 'REJECTED_B05' || (repair.status_acceptance as string) === 'acceptance_rejected') {
+            repair.status_acceptance = 'acceptance_pending';
+            repair.canceled = false;
+        }
+
         return this.repairRepo.save(repair);
+    }
+
+    private ensureHasSignature(user: User) {
+        if (!user.signature_url) {
+            throw new BadRequestException('Vui lòng cập nhật chữ ký trong Hồ sơ trước khi duyệt/ký.');
+        }
     }
 
     async reviewPhase(id: number, userId: number, dto: ReviewRepairDto, phase: 'request' | 'inspection' | 'acceptance') {
@@ -237,108 +275,116 @@ export class RepairsService {
             relations: [
                 'created_department',
                 'device',
+                'device.device_group', // Load device group needed for lead check
                 'approved_by_manager_request',
                 'approved_by_admin_request',
                 'approved_by_manager_inspection',
                 'approved_by_admin_inspection',
                 'approved_by_manager_acceptance',
                 'approved_by_admin_acceptance',
+                'approved_by_operator_lead_inspection',
+                'approved_by_operator_lead_acceptance',
             ],
         });
         if (!repair) throw new NotFoundException('Không tìm thấy phiếu');
         if (repair.canceled) throw new BadRequestException('Phiếu đã bị hủy');
         const user = await this.userRepo.findOne({ where: { user_id: userId }, relations: ['department'] });
         if (!user) throw new NotFoundException('Không tìm thấy người dùng');
-        if (dto.action === 'approve' && !user.signature_url) {
-            throw new BadRequestException('Vui lòng cập nhật chữ ký trong Hồ sơ trước khi duyệt/ký.');
+
+        if (dto.action === 'approve') {
+            this.ensureHasSignature(user);
+        } else if (dto.action === 'reject') {
+            if (!dto.reason) throw new BadRequestException('Vui lòng nhập lý do từ chối');
         }
 
+        // --- B03 REQUEST FLOW ---
         if (phase === 'request') {
             if (repair.status_inspection !== 'inspection_pending' || repair.status_acceptance !== 'acceptance_pending') {
-                throw new BadRequestException('Phiếu đã chuyển sang bước kiểm nghiệm hoặc nghiệm thu, không thể thay đổi phê duyệt yêu cầu');
+                throw new BadRequestException('Phiếu đã chuyển sang bước sau, không thể thay đổi phê duyệt yêu cầu');
             }
-            if (repair.status_request === 'REJECTED') throw new BadRequestException('Phiếu đã bị từ chối');
-            if (repair.status_request === 'COMPLETED') {
-                throw new BadRequestException('Phiếu yêu cầu đã hoàn tất, không thể thao tác lại');
-            }
+            if (repair.status_request === 'REJECTED_B03') throw new BadRequestException('Phiếu đã bị từ chối');
+            if (repair.status_request === 'COMPLETED') throw new BadRequestException('Phiếu yêu cầu đã hoàn tất');
+
             if (dto.action === 'approve') {
                 if (repair.status_request === 'WAITING_TECH') {
-                    // Tech (User with role/permission) approves -> WAITING_TEAM_LEAD
-                    // For now, assuming current user has permission (handled by guard/logic upstream or here)
-                    repair.status_request = 'WAITING_TEAM_LEAD';
-                    // Notification logic...
-                } else if (user.role === UserRole.UNIT_HEAD && repair.status_request === 'WAITING_TEAM_LEAD') {
+                    // Tech approvals (Normally specific Permission check here)
+                    repair.status_request = 'WAITING_MANAGER';
+                    // Notification...
+                } else if (repair.status_request === 'WAITING_MANAGER') {
+                    if (user.role !== UserRole.UNIT_HEAD) throw new ForbiddenException('Chỉ Trưởng bộ phận mới được duyệt bước này');
                     repair.status_request = 'WAITING_DIRECTOR';
                     repair.approved_by_manager_request = user;
-                    // Notification logic...
-                } else if ((user.role === UserRole.ADMIN || user.role === UserRole.DIRECTOR) && repair.status_request === 'WAITING_DIRECTOR') {
+                    // Notification...
+                } else if (repair.status_request === 'WAITING_DIRECTOR') {
+                    if (![UserRole.ADMIN, UserRole.DIRECTOR].includes(user.role)) throw new ForbiddenException('Chỉ Ban Giám đốc mới được duyệt bước này');
                     repair.status_request = 'COMPLETED';
                     repair.approved_by_admin_request = user;
-                    // Notification logic...
+                    
+                    if (repair.device) {
+                        repair.device.status = DeviceStatus.DANG_SUA_CHUA;
+                        await this.deviceRepo.save(repair.device);
+                    }
+                    // Notification...
                 } else {
-                    throw new ForbiddenException('Không có quyền duyệt ở bước này hoặc trạng thái không hợp lệ');
+                    throw new BadRequestException('Trạng thái không hợp lệ để duyệt');
                 }
             } else {
-                // If we are here, we know status is not REJECTED or COMPLETED (checked above)
-                repair.status_request = 'REJECTED';
+                // REJECT
+                repair.status_request = 'REJECTED_B03';
                 repair.canceled = true;
                 repair.canceled_at = new Date();
+                repair.rejection_reason = dto.reason;
+                repair.rejected_by = user;
             }
         }
 
+        // Helper to check if user is a Group Lead for the device
+        const checkGroupLead = async () => {
+             // If User is simple TEAM_LEAD role globally, allow
+             if (user.role === UserRole.TEAM_LEAD) return true;
+             
+             // Check if User is Group Lead for this specific Device's Group
+             if (repair.device && repair.device.device_group) {
+                 const udgRepo = this.repairRepo.manager.getRepository('user_device_group'); 
+                 const udg = await udgRepo.findOne({ 
+                     where: { 
+                         user_id: user.user_id, 
+                         device_group: { id: repair.device.device_group.id },
+                         is_group_lead: true 
+                     } 
+                 });
+                 if (udg) return true;
+             }
+             return false;
+        };
+
+        // --- B04 INSPECTION FLOW ---
         if (phase === 'inspection') {
-            if (repair.status_request !== 'COMPLETED') throw new BadRequestException('Phiếu yêu cầu chưa được phê duyệt');
-            if (repair.status_acceptance !== 'acceptance_pending') {
-                throw new BadRequestException('Phiếu đã chuyển sang nghiệm thu, không thể thay đổi phê duyệt kiểm nghiệm');
-            }
-            if (['inspection_rejected'].includes(repair.status_inspection)) throw new BadRequestException('Kiểm nghiệm đã bị từ chối');
-            if (repair.status_inspection === 'inspection_admin_approved') {
-                throw new BadRequestException('Kiểm nghiệm đã được phê duyệt xong, không thể thao tác lại');
-            }
+            if (repair.status_request !== 'COMPLETED') throw new BadRequestException('Phiếu yêu cầu chưa hoàn tất');
+            if (repair.status_acceptance !== 'acceptance_pending') throw new BadRequestException('Phiếu đã chuyển sang nghiệm thu');
+            if (repair.status_inspection === 'REJECTED_B04') throw new BadRequestException('Kiểm nghiệm đã bị từ chối');
+            if (repair.status_inspection === 'inspection_admin_approved') throw new BadRequestException('Kiểm nghiệm đã hoàn tất');
+
             if (dto.action === 'approve') {
-                if (user.role === UserRole.UNIT_HEAD && repair.status_inspection === 'inspection_pending') {
+                if (repair.status_inspection === 'inspection_pending') {
+                    // Strict check: Only Team Lead of "Tổ VHTTBMĐ"
+                    if (user.role !== UserRole.TEAM_LEAD || user.department?.name !== 'Tổ VHTTBMĐ') {
+                        throw new ForbiddenException('Bạn không thuộc phòng ban Tổ VHTTBMĐ để thực hiện ký duyệt mục này.');
+                    }
+                    
+                    repair.status_inspection = 'inspection_lead_approved';
+                    repair.approved_by_operator_lead_inspection = user;
+                    repair.inspection_approved_at = new Date(); 
+                } else if (repair.status_inspection === 'inspection_lead_approved') {
+                    if (user.role !== UserRole.UNIT_HEAD) throw new ForbiddenException('Chỉ Trưởng bộ phận mới được duyệt bước này');
                     repair.status_inspection = 'inspection_manager_approved';
                     repair.approved_by_manager_inspection = user;
-
-                    repair.inspection_approved_at = new Date();
-                    if (repair.inspection_created_at) {
-                        const durationMs = repair.inspection_approved_at.getTime() - repair.inspection_created_at.getTime();
-                        repair.inspection_duration_minutes = Math.floor(durationMs / (1000 * 60));
-                    }
-
-                    const admins = await this.userRepo.find({ where: { role: UserRole.ADMIN } });
-                    if (repair.created_by) {
-                        await this.notificationService.createForUser(
-                            repair.created_by,
-                            `Phiếu sửa chữa #${repair.repair_id} đã được Trưởng bộ phận phê duyệt bước kiểm nghiệm.`,
-                        );
-                    }
-                    for (const admin of admins) {
-                        await this.notificationService.createForUser(
-                            admin,
-                            `Phiếu sửa chữa #${repair.repair_id} đang chờ bạn phê duyệt bước kiểm nghiệm (đã qua Manager).`,
-                        );
-                    }
-                } else if (user.role === UserRole.ADMIN && repair.status_inspection === 'inspection_manager_approved') {
+                } else if (repair.status_inspection === 'inspection_manager_approved') {
+                     if (![UserRole.ADMIN, UserRole.DIRECTOR].includes(user.role)) throw new ForbiddenException('Chỉ Ban Giám đốc mới được duyệt bước này');
                     repair.status_inspection = 'inspection_admin_approved';
                     repair.approved_by_admin_inspection = user;
-                    const managers = await this.userRepo.find({ where: { role: UserRole.UNIT_HEAD }, relations: ['department'] });
-                    const approverManagers = managers.filter(
-                        (m) => Array.isArray(m.department?.permissions) && m.department.permissions.includes('APPROVE_REPAIR'),
-                    );
-                    if (repair.created_by) {
-                        await this.notificationService.createForUser(
-                            repair.created_by,
-                            `Phiếu sửa chữa #${repair.repair_id} đã được phê duyệt hoàn tất bước kiểm nghiệm.`,
-                        );
-                    }
-                    for (const manager of approverManagers) {
-                        await this.notificationService.createForUser(
-                            manager,
-                            `Phiếu sửa chữa #${repair.repair_id} đã được Admin phê duyệt bước kiểm nghiệm.`,
-                        );
-                    }
 
+                    // Handle Material Deduction
                     const pendingStockOuts = await this.stockOutRepo.find({
                         where: { repair: { repair_id: id } as any, status: StockOutStatus.PENDING },
                         relations: ['item'],
@@ -347,13 +393,10 @@ export class RepairsService {
                     for (const so of pendingStockOuts) {
                         if (so.item) {
                             const currentItem = await this.itemRepo.findOne({ where: { item_id: so.item.item_id } });
-                            if (!currentItem) {
-                                throw new BadRequestException(`Không tìm thấy vật tư ${so.item.name} trong kho`);
-                            }
+                            if (!currentItem) throw new BadRequestException(`Không tìm thấy vật tư ${so.item.name}`);
                             if (currentItem.quantity < so.quantity) {
                                 throw new BadRequestException(
-                                    `Không đủ số lượng vật tư "${currentItem.name}". Tồn kho: ${currentItem.quantity} ${currentItem.quantity_unit || ''
-                                    }, yêu cầu: ${so.quantity} ${currentItem.quantity_unit || ''}`,
+                                    `Không đủ vật tư "${currentItem.name}". Tồn: ${currentItem.quantity}, Cần: ${so.quantity}`
                                 );
                             }
                         }
@@ -374,81 +417,102 @@ export class RepairsService {
                         }
                     }
                 } else {
-                    throw new ForbiddenException('Không có quyền duyệt ở bước này');
+                     throw new BadRequestException('Trạng thái không hợp lệ để duyệt');
                 }
             } else {
-                if (!['inspection_pending', 'inspection_manager_approved'].includes(repair.status_inspection)) {
-                    throw new BadRequestException('Không thể từ chối kiểm nghiệm đã duyệt xong hoặc đã chuyển bước');
-                }
-                repair.status_inspection = 'inspection_rejected';
-                repair.canceled = true;
+                repair.status_inspection = 'REJECTED_B04';
+                // Note: We do NOT cancel the whole ticket if logic demands preserving B03. 
+                // But typically "rejection" implies stopping flow. 
+                // However, user requirement: "B03 remain Completed". 
+                // So we do NOT set repair.canceled = true globally if we want to separate statuses.
+                // But standard logic for "canceled" usually means "stop everything". 
+                // Let's set canceled = true but status_request remains COMPLETED. This works.
+                repair.canceled = true; 
                 repair.canceled_at = new Date();
+                repair.rejection_reason = dto.reason;
+                repair.rejected_by = user;
             }
         }
 
+        // --- B05 ACCEPTANCE FLOW ---
         if (phase === 'acceptance') {
-            if (repair.status_inspection !== 'inspection_admin_approved') throw new BadRequestException('Kiểm nghiệm chưa được phê duyệt');
-            if (['acceptance_rejected'].includes(repair.status_acceptance)) throw new BadRequestException('Nghiệm thu đã bị từ chối');
-            if (repair.status_acceptance === 'acceptance_admin_approved') {
-                throw new BadRequestException('Nghiệm thu đã được phê duyệt xong, không thể thao tác lại');
-            }
-            if (dto.action === 'approve') {
-                if (user.role === UserRole.UNIT_HEAD && repair.status_acceptance === 'acceptance_pending') {
+             if (repair.status_inspection !== 'inspection_admin_approved') throw new BadRequestException('Kiểm nghiệm chưa hoàn tất');
+             if (repair.status_acceptance === 'REJECTED_B05') throw new BadRequestException('Nghiệm thu đã bị từ chối');
+             if (repair.status_acceptance === 'acceptance_admin_approved') throw new BadRequestException('Nghiệm thu đã hoàn tất');
+
+             if (dto.action === 'approve') {
+                if (repair.status_acceptance === 'acceptance_pending') {
+                    // Strict check: Only Team Lead of "Tổ VHTTBMĐ"
+                    if (user.role !== UserRole.TEAM_LEAD || user.department?.name !== 'Tổ VHTTBMĐ') {
+                        throw new ForbiddenException('Bạn không thuộc phòng ban Tổ VHTTBMĐ để thực hiện ký duyệt mục này.');
+                    }
+                    
+                    repair.status_acceptance = 'acceptance_lead_approved';
+                    repair.approved_by_operator_lead_acceptance = user;
+                    repair.acceptance_approved_at = new Date();
+                } else if (repair.status_acceptance === 'acceptance_lead_approved') {
+                    if (user.role !== UserRole.UNIT_HEAD) throw new ForbiddenException('Chỉ Trưởng bộ phận mới được duyệt bước này');
                     repair.status_acceptance = 'acceptance_manager_approved';
                     repair.approved_by_manager_acceptance = user;
-
-                    repair.acceptance_approved_at = new Date();
-                    if (repair.acceptance_created_at) {
-                        const durationMs = repair.acceptance_approved_at.getTime() - repair.acceptance_created_at.getTime();
-                        repair.acceptance_duration_minutes = Math.floor(durationMs / (1000 * 60));
-                    }
-
-                    const admins = await this.userRepo.find({ where: { role: UserRole.ADMIN } });
-                    if (repair.created_by) {
-                        await this.notificationService.createForUser(
-                            repair.created_by,
-                            `Phiếu sửa chữa #${repair.repair_id} đã được Trưởng bộ phận phê duyệt bước nghiệm thu.`,
-                        );
-                    }
-                    for (const admin of admins) {
-                        await this.notificationService.createForUser(
-                            admin,
-                            `Phiếu sửa chữa #${repair.repair_id} đang chờ bạn phê duyệt bước nghiệm thu (đã qua Manager).`,
-                        );
-                    }
-                } else if (user.role === UserRole.ADMIN && repair.status_acceptance === 'acceptance_manager_approved') {
+                } else if (repair.status_acceptance === 'acceptance_manager_approved') {
+                    if (![UserRole.ADMIN, UserRole.DIRECTOR].includes(user.role)) throw new ForbiddenException('Chỉ Ban Giám đốc mới được duyệt bước này');
                     repair.status_acceptance = 'acceptance_admin_approved';
                     repair.approved_by_admin_acceptance = user;
 
-                    const managers = await this.userRepo.find({ where: { role: UserRole.UNIT_HEAD }, relations: ['department'] });
-                    const approverManagers = managers.filter(
-                        (m) => Array.isArray(m.department?.permissions) && m.department.permissions.includes('APPROVE_REPAIR'),
-                    );
-                    if (repair.created_by) {
-                        await this.notificationService.createForUser(
-                            repair.created_by,
-                            `Phiếu sửa chữa #${repair.repair_id} đã được phê duyệt hoàn tất bước nghiệm thu.`,
-                        );
-                    }
-                    for (const manager of approverManagers) {
-                        await this.notificationService.createForUser(
-                            manager,
-                            `Phiếu sửa chữa #${repair.repair_id} đã được Admin phê duyệt bước nghiệm thu.`,
-                        );
+                    if (repair.device) {
+                        repair.device.status = DeviceStatus.DANG_SU_DUNG;
+                        await this.deviceRepo.save(repair.device);
                     }
                 } else {
-                    throw new ForbiddenException('Không có quyền duyệt ở bước này');
+                     throw new BadRequestException('Trạng thái không hợp lệ để duyệt');
                 }
-            } else {
-                if (!['acceptance_pending', 'acceptance_manager_approved'].includes(repair.status_acceptance)) {
-                    throw new BadRequestException('Không thể từ chối nghiệm thu đã duyệt xong');
-                }
-                repair.status_acceptance = 'acceptance_rejected';
+             } else {
+                repair.status_acceptance = 'REJECTED_B05';
                 repair.canceled = true;
                 repair.canceled_at = new Date();
-            }
+                repair.rejection_reason = dto.reason;
+                repair.rejected_by = user;
+             }
         }
 
+        return this.repairRepo.save(repair);
+    }
+
+    async requestLimitedUse(id: number, userId: number, reason: string) {
+        const repair = await this.repairRepo.findOne({ where: { repair_id: id } });
+        if (!repair) throw new NotFoundException('Không tìm thấy phiếu');
+        
+        repair.limited_use_status = 'PENDING';
+        // Suggestion: store reason in a new field or reuse rejection_reason/note? 
+        // For strictness, maybe add `limited_use_reason` to entity? 
+        // For now, let's append to note or ignore if column not added. 
+        // "limited_use_status" was added. "rejection_reason" was added. 
+        // Let's assume reason is logged or add a column if needed. 
+        // But plan only said "Add limited_limited_use_status".
+        // Use note field for now if not strictly required schema change.
+        if (reason) repair.note = (repair.note || '') + `\n[Yêu cầu sử dụng hạn chế]: ${reason}`;
+        
+        return this.repairRepo.save(repair);
+    }
+
+    async reviewLimitedUse(id: number, userId: number, action: 'approve' | 'reject') {
+        const repair = await this.repairRepo.findOne({ where: { repair_id: id }, relations: ['device'] });
+        if (!repair) throw new NotFoundException('Không tìm thấy phiếu');
+        const user = await this.userRepo.findOne({ where: { user_id: userId } });
+        
+        if (![UserRole.UNIT_HEAD, UserRole.DIRECTOR, UserRole.ADMIN].includes(user.role)) {
+            throw new ForbiddenException('Bạn không có quyền duyệt yêu cầu sử dụng hạn chế');
+        }
+
+        if (action === 'approve') {
+            repair.limited_use_status = 'APPROVED';
+            if (repair.device) {
+                repair.device.status = DeviceStatus.SU_DUNG_HAN_CHE;
+                await this.deviceRepo.save(repair.device);
+            }
+        } else {
+            repair.limited_use_status = 'REJECTED';
+        }
         return this.repairRepo.save(repair);
     }
 
@@ -470,12 +534,28 @@ export class RepairsService {
             .leftJoinAndSelect('item.category', 'category')
             .leftJoinAndSelect('stock_out.requested_by', 'requested_by')
             .leftJoinAndSelect('stock_out.approved_by', 'stock_approved_by')
+            .leftJoinAndSelect('repair.rejected_by', 'rejected_by')
             .orderBy('repair.created_at', 'DESC');
 
         if (user) {
-            if (user.role === 'user') {
-                // User sees only their own tickets
-                 query.andWhere('created_by.user_id = :userId', { userId: user.user_id });
+            if (user.role === UserRole.OPERATOR) {
+                // User sees only their provided tickets OR tickets related to their device groups?
+                // The prompt says: "Employees belonging to a specific device group should only be able to create repair requests ... and ONLY SEE repair requests related to devices in their group."
+                // So we need to filter by device groups.
+                
+                // 1. Filter by creator? (Optional, usually they want to see all in their group)
+                // query.andWhere('created_by.user_id = :userId', { userId: user.user_id });
+                // But the requirement says "see repair requests related to devices in their group". This implies broader visibility than just "own tickets".
+                // It implies "Group Visibility".
+
+                 // Filter by User's Device Groups
+                 query.innerJoin(
+                     'user_device_group', 
+                     'udg', 
+                     'udg.group_id = device.group_id AND udg.user_id = :userId', 
+                     { userId: user.user_id }
+                 );
+
             } else if (user.role === UserRole.UNIT_HEAD) {
                  // Manager sees tickets from their department
                  if (user.department) {
@@ -489,7 +569,18 @@ export class RepairsService {
             query.andWhere('device.device_id = :deviceId', { deviceId: filters.device_id });
         }
         if (filters?.status_request) {
-            query.andWhere('repair.status_request = :statusRequest', { statusRequest: filters.status_request });
+            if (filters.status_request === 'CANCELED') {
+                query.andWhere('repair.canceled = :isCanceled', { isCanceled: true });
+            } else if (filters.status_request === 'REJECTED') {
+                 // Comprehensive check for any rejection status
+                 query.andWhere(new Brackets(qb => {
+                     qb.where('repair.status_request IN (:...reqRejs)', { reqRejs: ['REJECTED', 'REJECTED_B03'] })
+                       .orWhere('repair.status_inspection IN (:...inspRejs)', { inspRejs: ['REJECTED_B04', 'inspection_rejected'] })
+                       .orWhere('repair.status_acceptance IN (:...accRejs)', { accRejs: ['REJECTED_B05', 'acceptance_rejected'] });
+                 }));
+            } else {
+                query.andWhere('repair.status_request = :statusRequest', { statusRequest: filters.status_request });
+            }
         }
         if (filters?.status_inspection) {
             query.andWhere('repair.status_inspection = :statusInspection', { statusInspection: filters.status_inspection });
@@ -1027,7 +1118,7 @@ export class RepairsService {
                                 children: [
                                     new Paragraph({
                                         alignment: AlignmentType.CENTER,
-                                        children: [new TextRun({ text: 'TỔ KỸ THUẬT', bold: true, size: 26 })],
+                                        children: [new TextRun({ text: 'TỔ VHTTBMĐ', bold: true, size: 26 })],
                                     }),
                                 ],
                             }),
@@ -1036,7 +1127,7 @@ export class RepairsService {
                                 children: [
                                     new Paragraph({
                                         alignment: AlignmentType.CENTER,
-                                        children: [new TextRun({ text: 'TỔ VHTTBMĐ', bold: true, size: 26 })],
+                                        children: [new TextRun({ text: 'TỔ KỸ THUẬT', bold: true, size: 26 })],
                                     }),
                                 ],
                             }),
@@ -1073,16 +1164,16 @@ export class RepairsService {
                         children: [
                             new TableCell({
                                 borders: noCell,
+                                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: repair.created_by?.name || '', size: 26, })] })],
+                            }),
+                             new TableCell({
+                                borders: noCell,
                                 children: [
                                     new Paragraph({
                                         alignment: AlignmentType.CENTER,
-                                        children: [new TextRun({ text: repair.inspection_created_by?.name || repair.acceptance_created_by?.name || '', size: 26, })],
+                                        children: [new TextRun({ text: repair.inspection_created_by?.name || '', size: 26, })],
                                     }),
                                 ],
-                            }),
-                            new TableCell({
-                                borders: noCell,
-                                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: repair.created_by?.name || '', size: 26, })] })],
                             }),
                             new TableCell({
                                 borders: noCell,
