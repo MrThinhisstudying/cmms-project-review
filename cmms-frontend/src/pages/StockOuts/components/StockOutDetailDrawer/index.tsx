@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   Drawer,
   Box,
@@ -37,11 +37,9 @@ export default function StockOutDetailDrawer({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (open && stockOutId) fetchDetail(stockOutId);
-  }, [open, stockOutId]);
 
-  const fetchDetail = async (id: number) => {
+
+  const fetchDetail = useCallback(async (id: number) => {
     setLoading(true);
     try {
       const so = await getStockOut(id);
@@ -51,7 +49,11 @@ export default function StockOutDetailDrawer({
     } finally {
       setLoading(false);
     }
-  };
+  }, [getStockOut]);
+
+  useEffect(() => {
+    if (open && stockOutId) fetchDetail(stockOutId);
+  }, [open, stockOutId, fetchDetail]);
 
   const renderStatusChip = (status?: string) => {
     const s = String(status ?? "").toLowerCase();

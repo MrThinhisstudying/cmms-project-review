@@ -41,8 +41,8 @@ const DevicesProvider = ({ children }: { children: ReactNode }) => {
       }
     } catch (error) {
       console.error("Failed to load devices", error);
-      // Keep previous devices if fetch fails (e.g. 304 or network error)
-      if (devices.length === 0) setDevices([]);
+      // Keep previous devices if fetch fails, or ensure empty if none
+      setDevices(prev => prev.length === 0 ? [] : prev);
     } finally {
       setLoading(false);
     }

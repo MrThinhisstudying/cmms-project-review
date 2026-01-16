@@ -1,16 +1,10 @@
 import React, { useState } from "react";
-import { Button, Upload, message, Typography, Space } from "antd";
+import { Button, Typography, Space } from "antd";
 import {
-  UploadOutlined,
   PlusOutlined,
-  FileExcelOutlined,
   CalendarOutlined,
   TableOutlined,
 } from "@ant-design/icons";
-import {
-  importTemplate,
-} from "../../../../apis/maintenance";
-import { getToken } from "../../../../utils/auth";
 import MasterPlanModal from "../MasterPlanModal";
 import OriginalPlanModal from "../OriginalPlanModal";
 
@@ -24,35 +18,8 @@ interface Props {
 
 const MaintenanceHeader: React.FC<Props> = ({ onCreate, onRefresh, onImport }) => {
   // State loading riêng cho từng nút để UX tốt hơn
-  const [uploadingTemplate, setUploadingTemplate] = useState(false);
   const [isMasterOpen, setIsMasterOpen] = useState(false);
   const [isOriginalViewOpen, setIsOriginalViewOpen] = useState(false);
-  // 1. Xử lý Import QUY TRÌNH (Template)
-  const handleImportTemplate = async (file: File) => {
-    const token = getToken(); // Luôn lấy token mới nhất từ hàm chuẩn
-    if (!token) {
-      message.error("Phiên đăng nhập hết hạn, vui lòng đăng nhập lại!");
-      return false;
-    }
-
-    setUploadingTemplate(true);
-    try {
-      const templateName = `Quy trình Import ${new Date().toLocaleDateString(
-        "vi-VN"
-      )}`;
-      await importTemplate(file, templateName, "khac", "VH", token);
-      message.success(`Đã import quy trình "${file.name}" thành công!`);
-
-      if (onRefresh) onRefresh();
-    } catch (error) {
-      console.error(error);
-      message.error("Import quy trình thất bại.");
-    } finally {
-      setUploadingTemplate(false);
-    }
-
-    return false; // Chặn hành vi upload mặc định của Antd
-  };
 
   return (
     <div

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Box, CircularProgress, Snackbar, Alert } from "@mui/material";
 import {
   IMaintenanceTicket,

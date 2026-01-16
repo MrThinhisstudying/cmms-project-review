@@ -12,7 +12,7 @@ import { useAuthContext } from "../../../context/AuthContext/AuthContext";
 import { useNotificationContext } from "../../../context/NotificationContext/NotificationContext";
 import { Link, useLocation } from "react-router-dom";
 import ProfileModal from "../../../pages/Users/components/ProfileModal";
-import { IUser } from "../../../types/user.types";
+
 
 const { Header } = Layout;
 

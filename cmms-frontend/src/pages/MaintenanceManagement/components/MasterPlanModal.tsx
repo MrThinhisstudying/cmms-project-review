@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Modal, Table, Tag, DatePicker, Button, Tooltip, Empty } from "antd";
 import { CalendarOutlined, ReloadOutlined } from "@ant-design/icons";
 import dayjs from "dayjs";
@@ -14,7 +14,7 @@ const MasterPlanModal: React.FC<Props> = ({ open, onCancel }) => {
   const [data, setData] = useState<any[]>([]);
   const [year, setYear] = useState(dayjs()); // Mặc định năm hiện tại
 
-  const fetchMasterPlan = async () => {
+  const fetchMasterPlan = useCallback(async () => {
     setLoading(true);
     try {
       const selectedYear = year.year();
@@ -34,11 +34,11 @@ const MasterPlanModal: React.FC<Props> = ({ open, onCancel }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [year]);
 
   useEffect(() => {
     if (open) fetchMasterPlan();
-  }, [open, year]);
+  }, [open, fetchMasterPlan]);
 
   // --- CẤU HÌNH CỘT ---
   const columns: any[] = [

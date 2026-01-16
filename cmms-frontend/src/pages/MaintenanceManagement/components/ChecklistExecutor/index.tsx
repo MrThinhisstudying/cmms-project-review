@@ -40,7 +40,7 @@ const ChecklistExecutor: React.FC<Props> = ({
 
     setResults(initialData);
     onChange(Object.values(initialData)); // Gửi ngay danh sách đầy đủ (15 mục) ra ngoài
-  }, [templateData, currentLevel]);
+  }, [templateData, currentLevel, onChange]);
 
   // --- SỬA 1: Thêm tham số categoryName vào hàm này ---
   const handleUpdate = (

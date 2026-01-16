@@ -21,7 +21,6 @@ import {
   CloseOutlined,
   LeftOutlined,
   RightOutlined,
-  FilePdfOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useRepairsContext } from "../../../../context/RepairsContext/RepairsContext";
@@ -196,7 +195,7 @@ export default function RepairDetailDrawer({
   const showRedoB05 = (data?.status_acceptance === 'REJECTED_B05' || data?.status_acceptance === 'acceptance_rejected') && (role === 'TECHNICIAN' || role === 'ADMIN');
 
   // --- Limited Use Logic ---
-  const { requestLimitedUseItem, reviewLimitedUseItem } = useRepairsContext();
+  const { requestLimitedUseItem } = useRepairsContext();
   const [limitedUseReason, setLimitedUseReason] = React.useState("");
   const [limitedUseModalOpen, setLimitedUseModalOpen] = React.useState(false);
   
@@ -378,13 +377,7 @@ export default function RepairDetailDrawer({
       
       const finalMats = Array.from(mergedMap.values());
 
-      const matCols = [
-          { title: 'Loại', dataIndex: 'type', render: (t: string) => <Tag color={t==='Thay thế'?'blue':t==='Thu hồi'?'orange':'red'}>{t}</Tag> },
-          { title: 'Tên vật tư', dataIndex: 'item_name' },
-          { title: 'SL', dataIndex: 'quantity' },
-          { title: 'ĐVT', dataIndex: 'unit' },
-          { title: 'Ghi chú', dataIndex: 'notes' }
-      ];
+
 
       return (
           <Space direction="vertical" style={{ width: '100%' }}>

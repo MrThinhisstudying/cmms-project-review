@@ -35,7 +35,7 @@ const DepartmentFormModal: React.FC<Props> = ({ open, onClose, editingId }) => {
             form.resetFields();
         }
     }
-  }, [open, editingId, departments, form, users.length]);
+  }, [open, editingId, departments, form, users.length, fetchUsers]);
 
   const handleFinish = async (values: any) => {
     setLoading(true);

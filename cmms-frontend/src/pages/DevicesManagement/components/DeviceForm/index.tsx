@@ -160,9 +160,40 @@ const DeviceForm: React.FC<DeviceFormProps> = ({
                     <Input />
                 </Form.Item>
             </Col>
+             <Col span={8}>
+                <Form.Item name="using_department" label="Đơn vị sử dụng">
+                    <Input />
+                </Form.Item>
+            </Col>
+        </Row>
+
+        <Row gutter={16}>
             <Col span={8}>
                  <Form.Item name="technical_code_address" label="Mã số/Địa chỉ kỹ thuật">
                     <Input />
+                </Form.Item>
+            </Col>
+            <Col span={8}>
+                 <Form.Item name="fixed_asset_code" label="Mã số tài sản cố định (TSCĐ)">
+                    <Input />
+                </Form.Item>
+            </Col>
+            <Col span={8}>
+                 <Form.Item name="location_coordinates" label="Địa điểm/Tọa độ">
+                    <Input />
+                </Form.Item>
+            </Col>
+        </Row>
+
+        <Row gutter={16}>
+            <Col span={12}>
+                 <Form.Item name="relocation_origin" label="Xuất xứ khi di dời">
+                    <Input />
+                </Form.Item>
+            </Col>
+            <Col span={12}>
+                 <Form.Item name="relocation_year" label="Năm di dời">
+                    <InputNumber style={{ width: '100%' }} />
                 </Form.Item>
             </Col>
         </Row>

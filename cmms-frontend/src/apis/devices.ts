@@ -1,4 +1,5 @@
 import { IDevice } from "../types/devicesManagement.types";
+import { fetchClient } from "../utils/fetchClient";
 
 type DevicePayload = Partial<IDevice>;
 
@@ -12,13 +13,9 @@ export const getAllDevices = async (
     if (filters?.name) query.append("name", filters.name);
     if (filters?.groupId) query.append("groupId", filters.groupId.toString());
 
-    const response = await fetch(`${process.env.REACT_APP_BASE_URL}/devices?${query.toString()}`, {
+    const response = await fetchClient(`/devices?${query.toString()}`, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        // Thêm Authorization header
-        Authorization: token ? `Bearer ${token}` : "",
-      },
+      token,
     });
 
     if (!response.ok) {
@@ -41,16 +38,11 @@ export const uploadDevices = async (token: string | null, file: File) => {
   const formData = new FormData();
   formData.append("file", file);
 
-  const response = await fetch(
-    `${process.env.REACT_APP_BASE_URL}/devices/upload_devices`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: token ? `Bearer ${token}` : "",
-      },
-      body: formData,
-    }
-  );
+  const response = await fetchClient(`/devices/upload_devices`, {
+    method: "POST",
+    token,
+    body: formData,
+  });
 
   const data = await response.json();
 
@@ -66,16 +58,10 @@ export const deleteDevice = async (
   token: string | null
 ) => {
   try {
-    const response = await fetch(
-      `${process.env.REACT_APP_BASE_URL}/devices/${device_id}`,
-      {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: token ? `Bearer ${token}` : "",
-        },
-      }
-    );
+    const response = await fetchClient(`/devices/${device_id}`, {
+      method: "DELETE",
+      token,
+    });
 
     const data = await response.json();
 
@@ -93,12 +79,9 @@ export const createDevice = async (
   token: string | null,
   payload: DevicePayload
 ) => {
-  const response = await fetch(`${process.env.REACT_APP_BASE_URL}/devices`, {
+  const response = await fetchClient(`/devices`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: token ? `Bearer ${token}` : "",
-    },
+    token,
     body: JSON.stringify(payload),
   });
 
@@ -116,17 +99,11 @@ export const updateDevice = async (
   token: string | null,
   payload: DevicePayload
 ) => {
-  const response = await fetch(
-    `${process.env.REACT_APP_BASE_URL}/devices/${device_id}`,
-    {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: token ? `Bearer ${token}` : "",
-      },
-      body: JSON.stringify(payload),
-    }
-  );
+  const response = await fetchClient(`/devices/${device_id}`, {
+    method: "PATCH",
+    token,
+    body: JSON.stringify(payload),
+  });
 
   const data = await response.json();
 
@@ -146,16 +123,10 @@ export const getDevicesReport = async (
   if (startDate) query.append("startDate", startDate);
   if (endDate) query.append("endDate", endDate);
 
-  const response = await fetch(
-    `${process.env.REACT_APP_BASE_URL}/devices/report?${query.toString()}`,
-    {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: token ? `Bearer ${token}` : "",
-      },
-    }
-  );
+  const response = await fetchClient(`/devices/report?${query.toString()}`, {
+    method: "GET",
+    token,
+  });
 
   const data = await response.json();
 
@@ -165,13 +136,11 @@ export const getDevicesReport = async (
 
   return data;
 };
+
 export const getDeviceAnalytics = async (token: string | null) => {
-  const response = await fetch(`${process.env.REACT_APP_BASE_URL}/devices/analytics/monthly`, {
+  const response = await fetchClient(`/devices/analytics/monthly`, {
     method: 'GET',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: token ? `Bearer ${token}` : '',
-    },
+    token,
   });
 
   if (!response.ok) {
@@ -181,11 +150,9 @@ export const getDeviceAnalytics = async (token: string | null) => {
 };
 
 export const exportDevicesPdf = async (token: string | null) => {
-  const response = await fetch(`${process.env.REACT_APP_BASE_URL}/devices/export/pdf`, {
+  const response = await fetchClient(`/devices/export/pdf`, {
     method: 'GET',
-    headers: {
-      Authorization: token ? `Bearer ${token}` : '',
-    },
+    token,
   });
 
   if (!response.ok) {

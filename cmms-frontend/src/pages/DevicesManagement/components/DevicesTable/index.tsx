@@ -41,29 +41,34 @@ const DevicesTable: React.FC<DevicesTableProps> = ({
       title: '#',
       dataIndex: 'device_id',
       key: 'device_id',
-      width: 60,
+      width: 50,
+      align: 'center' as const,
       render: (_: any, __: any, index: number) => index + 1,
     },
     {
       title: 'Tên thiết bị',
       dataIndex: 'name',
       key: 'name',
+      render: (text: string) => <span style={{ fontWeight: 500 }}>{text || '-'}</span>,
     },
     {
-        title: 'Biển số',
-        dataIndex: 'reg_number',
-        key: 'reg_number',
-        render: (text: string) => text || '-',
+      title: 'Biển số',
+      dataIndex: 'reg_number',
+      key: 'reg_number',
+      width: 120,
+      render: (text: string) => text || '-',
     },
     {
       title: 'Nhãn hiệu',
       dataIndex: 'brand',
       key: 'brand',
+      width: 120,
     },
     {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
+      width: 150,
       render: (status: DeviceStatus) => {
         let color = 'default';
         let text: string = status;
@@ -82,6 +87,7 @@ const DevicesTable: React.FC<DevicesTableProps> = ({
        title: 'Hạn đăng kiểm',
        dataIndex: 'inspection_expiry',
        key: 'inspection_expiry',
+       width: 140,
        render: (date: string) => {
            if (!date) return '-';
            const expiring = isExpiringSoon(date);
@@ -103,6 +109,8 @@ const DevicesTable: React.FC<DevicesTableProps> = ({
     {
         title: 'Hành động',
         key: 'action',
+        width: 100,
+        align: 'center' as const,
         render: (_: any, record: IDevice) => (
             <Space size="small">
                 <Button 

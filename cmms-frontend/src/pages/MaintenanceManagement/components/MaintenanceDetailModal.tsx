@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
-import { Modal, Table, Tag, Steps, Spin, Card, Row, Col, Typography, Button, Tooltip } from "antd";
+import React, { useEffect, useState, useCallback } from "react";
+import { Modal, Table, Tag, Spin, Typography, Button, Tooltip } from "antd";
 import { getMaintenancesByDevice } from "../../../apis/maintenance";
 import { getToken } from "../../../utils/auth";
 import dayjs from "dayjs";
-import { ScheduleOutlined, CheckCircleOutlined, ClockCircleOutlined, ToolOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, ClockCircleOutlined, ToolOutlined } from "@ant-design/icons";
 
 interface Props {
   open: boolean;
@@ -25,13 +25,9 @@ const MaintenanceDetailModal: React.FC<Props> = ({
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<any[]>([]);
 
-  useEffect(() => {
-    if (open && deviceId) {
-      fetchDetails();
-    }
-  }, [open, deviceId]);
 
-  const fetchDetails = async () => {
+
+  const fetchDetails = useCallback(async () => {
     setLoading(true);
     try {
       const token = getToken();
@@ -46,24 +42,13 @@ const MaintenanceDetailModal: React.FC<Props> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [deviceId]);
 
-  const activePlans = data.filter((d) => d.status === "active");
-  const inactivePlans = data.filter((d) => d.status !== "active" && d.status !== "canceled");
-
-  // Format Status
-  const renderStatus = (status: string, date: string) => {
-    const today = dayjs().startOf("day");
-    const nextDate = dayjs(date).startOf("day");
-    const diff = nextDate.diff(today, "day");
-
-    if (status === "active") {
-        if (diff < 0) return <Tag color="red" icon={<ClockCircleOutlined />}>Đã quá hạn {Math.abs(diff)} ngày</Tag>;
-        if (diff <= 5) return <Tag color="orange" icon={<ClockCircleOutlined />}>Sắp đến ({diff} ngày)</Tag>;
-        return <Tag color="blue" icon={<ClockCircleOutlined />}>Đang theo dõi</Tag>;
+  useEffect(() => {
+    if (open && deviceId) {
+      fetchDetails();
     }
-    return <Tag color="default">Chờ kích hoạt</Tag>;
-  };
+  }, [open, deviceId, fetchDetails]);
 
   return (
     <Modal

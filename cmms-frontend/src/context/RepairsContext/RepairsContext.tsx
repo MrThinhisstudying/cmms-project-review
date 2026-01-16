@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import {
   getAllRepairs,
   createRepair,
@@ -33,36 +33,37 @@ export const RepairsProvider = ({
   const [repairs, setRepairs] = useState<IRepair[]>([]);
   const [loading, setLoading] = useState(false);
   const [userRole, setUserRole] = useState<Role>("viewer");
-  const token = getToken();
+  // const token = getToken(); // Moving inside functions to avoid dependency issues
 
-  const fetchData = async (params?: {
+  const fetchData = useCallback(async (params?: {
     status_request?: string;
     status_inspection?: string;
     device_id?: number;
   }) => {
     setLoading(true);
+    const currentToken = getToken();
     try {
-      const data = await getAllRepairs(token, params);
+      const data = await getAllRepairs(currentToken, params);
       setRepairs(data);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const setRole = (role: Role) => setUserRole(role);
 
   const createRepairItem = async (payload: RepairUpsertPayload) => {
-    const res = await createRepair(token, payload);
+    const res = await createRepair(getToken(), payload);
     await fetchData();
     return res;
   };
 
   const updateRepairItem = async (id: number, payload: RepairUpsertPayload) => {
-    const res = await updateRepair(id, token, payload);
+    const res = await updateRepair(id, getToken(), payload);
     await fetchData();
     return res;
   };
@@ -75,7 +76,7 @@ export const RepairsProvider = ({
       phase: "request" | "inspection" | "acceptance";
     }
   ) => {
-    const res = await reviewRepair(id, token, payload, payload.phase);
+    const res = await reviewRepair(id, getToken(), payload, payload.phase);
     await fetchData();
     return res;
   };
@@ -84,7 +85,7 @@ export const RepairsProvider = ({
     id: number,
     payload: RepairInspectionPayload
   ) => {
-    const res = await submitInspection(id, token, payload);
+    const res = await submitInspection(id, getToken(), payload);
     await fetchData();
     return res;
   };
@@ -93,7 +94,7 @@ export const RepairsProvider = ({
     id: number,
     payload: RepairAcceptancePayload
   ) => {
-    const res = await submitAcceptance(id, token, payload);
+    const res = await submitAcceptance(id, getToken(), payload);
     await fetchData();
     return res;
   };
@@ -101,7 +102,7 @@ export const RepairsProvider = ({
   const requestStockOutForRepair = async (
     payload: StockOutPayload & { repair_id: number }
   ) => {
-    const res = await requestStockOut(token, payload);
+    const res = await requestStockOut(getToken(), payload);
     await fetchData();
     return res;
   };
@@ -109,21 +110,21 @@ export const RepairsProvider = ({
   const exportRepairItem = async (
     id: number,
     type: "request" | "inspection" | "acceptance" = "request"
-  ) => await exportRepair(id, token, type);
+  ) => await exportRepair(id, getToken(), type);
 
   const deleteRepairItem = async (id: number) => {
-    await deleteRepair(id, token);
+    await deleteRepair(id, getToken());
     await fetchData();
   };
 
   const requestLimitedUseItem = async (id: number, reason: string) => {
-    const res = await requestLimitedUse(id, token, reason);
+    const res = await requestLimitedUse(id, getToken(), reason);
     await fetchData();
     return res;
   };
 
   const reviewLimitedUseItem = async (id: number, action: "approve" | "reject") => {
-    const res = await reviewLimitedUse(id, token, action);
+    const res = await reviewLimitedUse(id, getToken(), action);
     await fetchData();
     return res;
   };

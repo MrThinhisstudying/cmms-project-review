@@ -1,6 +1,6 @@
-import { MigrationInterface, QueryRunner } from "typeorm";
+import type { QueryRunner } from "typeorm";
 
-export class RefactorFinalSchema1764000000000 implements MigrationInterface {
+export class RefactorFinalSchema1764000000000 {
     name = 'RefactorFinalSchema1764000000000'
 
     public async up(queryRunner: QueryRunner): Promise<void> {

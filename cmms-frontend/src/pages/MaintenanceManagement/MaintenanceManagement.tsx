@@ -1,20 +1,16 @@
 import React, { useState, useEffect } from "react";
 import {
   Modal,
-  Layout,
   Card,
   Row,
   Col,
   Input,
   Select,
   DatePicker,
-  Button,
   message,
-  Space,
 } from "antd";
 import {
   SearchOutlined,
-  ReloadOutlined,
   FilterOutlined,
 } from "@ant-design/icons";
 import MaintenanceHeader from "./components/MaintenanceHeader";
@@ -22,10 +18,9 @@ import MaintenanceTable from "./components/MaintenanceTable";
 import MaintenanceForm from "./components/MaintenanceForm";
 import EditPlanModal from "./components/EditPlanModal";
 import MaintenanceImportModal from "./components/MaintenanceImportModal";
-import { getAllMaintenances, getDashboardOverview } from "../../apis/maintenance";
+import { getDashboardOverview } from "../../apis/maintenance";
 import moment from "moment";
 
-const { Content } = Layout;
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 

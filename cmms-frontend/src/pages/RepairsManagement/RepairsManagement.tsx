@@ -192,17 +192,17 @@ const RepairsManagement: React.FC = () => {
   const hasNext = selectedRepair ? repairs.findIndex(r => r.repair_id === selectedRepair.repair_id) < repairs.length - 1 : false;
 
   /* New state for export loading */
-  const [exportLoading, setExportLoading] = useState(false);
+  // const [exportLoading, setExportLoading] = useState(false);
 
   const handleExport = async (id: number, type: "request" | "inspection" | "acceptance") => {
     try {
-      setExportLoading(true);
+      // setExportLoading(true);
       await exportRepairItem(id, type);
       message.success("Tải xuống thành công");
     } catch {
       message.error("Xuất file thất bại");
     } finally {
-      setExportLoading(false);
+      // setExportLoading(false);
     }
   };
 
