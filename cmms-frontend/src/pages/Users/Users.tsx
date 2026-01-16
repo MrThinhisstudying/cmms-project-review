@@ -1,290 +1,226 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
-import { Box, Typography } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import CategoryIcon from "@mui/icons-material/Category";
-import { ICreateUser, IUpdatePassword, IUser } from "../../types/user.types";
-import UserStats from "./components/UserStats";
-import UserSearchBar from "./components/UserSearchBar";
-import UserTable from "./components/UserTable";
-import UserForm from "./components/UserForm";
-import Pagination from "../../components/Pagination/Pagination";
+import { PlusOutlined, DeleteOutlined, EditOutlined, SearchOutlined, UserOutlined, TeamOutlined, SafetyCertificateOutlined, WarningOutlined, EyeOutlined } from "@ant-design/icons";
 import { useUsersContext } from "../../context/UsersContext/UsersContext";
-import { createUser, deleteUser, updateUser } from "../../apis/users";
-import Toast from "../../components/Toast";
-import EditPasswordForm from "./components/EditPasswordForm";
-import UserManagementSkeleton from "./components/UserManagementSkeleton";
-import { CustomButton } from "../../components/Button";
 import { useDepartmentsContext } from "../../context/DepartmentsContext/DepartmentsContext";
+import { createUser, deleteUser, updateUser } from "../../apis/users";
+import { getDeviceGroups, IDeviceGroup } from "../../apis/device-groups";
+import UserModal from "./components/UserModal";
+import React, { useState, useEffect, useMemo } from "react";
+import { Table, Button, Space, Tag, Popconfirm, message, Input, Tooltip } from "antd";
+import { ICreateUser, IUser } from "../../types/user.types";
 import DepartmentModal from "./components/DepartmentModal";
+import DeviceGroupModal from "./components/DeviceGroupModal";
 import { getToken } from "../../utils/auth";
 
 const Users: React.FC = () => {
   const { users, loading, fetchUsers } = useUsersContext();
   const { departments } = useDepartmentsContext();
-
-  const [search, setSearch] = useState("");
-  const [selectedDept, setSelectedDept] = useState<number | "">("");
-  const [openForm, setOpenForm] = useState(false);
-  const [resetPassword, setResetPassword] = useState(false);
-  const [openDeptModal, setOpenDeptModal] = useState(false);
+  
+  const [deviceGroups, setDeviceGroups] = useState<IDeviceGroup[]>([]);
+  const [searchText, setSearchText] = useState("");
+  const [openUserModal, setOpenUserModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<IUser | null>(null);
-  const [page, setPage] = useState<number>(1);
-  const rowsPerPage = 10;
+  const [openDeptModal, setOpenDeptModal] = useState(false);
+  const [openGroupModal, setOpenGroupModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [viewOnlyMode, setViewOnlyMode] = useState(false);
 
   useEffect(() => {
-    setPage(1);
-  }, [selectedDept, search]);
+     // Fetch device groups
+     getDeviceGroups().then(groups => setDeviceGroups(groups)).catch(console.error);
+  }, []);
+
+  const handleView = (user: IUser) => {
+      setSelectedUser(user);
+      setViewOnlyMode(true);
+      setOpenUserModal(true);
+  }
+
+  const handleCreate = () => {
+      setSelectedUser(null);
+      setViewOnlyMode(false);
+      setOpenUserModal(true);
+  }
+
+  const handleEdit = (user: IUser) => {
+      setSelectedUser(user);
+      setViewOnlyMode(false);
+      setOpenUserModal(true);
+  }
+
+  const handleDelete = async (user: IUser) => {
+      try {
+          const token = getToken();
+          await deleteUser(user.user_id, token);
+          message.success("Xóa người dùng thành công");
+          fetchUsers();
+      } catch (error) {
+          message.error("Xóa người dùng thất bại");
+      }
+  }
+
+  const handleSaveUser = async (values: ICreateUser) => {
+      setSubmitting(true);
+      try {
+          const token = getToken();
+          // If editing, use updateUser, else createUser
+          if (selectedUser) {
+             await updateUser(selectedUser.user_id, values, token);
+             message.success("Cập nhật thành công");
+          } else {
+             await createUser(values, token);
+             message.success("Tạo mới thành công");
+          }
+          setOpenUserModal(false);
+          fetchUsers();
+      } catch (error: any) {
+          message.error(error.message || "Có lỗi xảy ra");
+      } finally {
+          setSubmitting(false);
+      }
+  }
 
   const filteredUsers = useMemo(() => {
-    let result = users;
-
-    if (search.trim()) {
-      result = result.filter((user: IUser) =>
-        user.name.toLowerCase().includes(search.toLowerCase())
+      if (!searchText) return users;
+      const lower = searchText.toLowerCase();
+      return users.filter(u => 
+          u.name.toLowerCase().includes(lower) || 
+          u.email.toLowerCase().includes(lower) ||
+          u.role.toLowerCase().includes(lower)
       );
-    }
+  }, [users, searchText]);
 
-    if (selectedDept) {
-      result = result.filter(
-        (user: IUser) => user.department?.dept_id === selectedDept
-      );
-    }
-
-    return result;
-  }, [users, search, selectedDept]);
-
-  const toast = useRef<{ type: "error" | "success"; content: string }>({
-    type: "success",
-    content: "",
-  });
-  const [openToast, setOpenToast] = useState(false);
-
-  const calculatePercentage = (value: number, total: number) =>
-    total > 0 ? `${((value / total) * 100).toFixed(1)}%` : "0%";
-
-  const stats = useMemo(() => {
-    const totalUsers = users.length;
-
-    const activeUsers = users.filter(
-      (user: IUser) => user.status === "active"
-    ).length;
-    const deactiveUsers = users.filter(
-      (user) => user.status === "deactive"
-    ).length;
-
-    const currentMonth = new Date().getMonth();
-    const newUsersThisMonth = users.filter((user) => {
-      const userCreatedAt = new Date(user.created_at);
-      return userCreatedAt.getMonth() === currentMonth;
-    }).length;
-
-    return [
+  const columns = [
       {
-        label: "Tổng số user",
-        value: totalUsers,
-        change: calculatePercentage(totalUsers, totalUsers),
+          title: 'Họ và tên',
+          dataIndex: 'name',
+          key: 'name',
+          render: (text: string, record: IUser) => (
+             <Space>
+                {record.avatar ? <img src={record.avatar} alt="avatar" style={{width: 24, height: 24, borderRadius: '50%'}} /> : <UserOutlined />}
+                {text}
+                {record.user_device_groups?.[0]?.is_group_lead && (
+                    <Tooltip title="Trưởng nhóm">
+                        <SafetyCertificateOutlined style={{ color: 'gold' }} />
+                    </Tooltip>
+                )}
+                {!record.signature_url && (
+                    <Tooltip title="Chưa cập nhật chữ ký số">
+                        <WarningOutlined style={{ color: 'orange' }} />
+                    </Tooltip>
+                )}
+             </Space>
+          )
       },
       {
-        label: "Số user đang hoạt động",
-        value: activeUsers,
-        change: calculatePercentage(activeUsers, totalUsers),
+          title: 'Email',
+          dataIndex: 'email',
+          key: 'email',
       },
       {
-        label: "Số user mới trong tháng",
-        value: newUsersThisMonth,
-        change: calculatePercentage(newUsersThisMonth, totalUsers),
+          title: 'Vai trò',
+          dataIndex: 'role',
+          key: 'role',
+          render: (role: string) => {
+              let displayRole = role;
+              switch(role?.toUpperCase()) {
+                  case 'ADMIN': displayRole = 'Quản trị viên'; break;
+                  case 'OPERATOR': displayRole = 'Vận hành'; break;
+                  case 'TECHNICIAN': displayRole = 'Kỹ thuật'; break;
+                  case 'TEAM_LEAD': displayRole = 'Tổ trưởng'; break;
+                  case 'UNIT_HEAD': displayRole = 'Cán bộ đội'; break;
+                  case 'DIRECTOR': displayRole = 'Ban giám đốc'; break;
+              }
+              return <Tag color={role === 'ADMIN' ? 'red' : 'blue'}>{displayRole}</Tag>;
+          }
       },
       {
-        label: "Số user không hoạt động",
-        value: deactiveUsers,
-        change: calculatePercentage(deactiveUsers, totalUsers),
+          title: 'Nhóm thiết bị',
+          key: 'group',
+          render: (_: any, record: IUser) => {
+              const group = record.user_device_groups?.[0]?.device_group;
+              return group ? <Tag icon={<TeamOutlined />} color="cyan">{group.name}</Tag> : '-';
+          }
       },
-    ];
-  }, [users]);
-
-  const handleAddUser = () => {
-    setSelectedUser(null);
-    setOpenForm(true);
-  };
-
-  const handleEditUser = (user: IUser) => {
-    setSelectedUser(user);
-    setOpenForm(true);
-  };
-
-  const onUpdatePassword = (user: IUser) => {
-    setSelectedUser(user);
-    setResetPassword(true);
-  };
-
-  const handleUpdatePassword = async (user: IUpdatePassword) => {
-    try {
-      const token = getToken();
-      if (!selectedUser) throw new Error("Không có người dùng được chọn.");
-
-      await updateUser(selectedUser.user_id, user, token);
-      toast.current = {
-        content: "Cập nhật mật khẩu thành công",
-        type: "success",
-      };
-    } catch (error) {
-      toast.current = { content: "Cập nhật mật khẩu thất bại", type: "error" };
-    } finally {
-      setOpenToast(true);
-      setResetPassword(false);
-      fetchUsers();
-    }
-  };
-
-  const handleUpdateUser = async (user: ICreateUser) => {
-    try {
-      const token = getToken();
-      const result = selectedUser
-        ? await updateUser(selectedUser.user_id, user, token)
-        : await createUser(user, token);
-
-      toast.current = { content: result.message, type: "success" };
-      setOpenToast(true);
-      fetchUsers();
-    } catch (error) {
-      toast.current = {
-        content:
-          error instanceof Error
-            ? error.message
-            : selectedUser
-            ? "Cập nhật người dùng thất bại"
-            : "Thêm người dùng thất bại",
-        type: "error",
-      };
-      setOpenToast(true);
-    }
-  };
-
-  const handleDeleteUser = async (userId: number) => {
-    try {
-      const token = getToken();
-      const result = await deleteUser(userId, token);
-
-      fetchUsers();
-      toast.current = {
-        content: result.message || "Xóa người dùng thành công",
-        type: "success",
-      };
-      setOpenToast(true);
-    } catch (error) {
-      toast.current = {
-        content:
-          error instanceof Error ? error.message : "Xóa người dùng thất bại",
-        type: "error",
-      };
-      setOpenToast(true);
-    }
-  };
-
-  const onPageChange = (newPage: number) => setPage(newPage);
-
-  const handleSearchChange = (name: string) => {
-    setSearch(name);
-    setPage(1);
-  };
+      {
+          title: 'Phòng ban',
+          dataIndex: ['department', 'name'],
+          key: 'department',
+      },
+      {
+          title: 'Trạng thái',
+          dataIndex: 'status',
+          key: 'status',
+          render: (status: string) => (
+              <Tag color={status === 'active' ? 'success' : 'default'}>
+                  {status === 'active' ? 'Hoạt động' : 'Ngừng hoạt động'}
+              </Tag>
+          )
+      },
+      {
+          title: 'Hành động',
+          key: 'action',
+          render: (_: any, record: IUser) => (
+              <Space>
+                  <Button icon={<EyeOutlined />} size="small" onClick={() => handleView(record)} />
+                  <Button icon={<EditOutlined />} size="small" onClick={() => handleEdit(record)} />
+                  <Popconfirm title="Bạn có chắc chắn muốn xóa?" onConfirm={() => handleDelete(record)}>
+                      <Button icon={<DeleteOutlined />} size="small" danger />
+                  </Popconfirm>
+              </Space>
+          )
+      }
+  ];
 
   return (
-    <>
-      {loading ? (
-        <UserManagementSkeleton />
-      ) : (
-        <Box
-          display="flex"
-          flexDirection="column"
-          sx={{ height: "calc(100vh - 120px)" }}
-        >
-          <Box mb={2}>
-            <Box
-              display="flex"
-              justifyContent="space-between"
-              alignItems="center"
-            >
-              <Typography variant="h6">Quản lý người dùng</Typography>
-              <Box display="flex" gap={2}>
-                <CustomButton
-                  variant="outlined"
-                  startIcon={<CategoryIcon />}
-                  onClick={() => setOpenDeptModal(true)}
-                  sx={{ height: 40 }}
-                >
-                  Quản lý phòng ban
-                </CustomButton>
-                <CustomButton
-                  variant="contained"
-                  startIcon={<AddIcon />}
-                  onClick={handleAddUser}
-                  sx={{ height: 40 }}
-                >
-                  Thêm mới người dùng
-                </CustomButton>
-              </Box>
-            </Box>
-          </Box>
+    <div style={{ padding: 24 }}>
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+            <Space>
+                 <Input 
+                    placeholder="Tìm kiếm..." 
+                    prefix={<SearchOutlined />} 
+                    onChange={e => setSearchText(e.target.value)} 
+                    style={{ width: 300 }}
+                 />
+            </Space>
+            <Space>
+                <Button onClick={() => setOpenDeptModal(true)}>Quản lý phòng ban</Button>
+                <Button onClick={() => setOpenGroupModal(true)}>Quản lý nhóm thiết bị</Button>
+                <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>Thêm mới</Button>
+            </Space>
+        </div>
 
-          <Box flex="1" display="flex" flexDirection="column" overflow="hidden">
-            <UserStats stats={stats} />
-            <UserSearchBar
-              search={search}
-              onChange={handleSearchChange}
-              selectedDept={selectedDept}
-              onChangeDept={setSelectedDept}
-              departments={departments}
-            />
+        <Table 
+            columns={columns} 
+            dataSource={filteredUsers} 
+            rowKey="user_id"
+            loading={loading}
+            pagination={{ pageSize: 10 }} 
+        />
 
-            <Box flex="1" overflow="auto" mt={2}>
-              <UserTable
-                users={filteredUsers}
-                onEdit={handleEditUser}
-                onDelete={handleDeleteUser}
-                onUpdatePassword={onUpdatePassword}
-                rowsPerPage={rowsPerPage}
-                page={page}
-              />
-            </Box>
-          </Box>
+        <UserModal
+            open={openUserModal}
+            onCancel={() => setOpenUserModal(false)}
+            onOk={handleSaveUser}
+            initialValues={selectedUser}
+            departments={departments}
+            deviceGroups={deviceGroups}
+            loading={submitting}
+            readOnly={viewOnlyMode}
+        />
 
-          <Box mt="auto">
-            <Pagination
-              data={filteredUsers}
-              rowsPerPage={rowsPerPage}
-              onPageChange={onPageChange}
-              page={page}
-            />
-          </Box>
-
-          <UserForm
-            open={openForm}
-            onClose={() => setOpenForm(false)}
-            onSave={handleUpdateUser}
-            selectedUser={selectedUser}
-          />
-          <EditPasswordForm
-            open={resetPassword}
-            onClose={() => setResetPassword(false)}
-            onSave={handleUpdatePassword}
-          />
-          <DepartmentModal
+        <DepartmentModal
             open={openDeptModal}
             onClose={(changed) => {
               setOpenDeptModal(false);
               if (changed) fetchUsers();
             }}
-          />
+        />
 
-          <Toast
-            content={toast.current?.content}
-            variant={toast.current?.type}
-            open={openToast}
-            onClose={() => setOpenToast(false)}
-          />
-        </Box>
-      )}
-    </>
+        <DeviceGroupModal
+            open={openGroupModal}
+            onClose={() => setOpenGroupModal(false)}
+        />
+    </div>
   );
 };
 

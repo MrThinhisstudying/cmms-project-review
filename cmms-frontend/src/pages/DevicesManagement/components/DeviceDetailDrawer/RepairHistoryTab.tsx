@@ -30,10 +30,11 @@ const STATUS_MAP: Record<
     color: "default" | "warning" | "info" | "success" | "error";
   }
 > = {
-  pending: { label: "Yêu cầu – Chờ duyệt", color: "warning" },
-  manager_approved: { label: "Yêu cầu – Trưởng phòng duyệt", color: "info" },
-  admin_approved: { label: "Yêu cầu – Ban Giám đốc duyệt", color: "success" },
-  rejected: { label: "Yêu cầu – Bị từ chối", color: "error" },
+  WAITING_TECH: { label: "Yêu cầu – Chờ kỹ thuật", color: "warning" },
+  WAITING_TEAM_LEAD: { label: "Yêu cầu – Chờ Đội duyệt", color: "info" },
+  WAITING_DIRECTOR: { label: "Yêu cầu – Chờ GĐ duyệt", color: "info" },
+  COMPLETED: { label: "Yêu cầu – Đã duyệt", color: "success" },
+  REJECTED: { label: "Yêu cầu – Bị từ chối", color: "error" },
 
   inspection_pending: {
     label: "Kiểm nghiệm – Đang thực hiện",
@@ -73,9 +74,9 @@ const getOverallStatus = (r: IRepair) => {
 };
 
 const getPhaseIcon = (status: string) => {
-  if (status?.includes("approved"))
+  if (status?.includes("approved") || status === "COMPLETED")
     return <CheckCircleIcon fontSize="small" color="success" />;
-  if (status?.includes("rejected"))
+  if (status?.includes("rejected") || status === "REJECTED")
     return <CancelIcon fontSize="small" color="error" />;
   return <PendingIcon fontSize="small" color="warning" />;
 };
@@ -84,14 +85,14 @@ export default function RepairHistoryTab({ loading, repairs }: Props) {
   const renderRepairRow = (r: IRepair, index: number) => {
     const currentStatus = getOverallStatus(r);
     const status = STATUS_MAP[currentStatus] || {
-      label: "Không xác định",
+      label: currentStatus,
       color: "default" as const,
     };
 
-    const isRejected =
-      r.status_request === "rejected" ||
-      r.status_inspection === "inspection_rejected" ||
-      r.status_acceptance === "acceptance_rejected";
+    const isRejected = 
+      r.status_request === "REJECTED_B03" ||
+      r.status_inspection === "REJECTED_B04" ||
+      r.status_acceptance === "REJECTED_B05";
 
     return (
       <TableRow key={r.repair_id || index} hover>

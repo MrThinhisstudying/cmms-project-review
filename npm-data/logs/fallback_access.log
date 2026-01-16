@@ -3101,3 +3101,5 @@
 [04/Jan/2026:06:54:04 +0000] 200 - GET http 103.15.50.119 "/" [Client 64.82.206.194] [Length 568] [Gzip 1.86] "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0" "-"
 [04/Jan/2026:06:54:04 +0000] 405 - POST http 103.15.50.119 "/" [Client 64.82.206.194] [Length 556] [Gzip -] "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0" "-"
 [04/Jan/2026:07:11:23 +0000] 200 - GET http 103.15.50.119 "/" [Client 204.76.203.212] [Length 568] [Gzip 1.86] "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.85 Safari/537.36 Edg/90.0.818.46" "-"
+[07/Jan/2026:07:56:57 +0000] 404 - POST http localhost "/api/user/create-admin" [Client 192.168.65.1] [Length 150] [Gzip -] "curl/8.7.1" "-"
+[07/Jan/2026:07:57:20 +0000] 404 - POST http localhost "/api/user/create-admin" [Client 192.168.65.1] [Length 150] [Gzip -] "curl/8.7.1" "-"

@@ -39,6 +39,10 @@ class InspectionMaterialDto {
     @IsOptional()
     @IsString()
     notes?: string;
+
+    @IsOptional()
+    @IsString()
+    specifications?: string;
 }
 
 export class UpdateInspectionDto {

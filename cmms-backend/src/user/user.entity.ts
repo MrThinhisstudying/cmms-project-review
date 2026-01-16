@@ -15,7 +15,11 @@ import {
     JoinTable,
     ManyToOne,
     JoinColumn,
+    OneToMany,
 } from 'typeorm';
+
+import { UserRole } from './user-role.enum';
+import { UserDeviceGroup } from '../device-groups/entities/user-device-group.entity';
 
 @Entity()
 export class User {
@@ -31,6 +35,19 @@ export class User {
     @Column({nullable: true})
     email?: string;
 
+    @ApiProperty({ enum: UserRole })
+    @Column({
+        type: 'enum',
+        enum: UserRole,
+        default: UserRole.OPERATOR,
+        nullable: true
+    })
+    role?: UserRole;
+
+    @ApiProperty()
+    @Column({type: 'text', nullable: true})
+    signature_url?: string;
+
     @ApiProperty()
     @Column({nullable: true})
     position?: string;
@@ -43,10 +60,6 @@ export class User {
     @ApiProperty()
     @Column({nullable: true})
     status?: string;
-
-    @ApiProperty()
-    @Column({nullable: true})
-    role?: string;
 
     @ApiProperty()
     @Column({nullable: true})
@@ -65,6 +78,9 @@ export class User {
     @ManyToMany(() => Device, (device) => device.users)
     @JoinTable()
     devices?: Device[];
+
+    @OneToMany(() => UserDeviceGroup, (userDeviceGroup) => userDeviceGroup.user)
+    user_device_groups?: UserDeviceGroup[];
 
     @ManyToOne(() => Department, (department) => department.users, {
         eager: true,
@@ -88,7 +104,7 @@ export class User {
     @BeforeUpdate()
     async hashPassword(): Promise<void> {
         const salt = await bcrypt.genSalt();
-        if (this.password && !/^\$2a\$\d+\$/.test(this.password)) {
+        if (this.password && !/^\$2[abxy]\$\d+\$/.test(this.password)) {
             this.password = await bcrypt.hash(this.password, salt);
         }
     }

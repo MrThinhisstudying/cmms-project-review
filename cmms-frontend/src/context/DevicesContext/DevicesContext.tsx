@@ -19,7 +19,7 @@ const DevicesContext = createContext<DevicesContextValue>({
   devices: [],
   setDevices: () => {},
   loading: true,
-  fetchDevices: () => {},
+  fetchDevices: async () => {},
   report: null,
   fetchReport: async () => {},
 });
@@ -30,15 +30,19 @@ const DevicesProvider = ({ children }: { children: ReactNode }) => {
   const [report, setReport] = useState<ReportData | null>(null);
   const { user } = useAuthContext();
 
-  const fetchDevices = useCallback(async () => {
+  const fetchDevices = useCallback(async (filters?: { status?: string; name?: string; groupId?: number }) => {
     if (!user) return;
 
-    setLoading(true);
     try {
-      const devicesData = await getAllDevices();
-      setDevices(devicesData || []);
+      const token = getToken();
+      const devicesData = await getAllDevices(token, filters);
+      if (devicesData) {
+        setDevices(devicesData);
+      }
     } catch (error) {
-      setDevices([]);
+      console.error("Failed to load devices", error);
+      // Keep previous devices if fetch fails (e.g. 304 or network error)
+      if (devices.length === 0) setDevices([]);
     } finally {
       setLoading(false);
     }

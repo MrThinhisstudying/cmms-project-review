@@ -159,3 +159,64 @@ export const resetPassword = async (token: string, newPassword: string) => {
     throw error;
   }
 };
+
+export const getProfile = async (token: string | null) => {
+  try {
+    const response = await fetch(`${process.env.REACT_APP_BASE_URL}/user/profile`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: token ? `Bearer ${token}` : "",
+      },
+    });
+    if (response.ok) {
+        const res = await response.json();
+        return res.data as IUser;
+    }
+    return null;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const updateProfile = async (data: Partial<IUser>, token: string | null) => {
+    try {
+        const response = await fetch(`${process.env.REACT_APP_BASE_URL}/user/profile`, {
+            method: "PATCH",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: token ? `Bearer ${token}` : "",
+            },
+            body: JSON.stringify(data),
+        });
+        const res = await response.json();
+        if (!response.ok) throw new Error(res.message);
+        return res.data as IUser;
+    } catch (error) {
+        throw error;
+    }
+};
+
+export const uploadSignature = async (userId: number, file: File, token: string | null) => {
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(
+      `${process.env.REACT_APP_BASE_URL}/user/${userId}/signature`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: formData,
+      }
+    );
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || "Upload failed");
+    return data.data; // { signature_url: string }
+  } catch (error) {
+    throw error;
+  }
+};

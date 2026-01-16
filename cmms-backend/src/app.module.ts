@@ -23,6 +23,7 @@ import {InventoryItemModule} from './inventory_item/inventory-item.module';
 import {InventoryTransactionModule} from './inventory_transaction/inventory-transaction.module';
 import {StockOutModule} from './stock-out/stock-out.module';
 import {RepairsModule} from './repairs/repairs.module';
+import {DeviceGroupsModule} from './device-groups/device-groups.module';
 
 @Module({
     imports: [
@@ -62,6 +63,7 @@ import {RepairsModule} from './repairs/repairs.module';
         InventoryTransactionModule,
         StockOutModule,
         RepairsModule,
+        DeviceGroupsModule,
     ],
     controllers: [AppController],
     providers: [AppService],

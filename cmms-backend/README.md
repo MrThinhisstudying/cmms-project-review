@@ -7,9 +7,7 @@ Simple Nest.js app that uses IPFS.
 ```bash
 $ yarn install
 
-# Build the application:
-$ yarn build
-
-# Run existing database migrations
+# Build the applicUpdating task boundary to reflect current statusabase migrations
 $ yarn typeorm migration:generate src/migrations/InitSchema -d src/data-source.ts
 $ yarn typeorm migration:run -d src/data-source.ts
+```

@@ -14,7 +14,7 @@ export class PermissionsGuard implements CanActivate {
         const {user} = context.switchToHttp().getRequest();
         if (!user) throw new ForbiddenException('Không xác định người dùng.');
 
-        if (user.role === 'admin') return true;
+        if (user.role === 'admin' || user.role === 'ADMIN') return true;
 
         const userPermissions: string[] = user?.department?.permissions || [];
         const hasPermission = requiredPermissions.some((p) => userPermissions.includes(p));

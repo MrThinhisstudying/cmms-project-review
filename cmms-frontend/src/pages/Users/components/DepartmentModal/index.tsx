@@ -1,41 +1,17 @@
-import React, { useState, useRef } from "react";
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  IconButton,
-  List,
-  ListItem,
-  ListItemText,
-  Box,
-  Typography,
-} from "@mui/material";
-import { Edit, Delete, Add } from "@mui/icons-material";
+import React, { useState } from "react";
+import { Modal, Table, Button, Space, Typography, Popconfirm, message } from "antd";
+import { EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import { useDepartmentsContext } from "../../../../context/DepartmentsContext/DepartmentsContext";
-import { CustomButton } from "../../../../components/Button";
 import DepartmentFormModal from "../DepartmentFormModal";
-import Toast from "../../../../components/Toast";
-import ConfirmModal from "../../../../components/Modal";
+import { IDepartment } from "../../../../types/user.types";
 
 const DepartmentModal: React.FC<{
   open: boolean;
   onClose: (changed?: boolean) => void;
 }> = ({ open, onClose }) => {
   const { departments, removeDepartment } = useDepartmentsContext();
-
   const [openForm, setOpenForm] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [changed, setChanged] = useState(false);
-
-  const toast = useRef<{ type: "error" | "success"; content: string }>({
-    type: "success",
-    content: "",
-  });
-  const [openToast, setOpenToast] = useState(false);
 
   const handleOpenAdd = () => {
     setEditingId(null);
@@ -47,172 +23,78 @@ const DepartmentModal: React.FC<{
     setOpenForm(true);
   };
 
-  const handleDeleteClick = (id: number) => {
-    setDeleteId(id);
-    setConfirmOpen(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!deleteId) return;
-
+  const handleDelete = async (id: number) => {
     try {
-      await removeDepartment(deleteId);
-      toast.current = { type: "success", content: "Xóa phòng ban thành công" };
-      onClose(true);
-      setChanged(true);
+      await removeDepartment(id);
+      message.success("Xóa phòng ban thành công");
+      onClose(true); // Signal change
     } catch (e) {
-      toast.current = { type: "error", content: "Xóa phòng ban thất bại" };
-    } finally {
-      setConfirmOpen(false);
-      setDeleteId(null);
-      setOpenToast(true);
+      message.error("Xóa phòng ban thất bại");
     }
   };
 
   const handleFormClose = (isChanged?: boolean) => {
     setOpenForm(false);
-    if (isChanged) setChanged(true);
+    if (isChanged) onClose(true);
   };
+
+  const columns = [
+    {
+      title: 'Tên phòng ban',
+      dataIndex: 'name',
+      key: 'name',
+    },
+    {
+      title: 'Mô tả',
+      dataIndex: 'description',
+      key: 'description',
+    },
+    {
+      title: 'Trưởng phòng',
+      key: 'manager',
+      render: (_: any, record: IDepartment) => record.manager?.name || '-'
+    },
+    {
+      title: 'Hành động',
+      key: 'action',
+      render: (_: any, record: IDepartment) => (
+        <Space>
+           <Button icon={<EditOutlined />} size="small" onClick={() => handleOpenEdit(record.dept_id)} />
+           <Popconfirm title="Xóa phòng ban này?" onConfirm={() => handleDelete(record.dept_id)}>
+              <Button icon={<DeleteOutlined />} size="small" danger />
+           </Popconfirm>
+        </Space>
+      )
+    }
+  ];
 
   return (
     <>
-      <Dialog
+      <Modal
+        title="Quản lý phòng ban"
         open={open}
-        onClose={() => onClose(changed)}
-        fullWidth
-        maxWidth="sm"
+        onCancel={() => onClose(false)}
+        footer={null}
+        width={900}
       >
-        <DialogTitle>Quản lý phòng ban</DialogTitle>
-        <DialogContent>
-          <Box display="flex" justifyContent="flex-end" mb={2}>
-            <CustomButton
-              color="primary"
-              variant="contained"
-              padding="4px 12px"
-              startIcon={<Add />}
-              onClick={handleOpenAdd}
-            >
-              Thêm phòng ban
-            </CustomButton>
-          </Box>
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenAdd}>
+            Thêm phòng ban
+          </Button>
+        </div>
 
-          {departments.length === 0 && (
-            <Typography>Chưa có phòng ban nào</Typography>
-          )}
-          <List>
-            {departments.map((dept) => (
-              <ListItem
-                key={dept.dept_id}
-                sx={{
-                  border: "1px solid #ddd",
-                  borderRadius: "8px",
-                  mb: 1,
-                  pr: 12,
-                  "&:hover": { backgroundColor: "#fafafa" },
-                }}
-                secondaryAction={
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <Box
-                      sx={{
-                        border: "1px solid #ddd",
-                        borderRadius: "6px",
-                        p: "2px",
-                        backgroundColor: "#fff",
-                      }}
-                    >
-                      <IconButton
-                        onClick={() => handleOpenEdit(dept.dept_id)}
-                        size="small"
-                      >
-                        <Edit fontSize="small" />
-                      </IconButton>
-                    </Box>
-                    <Box
-                      sx={{
-                        border: "1px solid #ddd",
-                        borderRadius: "6px",
-                        p: "2px",
-                        backgroundColor: "#fff",
-                      }}
-                    >
-                      <IconButton
-                        color="error"
-                        onClick={() => handleDeleteClick(dept.dept_id)}
-                        size="small"
-                      >
-                        <Delete fontSize="small" />
-                      </IconButton>
-                    </Box>
-                  </Box>
-                }
-              >
-                <ListItemText
-                  primary={
-                    <Typography
-                      variant="subtitle1"
-                      sx={{
-                        fontWeight: 600,
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        maxWidth: "100%",
-                      }}
-                    >
-                      {dept.name}
-                    </Typography>
-                  }
-                  secondary={
-                    dept.description && (
-                      <Typography
-                        variant="body2"
-                        color="textSecondary"
-                        sx={{
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          maxWidth: "100%",
-                        }}
-                      >
-                        {dept.description}
-                      </Typography>
-                    )
-                  }
-                />
-              </ListItem>
-            ))}
-          </List>
-        </DialogContent>
-        <DialogActions>
-          <CustomButton
-            color="secondary"
-            variant="outlined"
-            padding="4px 12px"
-            onClick={() => onClose(changed)}
-          >
-            Đóng
-          </CustomButton>
-        </DialogActions>
-      </Dialog>
+        <Table 
+          columns={columns} 
+          dataSource={departments} 
+          rowKey="dept_id"
+          pagination={{ pageSize: 10 }}
+        />
+      </Modal>
 
       <DepartmentFormModal
         open={openForm}
         onClose={handleFormClose}
         editingId={editingId}
-      />
-
-      <ConfirmModal
-        open={confirmOpen}
-        title="Xác nhận xóa"
-        content="Bạn có chắc chắn muốn xóa phòng ban này?"
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={handleConfirmDelete}
-      />
-
-      <Toast
-        content={toast.current?.content}
-        variant={toast.current?.type}
-        open={openToast}
-        onClose={() => setOpenToast(false)}
       />
     </>
   );

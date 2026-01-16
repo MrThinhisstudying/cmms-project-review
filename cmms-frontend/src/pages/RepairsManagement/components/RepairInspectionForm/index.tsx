@@ -1,29 +1,49 @@
 import React, { useEffect, useState } from "react";
 import {
-  Box,
-  Dialog,
-  Divider,
-  Grid,
-  IconButton,
-  MenuItem,
-  TextField,
+  Modal,
+  Button,
+  Input,
+  Select,
   Typography,
-  Paper,
-  Autocomplete,
-  Chip,
-} from "@mui/material";
-import TopBar from "../../../../layout/MainLayout/TopBar";
-import { CustomButton } from "../../../../components/Button";
+  Space,
+  Row,
+  Col,
+  Table,
+  InputNumber,
+  Form,
+  Descriptions
+} from "antd";
+import {
+  PlusOutlined,
+  DeleteOutlined,
+  SaveOutlined,
+  CloseOutlined,
+  CheckCircleOutlined
+} from "@ant-design/icons";
 import {
   IRepair,
   RepairInspectionPayload,
   IInspectionMaterial,
 } from "../../../../types/repairs.types";
-import { IUser } from "../../../../types/user.types";
-import DeleteIcon from "@mui/icons-material/Delete";
-import AddIcon from "@mui/icons-material/Add";
 import { useInventoryContext } from "../../../../context/InventoryContext/InventoryContext";
 import { useUsersContext } from "../../../../context/UsersContext/UsersContext";
+import { useAuthContext } from "../../../../context/AuthContext/AuthContext";
+
+const { Title, Text } = Typography;
+const { TextArea } = Input;
+
+// Simplified Material Type for Section III (Expected Materials)
+interface ExtendedInspectionMaterial {
+  key: string;
+  item_id?: number | null;
+  name: string;
+  unit: string;
+  specifications?: string;
+  quantity: number;
+  item_code?: string;
+  is_new: boolean;
+  notes?: string;
+}
 
 export default function RepairInspectionForm({
   open,
@@ -40,619 +60,394 @@ export default function RepairInspectionForm({
 }) {
   const { items } = useInventoryContext();
   const { users } = useUsersContext();
+  const { user: currentUser } = useAuthContext();
+  const [form] = Form.useForm();
+  
+  // Watch committee to smart filter
+  const committee = Form.useWatch('committee', form) || [];
+  const selectedUserIds = Array.isArray(committee) ? committee.map((c: any) => c?.user_id).filter(Boolean) : [];
 
-  const [committeeMembers, setCommitteeMembers] = useState<IUser[]>([]);
-
-  const [inspectionItems, setInspectionItems] = useState<Array<{description: string; cause: string; solution: string; notes: string}>>([
-    { description: "", cause: "", solution: "", notes: "" }
-  ]);
-  const [inspectionOtherOpinions, setInspectionOtherOpinions] = useState("");
-
-  const [materialsStock, setMaterialsStock] = useState<IInspectionMaterial[]>([
-    { item_id: null, quantity: 1, unit: "", is_new: false, notes: "" },
-  ]);
-
-  const [materialsNew, setMaterialsNew] = useState<IInspectionMaterial[]>([
-    { item_id: null, item_name: "", quantity: 1, unit: "", is_new: true, notes: "" },
-  ]);
-
-  const [action, setAction] = useState<"approve" | "reject">("approve");
+  // --- STATE ---
+  const [materials, setMaterials] = useState<ExtendedInspectionMaterial[]>([]);
+  const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [reason, setReason] = useState("");
 
+  // --- INIT ---
   useEffect(() => {
-    if (!open) return;
+    if (!open || !initialData) return;
 
-    setCommitteeMembers(initialData.inspection_committee || []);
+    // 1. Committee
+    const initialCommittee = initialData.inspection_committee?.map(u => ({
+        user_id: u.user_id,
+        name: u.name,
+        role: u.role
+    })) || [];
+    // Ensure at least 1 empty row if empty
+    if (initialCommittee.length === 0) {
+        initialCommittee.push({ user_id: undefined, name: '', role: '' });
+    }
 
-    setInspectionItems(
-      initialData.inspection_items && initialData.inspection_items.length > 0
+    // 2. Inspection Items
+    const initInspectionItems = initialData.inspection_items && initialData.inspection_items.length > 0
         ? initialData.inspection_items.map(item => ({
             description: item.description || "",
             cause: item.cause || "",
             solution: item.solution || "",
             notes: item.notes || ""
           }))
-        : [{ description: "", cause: "", solution: "", notes: "" }]
-    );
-    setInspectionOtherOpinions(initialData.inspection_other_opinions || "");
+        : [{ description: "", cause: "", solution: "", notes: "" }];
 
-    const fromStock =
-      initialData.inspection_materials?.filter((m) => !m.is_new) || [];
-    const fromNew =
-      initialData.inspection_materials?.filter((m) => m.is_new) || [];
+    // 3. Materials
+    const existingMats = initialData.inspection_materials || [];
+    const mappedMats: ExtendedInspectionMaterial[] = existingMats.map((m, idx) => ({
+      key: `exist_${idx}`,
+      item_id: m.item_id || null,
+      name: m.item_name || (m.item_id ? items.find(i => i.item_id === m.item_id)?.name || "Unknown Item" : ""),
+      unit: m.unit || (m.item_id ? items.find(i => i.item_id === m.item_id)?.quantity_unit || "" : ""),
+      item_code: m.item_code || (m.item_id ? items.find(i => i.code === m.item_code)?.code || "" : ""),
+      quantity: m.quantity || 0,
+      is_new: !!m.is_new,
+      notes: m.notes || "",
+    }));
+    
+    setMaterials(mappedMats);
 
-    setMaterialsStock(
-      fromStock.length
-        ? fromStock.map((m) => ({
-            item_id: m.item_id ?? null,
-            quantity: m.quantity,
-            unit: m.unit || "",
-            is_new: false,
-            notes: m.notes || "",
-          }))
-        : [{ item_id: null, quantity: 1, unit: "", is_new: false, notes: "" }]
-    );
-
-    setMaterialsNew(
-      fromNew.length
-        ? fromNew.map((m) => ({
-            item_id: null,
-            item_name: m.item_name || "",
-            quantity: m.quantity,
-            unit: m.unit || "",
-            is_new: true,
-            notes: m.notes || "",
-          }))
-        : [
-            {
-              item_id: null,
-              item_name: "",
-              quantity: 1,
-              unit: "",
-              is_new: true,
-              notes: "",
-            },
-          ]
-    );
-
-    setAction("approve");
+    form.setFieldsValue({
+        committee: initialCommittee,
+        inspection_items: initInspectionItems,
+        inspection_other_opinions: initialData.inspection_other_opinions || ""
+    });
     setReason("");
-  }, [open, initialData]);
+  }, [open, initialData, items, form]);
 
-  const updateStock = (i: number, key: keyof IInspectionMaterial, v: any) => {
-    const next = [...materialsStock];
-    next[i] = { ...next[i], [key]: v };
-    setMaterialsStock(next);
+  // --- ACTIONS ---
+  
+  // Smart Options for Users
+  const getUserOptions = (currentUserId?: number) => {
+      const excludedRoles = ['TEAM_LEAD', 'UNIT_HEAD', 'ADMIN', 'DIRECTOR'];
+      const excludedDepts = ['Ban giám đốc'];
+      
+      const options = users.filter(u => {
+          if (u.user_id === currentUserId) return true; // always allow current selection
+          if (selectedUserIds.includes(u.user_id)) return false; // exclude already selected
+          
+          if (excludedRoles.includes(u.role)) return false;
+          if (u.department?.name && excludedDepts.includes(u.department.name)) return false;
+          
+          return true;
+      }).map(u => ({ label: u.name, value: u.user_id, position: u.position }));
+      return options;
   };
 
-  const updateNew = (i: number, key: keyof IInspectionMaterial, v: any) => {
-    const next = [...materialsNew];
-    next[i] = { ...next[i], [key]: v };
-    setMaterialsNew(next);
-  };
-
-  const addInspectionItem = () => {
-    setInspectionItems((p) => [...p, { description: "", cause: "", solution: "", notes: "" }]);
-  };
-
-  const removeInspectionItem = (i: number) => {
-    setInspectionItems((p) => p.filter((_, idx) => idx !== i));
-  };
-
-  const updateInspectionItem = (i: number, field: 'description' | 'cause' | 'solution' | 'notes', value: string) => {
-    const updated = [...inspectionItems];
-    updated[i] = { ...updated[i], [field]: value };
-    setInspectionItems(updated);
-  };
-
-  const addStock = () => {
-    setMaterialsStock((p) => [
-      ...p,
-      { item_id: null, quantity: 1, unit: "", is_new: false, notes: "" },
-    ]);
-  };
-
-  const addNew = () => {
-    setMaterialsNew((p) => [
-      ...p,
-      { item_id: null, item_name: "", quantity: 1, unit: "", is_new: true, notes: "" },
-    ]);
-  };
-
-  const removeStock = (i: number) => {
-    setMaterialsStock((p) => p.filter((_, idx) => idx !== i));
-  };
-
-  const removeNew = (i: number) => {
-    setMaterialsNew((p) => p.filter((_, idx) => idx !== i));
-  };
-
-  const canSubmit = () => {
-    if (action === "reject") return reason.trim().length > 0;
-    return inspectionItems.some(item => 
-      item.description.trim().length > 0 || 
-      item.cause.trim().length > 0 || 
-      item.solution.trim().length > 0
-    );
-  };
-
-  const handleSubmit = async () => {
-    const payload: RepairInspectionPayload = {
-      inspection_materials:
-        action === "approve"
-          ? [
-              ...materialsStock.filter(
-                (m) => m.item_id && m.quantity > 0 && !m.is_new
-              ),
-              ...materialsNew.filter(
-                (m) => m.item_name && m.quantity > 0 && m.is_new
-              ),
-            ]
-          : [],
-      inspection_committee_ids: committeeMembers.map((u) => u.user_id),
-      action,
-      reason: action === "reject" ? reason.trim() : undefined,
-      inspection_items: inspectionItems.filter(item => 
-        item.description.trim() || item.cause.trim() || item.solution.trim()
-      ),
-      inspection_other_opinions: inspectionOtherOpinions.trim() || undefined,
+  // Materials Logic (Kept Local State for Table complexity handling)
+  const handleAddNewMaterialRow = () => {
+    const newMat: ExtendedInspectionMaterial = {
+      key: `new_${Date.now()}`,
+      item_id: null,
+      name: "",
+      unit: "",
+      quantity: 1,
+      is_new: false, 
+      notes: ""
     };
-
-    await onSubmit(payload);
+    setMaterials([...materials, newMat]);
   };
+
+  const updateMaterial = (key: string, field: keyof ExtendedInspectionMaterial, value: any) => {
+    setMaterials(prev => prev.map(m => {
+      if (m.key !== key) return m;
+      if (field === 'item_id') {
+         const selectedItem = items.find(i => i.item_id === value);
+         return {
+             ...m,
+             item_id: value,
+             name: selectedItem?.name || "",
+             unit: selectedItem?.quantity_unit || "",
+             item_code: selectedItem?.code || "",
+             is_new: false
+         };
+      }
+      if (field === 'name' && m.item_id === null) {
+          return { ...m, name: value, is_new: true };
+      }
+      return { ...m, [field]: value };
+    }));
+  };
+
+  const removeMaterial = (key: string) => {
+    setMaterials(prev => prev.filter(m => m.key !== key));
+  };
+
+  const handleFinalSubmit = async (finalAction: "approve" | "reject") => {
+     try {
+         const values = await form.validateFields();
+         
+         const committeeIds = values.committee.map((c: any) => c.user_id).filter((id: number) => !!id);
+
+         const payloadMaterials: IInspectionMaterial[] = materials.map(m => ({
+             item_id: m.item_id || undefined,
+             item_name: m.name,
+             quantity: m.quantity,
+             unit: m.unit,
+             specifications: m.specifications,
+             item_code: m.item_code,
+             is_new: !m.item_id,
+             notes: m.notes
+         }));
+
+         const payload: RepairInspectionPayload = {
+            inspection_materials: finalAction === 'approve' ? payloadMaterials : [],
+            inspection_committee_ids: committeeIds,
+            action: finalAction,
+            reason: finalAction === 'reject' ? reason : undefined,
+            inspection_items: values.inspection_items || [],
+            inspection_other_opinions: values.inspection_other_opinions?.trim() || undefined,
+         };
+
+         await onSubmit(payload);
+     } catch (e) {
+         console.error("Validation failed", e);
+     }
+  };
+
+  // Permissions
+  // Role 'OPERATOR' (Group Lead) included in Approvers
+  const canApprove = currentUser?.role === 'UNIT_HEAD' || currentUser?.role === 'ADMIN' || currentUser?.role === 'DIRECTOR' || currentUser?.role === 'TEAM_LEAD' || currentUser?.role === 'OPERATOR';
+  const canModify = currentUser?.role === 'TECHNICIAN' || currentUser?.role === 'ADMIN';
+
+  if (!initialData) return null;
 
   return (
-    <Dialog
-      fullScreen
-      open={open}
-      onClose={onClose}
-      PaperProps={{
-        sx: { display: "flex", flexDirection: "column", height: "100dvh" },
-      }}
-    >
-      <TopBar />
-
-      <Box sx={{ flex: 1, overflowY: "auto", p: 3, mt: "70px" }}>
-        <Typography fontWeight={700} variant="h6" mb={3} color="primary">
-          Phiếu kiểm nghiệm kỹ thuật thiết bị
-        </Typography>
-
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <Paper
-              sx={{
-                p: 3,
-                borderRadius: 2,
-                border: "1px solid #e0e0e0",
-                background: "#f9fafb",
-              }}
-            >
-              <Typography fontWeight={700} fontSize={16} mb={2} color="primary">
-                Ban Kiểm nghiệm kỹ thuật
-              </Typography>
-              <Autocomplete
-                multiple
-                options={users}
-                getOptionLabel={(option) => `${option.name} - ${option.email}`}
-                value={committeeMembers}
-                onChange={(_, newValue) => setCommitteeMembers(newValue)}
-                disabled={loading || action === "reject"}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    label="Chọn thành viên ban kiểm nghiệm"
-                    placeholder="Tìm kiếm và chọn người dùng..."
-                  />
+    <>
+      <Modal
+        open={open}
+        onCancel={onClose}
+        width={900}
+        centered
+        title={
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+                <Title level={4} style={{ margin: 0 }}>KẾT QUẢ KIỂM TRA KỸ THUẬT (B04)</Title>
+                <Text type="secondary">Mã phiếu: #{initialData.repair_id}</Text>
+            </div>
+        }
+        footer={
+           <div style={{ textAlign: "right" }}>
+                <Button onClick={onClose} style={{ marginRight: 8 }}>Thoát</Button>
+                
+                {canModify && (
+                   <Button type="primary" icon={<SaveOutlined />} loading={loading} onClick={() => handleFinalSubmit('approve')}>
+                       Lưu phiếu
+                   </Button>
                 )}
-                renderTags={(value, getTagProps) =>
-                  value.map((option, index) => (
-                    <Chip
-                      label={option.name}
-                      {...getTagProps({ index })}
-                      sx={{ bgcolor: '#e3f2fd', color: '#1976d2' }}
-                    />
-                  ))
-                }
-              />
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: "block" }}>
-                Chọn các thành viên tham gia vào ban kiểm nghiệm kỹ thuật thiết bị
-              </Typography>
-            </Paper>
-          </Grid>
 
-          <Grid item xs={12}>
-            <Paper sx={{ p: 3, background: "#f5f5f5", border: "2px solid #e0e0e0" }}>
-              <Typography fontWeight={700} fontSize={18} mb={2} color="primary">
-                Nội dung kiểm nghiệm
-              </Typography>
-              {inspectionItems.map((item, idx) => (
-                <Paper
-                  key={idx}
-                  sx={{
-                    p: 2,
-                    mb: 2,
-                    background: "white",
-                    border: "1px solid #e0e0e0",
-                  }}
-                >
-                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
-                    <Typography fontWeight={600} color="text.secondary">
-                      Mục {idx + 1}
-                    </Typography>
-                    <IconButton
-                      color="error"
-                      size="small"
-                      onClick={() => removeInspectionItem(idx)}
-                      disabled={loading || action === "reject" || inspectionItems.length === 1}
-                    >
-                      <DeleteIcon />
-                    </IconButton>
-                  </Box>
-
-                  <Grid container spacing={2}>
-                    <Grid item xs={12}>
-                      <TextField
-                        label="Mô tả hư hỏng"
-                        value={item.description}
-                        onChange={(e) => updateInspectionItem(idx, 'description', e.target.value)}
-                        fullWidth
-                        multiline
-                        minRows={2}
-                        disabled={loading || action === "reject"}
-                        placeholder="Mô tả chi tiết tình trạng hư hỏng..."
-                      />
-                    </Grid>
-                    <Grid item xs={12}>
-                      <TextField
-                        label="Nguyên nhân hư hỏng"
-                        value={item.cause}
-                        onChange={(e) => updateInspectionItem(idx, 'cause', e.target.value)}
-                        fullWidth
-                        multiline
-                        minRows={2}
-                        disabled={loading || action === "reject"}
-                        placeholder="Phân tích nguyên nhân gây ra hư hỏng..."
-                      />
-                    </Grid>
-                    <Grid item xs={12}>
-                      <TextField
-                        label="Biện pháp sửa chữa"
-                        value={item.solution}
-                        onChange={(e) => updateInspectionItem(idx, 'solution', e.target.value)}
-                        fullWidth
-                        multiline
-                        minRows={2}
-                        disabled={loading || action === "reject"}
-                        placeholder="Đề xuất biện pháp sửa chữa..."
-                      />
-                    </Grid>
-                    <Grid item xs={12}>
-                      <TextField
-                        label="Ghi chú"
-                        value={item.notes}
-                        onChange={(e) => updateInspectionItem(idx, 'notes', e.target.value)}
-                        fullWidth
-                        multiline
-                        minRows={2}
-                        disabled={loading || action === "reject"}
-                        placeholder="Ghi chú bổ sung..."
-                      />
-                    </Grid>
-                  </Grid>
-                </Paper>
-              ))}
-              <CustomButton
-                variant="contained"
-                size="small"
-                startIcon={<AddIcon />}
-                onClick={addInspectionItem}
-                disabled={loading || action === "reject"}
-                bgrColor="#1976d2"
-              >
-                Thêm mục kiểm nghiệm
-              </CustomButton>
-            </Paper>
-          </Grid>
-
-          <Grid item xs={12}>
-            <TextField
-              label="Ý kiến khác"
-              value={inspectionOtherOpinions}
-              onChange={(e) => setInspectionOtherOpinions(e.target.value)}
-              fullWidth
-              multiline
-              minRows={2}
-              disabled={loading || action === "reject"}
-              placeholder="Các ý kiến khác về quá trình kiểm nghiệm..."
-            />
-          </Grid>
-
-          {action === "approve" && (
-            <>
-              <Grid item xs={12}>
-                <Paper
-                  sx={{
-                    p: 3,
-                    borderRadius: 2,
-                    border: "1px solid #e0e0e0",
-                    background: "white",
-                  }}
-                >
-                  <Typography fontWeight={700} fontSize={16} mb={2}>
-                    Vật tư sử dụng từ kho
-                  </Typography>
-
-                  {materialsStock.map((m, i) => {
-                    const item = items.find((it) => it.item_id === m.item_id);
-                    const maxQty = item?.quantity ?? 0;
-
-                    return (
-                      <Box
-                        key={i}
-                        sx={{
-                          border: "1px solid #f0f0f0",
-                          p: 2,
-                          mb: 2,
-                          borderRadius: 1.5,
-                        }}
-                      >
-                        <Grid container spacing={2} alignItems="center">
-                          <Grid item xs={5}>
-                            <TextField
-                              select
-                              fullWidth
-                              label="Vật tư kho"
-                              size="small"
-                              value={m.item_id ?? ""}
-                              onChange={(e) =>
-                                updateStock(
-                                  i,
-                                  "item_id",
-                                  Number(e.target.value)
-                                )
-                              }
-                            >
-                              <MenuItem value="">-- chọn vật tư --</MenuItem>
-                              {items.map((it) => (
-                                <MenuItem
-                                  key={it.item_id}
-                                  value={it.item_id}
-                                  disabled={it.quantity < 1}
-                                >
-                                  {it.name} {it.quantity < 1 && "(Hết)"}
-                                </MenuItem>
-                              ))}
-                            </TextField>
-                          </Grid>
-
-                          <Grid item xs={2}>
-                            <TextField
-                              label="SL"
-                              type="number"
-                              size="small"
-                              fullWidth
-                              value={m.quantity}
-                              inputProps={{ min: 1, max: maxQty }}
-                              onChange={(e) => {
-                                let v = Number(e.target.value);
-                                if (v < 1) v = 1;
-                                if (v > maxQty) v = maxQty;
-                                updateStock(i, "quantity", v);
-                              }}
-                            />
-                          </Grid>
-
-                          <Grid item xs={2}>
-                            <TextField
-                              label="ĐVT"
-                              size="small"
-                              fullWidth
-                              disabled
-                              value={item?.quantity_unit || ""}
-                            />
-                          </Grid>
-
-                          <Grid item xs={2}>
-                            <TextField
-                              label="Tồn kho"
-                              size="small"
-                              fullWidth
-                              disabled
-                              value={item?.quantity ?? 0}
-                            />
-                          </Grid>
-
-                          <Grid item xs={1} textAlign="center">
-                            <IconButton
-                              color="error"
-                              onClick={() => removeStock(i)}
-                              disabled={materialsStock.length === 1}
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          </Grid>
-
-                          <Grid item xs={12}>
-                            <TextField
-                              label="Ghi chú vật tư"
-                              size="small"
-                              fullWidth
-                              value={m.notes || ""}
-                              onChange={(e) => updateStock(i, "notes", e.target.value)}
-                              placeholder="Ghi chú cho yêu cầu vật tư này..."
-                            />
-                          </Grid>
-                        </Grid>
-                      </Box>
-                    );
-                  })}
-
-                  <CustomButton
-                    variant="outlined"
-                    padding="6px 16px"
-                    startIcon={<AddIcon />}
-                    onClick={addStock}
-                  >
-                    Thêm vật tư kho
-                  </CustomButton>
-                </Paper>
-              </Grid>
-
-              <Grid item xs={12}>
-                <Paper
-                  sx={{
-                    p: 3,
-                    borderRadius: 2,
-                    border: "1px solid #e0e0e0",
-                    background: "white",
-                  }}
-                >
-                  <Typography fontWeight={700} fontSize={16} mb={2}>
-                    Vật tư mua mới
-                  </Typography>
-
-                  {materialsNew.map((m, i) => (
-                    <Box
-                      key={i}
-                      sx={{
-                        border: "1px solid #f0f0f0",
-                        p: 2,
-                        mb: 2,
-                        borderRadius: 1.5,
-                      }}
-                    >
-                      <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={5}>
-                          <TextField
-                            label="Tên vật tư"
-                            size="small"
-                            fullWidth
-                            value={m.item_name}
-                            onChange={(e) =>
-                              updateNew(i, "item_name", e.target.value)
-                            }
-                          />
-                        </Grid>
-
-                        <Grid item xs={2}>
-                          <TextField
-                            label="SL"
-                            size="small"
-                            type="number"
-                            fullWidth
-                            value={m.quantity}
-                            inputProps={{ min: 1 }}
-                            onChange={(e) => {
-                              let v = Number(e.target.value);
-                              if (v < 1) v = 1;
-                              updateNew(i, "quantity", v);
-                            }}
-                          />
-                        </Grid>
-
-                        <Grid item xs={3}>
-                          <TextField
-                            label="ĐVT"
-                            size="small"
-                            fullWidth
-                            value={m.unit}
-                            onChange={(e) =>
-                              updateNew(i, "unit", e.target.value)
-                            }
-                          />
-                        </Grid>
-
-                        <Grid item xs={1} textAlign="center">
-                          <IconButton
-                            color="error"
-                            onClick={() => removeNew(i)}
-                            disabled={materialsNew.length === 1}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Grid>
-
-                        <Grid item xs={12}>
-                          <TextField
-                            label="Ghi chú vật tư"
-                            size="small"
-                            fullWidth
-                            value={m.notes || ""}
-                            onChange={(e) => updateNew(i, "notes", e.target.value)}
-                            placeholder="Ghi chú cho yêu cầu vật tư này..."
-                          />
-                        </Grid>
-                      </Grid>
-                    </Box>
-                  ))}
-
-                  <CustomButton
-                    variant="outlined"
-                    padding="6px 16px"
-                    startIcon={<AddIcon />}
-                    onClick={addNew}
-                  >
-                    Thêm vật tư mới
-                  </CustomButton>
-                </Paper>
-              </Grid>
-            </>
-          )}
-
-          <Grid item xs={12}>
-            <TextField
-              select
-              label="Hành động xử lý"
-              fullWidth
-              value={action}
-              onChange={(e) =>
-                setAction(e.target.value as "approve" | "reject")
-              }
-            >
-              <MenuItem value="approve">Phê duyệt kết quả kiểm nghiệm</MenuItem>
-              <MenuItem value="reject">Từ chối kết quả kiểm nghiệm</MenuItem>
-            </TextField>
-          </Grid>
-
-          {action === "reject" && (
-            <Grid item xs={12}>
-              <TextField
-                label="Lý do từ chối"
-                fullWidth
-                multiline
-                minRows={3}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-              />
-            </Grid>
-          )}
-        </Grid>
-      </Box>
-
-      <Divider />
-      <Box
-        sx={{
-          p: 2,
-          display: "flex",
-          justifyContent: "flex-end",
-          gap: 2,
-          background: "#fafafa",
-        }}
+                {canApprove && (
+                   <Space style={{ marginLeft: 8 }}>
+                       <Button danger icon={<CloseOutlined />} onClick={() => setRejectModalOpen(true)}>
+                           Từ chối
+                       </Button>
+                       <Button type="primary" icon={<CheckCircleOutlined />} onClick={() => handleFinalSubmit('approve')}>
+                           Phê duyệt
+                       </Button>
+                   </Space>
+                )}
+           </div>
+        }
       >
-        <CustomButton variant="outlined" onClick={onClose} disabled={loading}>
-          Hủy
-        </CustomButton>
-        <CustomButton
-          variant="contained"
-          onClick={handleSubmit}
-          disabled={loading || !canSubmit()}
-          bgrColor={action === "approve" ? "#2e7d32" : "#d32f2f"}
-        >
-          {action === "approve"
-            ? "Hoàn tất kiểm nghiệm"
-            : "Từ chối kiểm nghiệm"}
-        </CustomButton>
-      </Box>
-    </Dialog>
+        <Form form={form} layout="vertical">
+             {/* I. PHẦN TỔNG QUÁT */}
+             <Typography.Title level={5}>I. PHẦN TỔNG QUÁT</Typography.Title>
+             
+             {/* 1. Device Info */}
+             <div style={{ marginLeft: 16, marginBottom: 24 }}>
+                 <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>1. Lý lịch thiết bị</Typography.Text>
+                 <Descriptions bordered size="small" column={2}>
+                        <Descriptions.Item label="Tên thiết bị" span={3}>{initialData.device?.name}</Descriptions.Item>
+                        <Descriptions.Item label="Số đăng ký">{initialData.device?.brand || ''}</Descriptions.Item>
+                        <Descriptions.Item label="Đơn vị quản lý tài sản" span={2}>{initialData.device?.using_department || initialData.created_department?.name || "N/A"}</Descriptions.Item>
+                    <Descriptions.Item label="Số giờ/km hoạt động" span={2}>
+                        <Space>
+                            <Input style={{ width: 120 }} placeholder="Km 000000" bordered={false} className="border-bottom-input" />
+                            <Input style={{ width: 120 }} placeholder="Giờ 000000" bordered={false} className="border-bottom-input" />
+                        </Space>
+                    </Descriptions.Item>
+                 </Descriptions>
+             </div>
+
+             {/* 2. Committee */}
+             <div style={{ marginLeft: 16, marginBottom: 24 }}>
+                 <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>2. Thành phần kiểm nghiệm</Typography.Text>
+                 <Form.List name="committee">
+                    {(fields, { add, remove }) => (
+                        <div>
+                            {fields.map(({ key, name, ...restField }) => (
+                                <Row key={key} gutter={16} align="middle" style={{ marginBottom: 8 }}>
+                                    <Col span={10}>
+                                        <Form.Item
+                                            {...restField}
+                                            name={[name, 'user_id']}
+                                            label={name === 0 ? "Họ tên" : undefined}
+                                            rules={[{ required: true, message: 'Chọn thành viên' }]}
+                                            style={{ margin: 0 }}
+                                        >
+                                            <Select 
+                                                placeholder="Chọn thành viên"
+                                                showSearch
+                                                optionFilterProp="label"
+                                                onChange={(_, option: any) => {
+                                                const usersArr = form.getFieldValue('committee') || [];
+                                                if(usersArr[name]) {
+                                                    usersArr[name].role = option.position || '';
+                                                    form.setFieldsValue({ committee: [...usersArr] });
+                                                }
+                                            }}
+                                            options={getUserOptions(form.getFieldValue(['committee', name, 'user_id']))}
+                                            />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={10}>
+                                        <Form.Item
+                                            {...restField}
+                                            name={[name, 'role']}
+                                            label={name === 0 ? "Chức vụ" : undefined}
+                                            style={{ margin: 0 }}
+                                        >
+                                            <Input placeholder="Chức vụ" />
+                                        </Form.Item>
+                                    </Col>
+                                    <Col span={2}>
+                                        <Button 
+                                            type="text" 
+                                            danger 
+                                            icon={<DeleteOutlined />} 
+                                            onClick={() => remove(name)} 
+                                            style={{ marginTop: name === 0 ? 30 : 0 }}
+                                        />
+                                    </Col>
+                                </Row>
+                            ))}
+                            <Button type="dashed" onClick={() => add()} icon={<PlusOutlined />} style={{ marginTop: 8 }}>
+                                Thêm thành viên
+                            </Button>
+                        </div>
+                    )}
+                 </Form.List>
+             </div>
+
+             {/* II. INSPECTION CONTENT */}
+             <Typography.Title level={5}>II. NỘI DUNG KIỂM NGHIỆM</Typography.Title>
+             <Form.List name="inspection_items">
+                {(fields, { add, remove }) => (
+                    <div style={{ marginBottom: 24 }}>
+                        {fields.map(({ key, name, ...restField }) => (
+                           <div key={key} style={{ background: '#fafafa', padding: 12, marginBottom: 12, borderRadius: 8, border: '1px solid #f0f0f0' }}>
+                               <Row gutter={16}>
+                                   <Col span={24}>
+                                       <Form.Item {...restField} name={[name, 'description']} label="Mô tả hư hỏng" rules={[{ required: true, message: 'Nhập mô tả' }]}>
+                                           <Input.TextArea autoSize={{ minRows: 1 }} placeholder="Mô tả..." />
+                                       </Form.Item>
+                                   </Col>
+                                   <Col span={8}>
+                                       <Form.Item {...restField} name={[name, 'cause']} label="Nguyên nhân hư hỏng">
+                                           <Input.TextArea autoSize={{ minRows: 1 }} />
+                                       </Form.Item>
+                                   </Col>
+                                   <Col span={8}>
+                                       <Form.Item {...restField} name={[name, 'solution']} label="Biện pháp sửa chữa">
+                                           <Input.TextArea autoSize={{ minRows: 1 }} />
+                                       </Form.Item>
+                                   </Col>
+                                   <Col span={8}>
+                                       <Form.Item {...restField} name={[name, 'notes']} label="Ghi chú">
+                                           <Input.TextArea autoSize={{ minRows: 1 }} />
+                                       </Form.Item>
+                                   </Col>
+                                   <Col span={24} style={{ textAlign: 'right' }}>
+                                       <Button danger size="small" type="text" onClick={() => remove(name)} icon={<DeleteOutlined />}>Xóa dòng</Button>
+                                   </Col>
+                               </Row>
+                           </div>
+                        ))}
+                        <Button type="dashed" onClick={() => add()} icon={<PlusOutlined />}>
+                            Thêm nội dung kiểm nghiệm
+                        </Button>
+                    </div>
+                )}
+             </Form.List>
+
+             {/* III. MATERIALS */}
+             <Typography.Title level={5}>III. PHẦN ĐỀ NGHỊ CUNG CẤP VẬT TƯ</Typography.Title>
+             <Table
+                dataSource={materials}
+                pagination={false}
+                size="small"
+                rowKey="key"
+                bordered
+                footer={() => <Button type="dashed" size="small" onClick={handleAddNewMaterialRow} icon={<PlusOutlined />}>Thêm vật tư</Button>}
+                columns={[
+                    { title: 'Tên vật tư, phụ tùng cần thay thế', dataIndex: 'name', width: '35%', render: (_: string, record: ExtendedInspectionMaterial) => (
+                         <Space direction="vertical" style={{ width: '100%' }} size={0}>
+                            <Select
+                                style={{ width: '100%' }}
+                                placeholder="Chọn từ kho..."
+                                value={record.item_id}
+                                onChange={(val) => updateMaterial(record.key, 'item_id', val)}
+                                allowClear
+                                showSearch
+                                optionFilterProp="children"
+                            >
+                                {items.map(it => <Select.Option key={it.item_id} value={it.item_id} disabled={it.quantity < 1}>{it.name} (Tồn: {it.quantity})</Select.Option>)}
+                            </Select>
+                            {!record.item_id && (
+                                <Input 
+                                    placeholder="Nhập vật tư ngoài..." 
+                                    value={record.name} 
+                                    onChange={e => updateMaterial(record.key, 'name', e.target.value)} 
+                                    style={{ marginTop: 4 }} 
+                                />
+                            )}
+                         </Space>
+                    )},
+                    { title: 'Quy cách, mã số', dataIndex: 'specifications', width: 100, render: (val: string, record: ExtendedInspectionMaterial) => (
+                         <Input value={val} onChange={e => updateMaterial(record.key, 'specifications', e.target.value)} placeholder="Quy cách..." />
+                    )},
+                    { title: 'ĐVT', dataIndex: 'unit', width: 80, render: (val: string, record: ExtendedInspectionMaterial) => (
+                         <Input value={val} onChange={e => updateMaterial(record.key, 'unit', e.target.value)} placeholder="ĐVT" />
+                    )},
+                    { title: 'Số lượng', dataIndex: 'quantity', width: 100, render: (val: number, record: ExtendedInspectionMaterial) => (
+                         <InputNumber min={1} value={val} onChange={v => updateMaterial(record.key, 'quantity', v)} style={{ width: '100%' }} />
+                    )},
+                    { title: 'Ghi chú', dataIndex: 'notes', render: (val: string, record: ExtendedInspectionMaterial) => (
+                         <Input.TextArea autoSize value={val} onChange={e => updateMaterial(record.key, 'notes', e.target.value)} />
+                    )},
+                    { title: '', width: 50, render: (_: any, record: ExtendedInspectionMaterial) => (
+                        <Button type="text" danger icon={<DeleteOutlined />} onClick={() => removeMaterial(record.key)} />
+                    )}
+                ]}
+                style={{ marginBottom: 24 }}
+             />
+
+             {/* IV. OTHER OPINIONS */}
+             <Typography.Title level={5}>IV. CÁC Ý KIẾN KHÁC (nếu có)</Typography.Title>
+             <Form.Item name="inspection_other_opinions">
+                 <TextArea rows={3} placeholder="...." />
+             </Form.Item>
+
+        </Form>
+      </Modal>
+
+      {/* Reject Modal */}
+      <Modal
+        title="Từ chối kiểm nghiệm"
+        open={rejectModalOpen}
+        onOk={() => {
+            handleFinalSubmit('reject');
+            setRejectModalOpen(false);
+        }}
+        onCancel={() => setRejectModalOpen(false)}
+    >
+        <Typography.Paragraph>Vui lòng nhập lý do từ chối:</Typography.Paragraph>
+         <TextArea rows={4} value={reason} onChange={e => setReason(e.target.value)} />
+    </Modal>
+    </>
   );
 }

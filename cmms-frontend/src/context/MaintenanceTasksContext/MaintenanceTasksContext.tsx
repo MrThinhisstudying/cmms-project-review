@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { getToken } from "../../utils/auth";
 import { useAuthContext } from "../AuthContext/AuthContext";
 import {
@@ -32,31 +32,37 @@ export const MaintenanceTasksProvider = ({
   const [loading, setLoading] = useState(false);
   const { user } = useAuthContext();
 
-  const loadTickets = async () => {
+  const loadTickets = useCallback(async () => {
     setLoading(true);
     try {
       const token = getToken();
-      if (!token) throw new Error("Unauthorized");
+      if (!token || !user) {
+        setTickets([]);
+        return;
+      }
+      
       let data: IMaintenanceTicket[] = [];
       if (user?.role === "admin" || user?.role === "manager") {
         data = await listMaintenanceTickets(token, {
-          userId: user.id,
+          userId: user.user_id,
           deptId: user.department?.dept_id,
         });
       } else {
         data = await listMaintenanceTickets(token);
       }
       setTickets(data || []);
+    } catch (error) {
+       console.error("Failed to load tickets", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     loadTickets();
-  }, [user?.id, user?.department?.dept_id]);
+  }, [loadTickets]);
 
-  const moveStatus = async (ticket: IMaintenanceTicket, to: TicketStatus) => {
+  const moveStatus = useCallback(async (ticket: IMaintenanceTicket, to: TicketStatus) => {
     const token = getToken();
     if (!token) throw new Error("Unauthorized");
     await updateMaintenanceTicketStatus(ticket.ticket_id, to, token);
@@ -65,14 +71,14 @@ export const MaintenanceTasksProvider = ({
         t.ticket_id === ticket.ticket_id ? { ...t, status: to } : t
       )
     );
-  };
+  }, []);
 
-  const completeTicket = async (ticket: IMaintenanceTicket, review: string) => {
+  const completeTicket = useCallback(async (ticket: IMaintenanceTicket, review: string) => {
     const token = getToken();
     if (!token) throw new Error("Unauthorized");
     await completeMaintenanceTicket(ticket.ticket_id, { review }, token);
     await loadTickets();
-  };
+  }, [loadTickets]);
 
   return (
     <MaintenanceTasksContext.Provider

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import {
   getNotifications,
   markAllAsRead,
@@ -12,30 +12,30 @@ export const NotificationProvider = ({ children }: any) => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const { user } = useAuthContext();
 
-  const fetchNotifications = async () => {
-    if (user?.id) {
-      const data = await getNotifications(user?.id);
+  const fetchNotifications = useCallback(async () => {
+    if (user?.user_id) {
+      const data = await getNotifications(user?.user_id);
       setNotifications(data);
     }
-  };
+  }, [user?.user_id]);
 
-  const readOne = async (id: number) => {
+  const readOne = useCallback(async (id: number) => {
     await markAsRead(id);
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, is_read: true } : n))
     );
-  };
+  }, []);
 
-  const readAll = async () => {
-    if (user?.id) {
-      await markAllAsRead(user?.id);
+  const readAll = useCallback(async () => {
+    if (user?.user_id) {
+      await markAllAsRead(user?.user_id);
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     }
-  };
+  }, [user?.user_id]);
 
   useEffect(() => {
     if (user) fetchNotifications();
-  }, [user]);
+  }, [user, fetchNotifications]);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 

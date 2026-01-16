@@ -5,8 +5,10 @@ import {User} from './user.entity';
 import {UserService} from './user.service';
 import {UserController} from './user.controller';
 
+import {UserDeviceGroup} from '../device-groups/entities/user-device-group.entity';
+
 @Module({
-    imports: [TypeOrmModule.forFeature([User])],
+    imports: [TypeOrmModule.forFeature([User, UserDeviceGroup])],
     providers: [UserService, IsEmailAvailable],
     exports: [UserService],
     controllers: [UserController],

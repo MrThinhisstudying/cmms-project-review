@@ -56,6 +56,7 @@ export class AuthService {
             avatar: user.avatar,
             status: user.status,
             permissions: departmentPermissions,
+            signature_url: user.signature_url,
         };
 
         return {
