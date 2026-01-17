@@ -1,14 +1,16 @@
 export enum DeviceStatus {
-    MOI = 'moi',
-    DANG_SU_DUNG = 'dang_su_dung',
-    THANH_LY = 'thanh_ly',
-    HUY_BO = 'huy_bo',
+    MOI = 'MOI', // Mới
+    DANG_SU_DUNG = 'DANG_SU_DUNG', // Đang sử dụng
+    SU_DUNG_HAN_CHE = 'SU_DUNG_HAN_CHE', // Sử dụng hạn chế
+    DANG_SUA_CHUA = 'DANG_SUA_CHUA', // Đang sửa chữa
+    THANH_LY = 'THANH_LY', // Thanh lý
 }
 
 export const columnMapping: Record<string, string> = {
     'Tên phương tiện': 'name',
     'Nhãn hiệu': 'brand',
-    'Biển đăng ký': 'serial_number',
+    'Biển đăng ký': 'reg_number', // Updates to reg_number
+    'Số máy (Serial Number)': 'serial_number', // Keep tracking serial
     'Nước sản xuất': 'country_of_origin',
     'Năm sản xuất': 'manufacture_year',
     'Ghi chú': 'note',
@@ -29,4 +31,5 @@ export const columnMapping: Record<string, string> = {
     'Nguồn điện cung cấp': 'power_source',
     'Công suất tiêu thụ': 'power_consumption',
     'Tình trạng kỹ thuật': 'other_specifications',
+    // Add new fields if they appear in Excel, for now mapping Reg Number is key
 };

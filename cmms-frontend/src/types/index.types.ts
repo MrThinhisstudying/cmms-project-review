@@ -22,8 +22,10 @@ export interface INotification {
 
 export interface ReportData {
   total: number;
-  moi: number;
-  dang_su_dung: number;
-  thanh_ly: number;
-  huy_bo: number;
+  MOI?: number;
+  DANG_SU_DUNG?: number;
+  SU_DUNG_HAN_CHE?: number;
+  DANG_SUA_CHUA?: number;
+  THANH_LY?: number;
+  HUY_BO?: number;
 }

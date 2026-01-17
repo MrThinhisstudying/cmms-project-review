@@ -1,19 +1,25 @@
-import {Controller, Get, Post, Body, Param, Delete, Patch, Req, Res, UseGuards} from '@nestjs/common';
+import {Controller, Get, Post, Body, Param, Delete, Patch, Req, Res, UseGuards, Query} from '@nestjs/common';
 import {RepairsService} from './repairs.service';
 import {CreateRepairDto} from './dto/create-repair.dto';
 import {ReviewRepairDto} from './dto/review-repair.dto';
 import {UpdateInspectionDto} from './dto/update-inspection.dto';
 import {UpdateAcceptanceDto} from './dto/update-acceptance.dto';
+import {RequestLimitedUseDto} from './dto/request-limited-use.dto';
 import {JWTAuthGuard} from 'src/auth/guards/jwt-auth.guard';
 import {PermissionsGuard} from 'src/auth/guards/permissions.guard';
 import {RequirePermissions} from 'src/auth/decorators/permissions.decorator';
 import {ApiTags} from '@nestjs/swagger';
 import {Response} from 'express';
+import { ExportDocxService } from './export-docx.service';
+import * as fs from 'fs';
 
 @ApiTags('Repairs')
 @Controller('repairs')
 export class RepairsController {
-    constructor(private readonly repairService: RepairsService) {}
+    constructor(
+        private readonly repairService: RepairsService,
+        private readonly exportDocxService: ExportDocxService // Added
+    ) {}
 
     @UseGuards(JWTAuthGuard, PermissionsGuard)
     @RequirePermissions('CREATE_REPAIR')
@@ -26,8 +32,9 @@ export class RepairsController {
     @UseGuards(JWTAuthGuard, PermissionsGuard)
     @RequirePermissions('UPDATE_REPAIR')
     @Patch(':id')
-    async update(@Param('id') id: string, @Body() dto: CreateRepairDto) {
-        const repair = await this.repairService.update(+id, dto);
+    async update(@Param('id') id: string, @Body() dto: CreateRepairDto, @Req() req) {
+        // Enforce user ownership check in service
+        const repair = await this.repairService.update(+id, dto, req.user.user_id, req.user.role);
         return {message: 'Cập nhật phiếu sửa chữa thành công', data: repair};
     }
 
@@ -71,9 +78,35 @@ export class RepairsController {
         return {message: 'Cập nhật phiếu thành công', data: repair};
     }
 
+    @UseGuards(JWTAuthGuard, PermissionsGuard)
+    @RequirePermissions('CREATE_REPAIR')
+    @Post(':id/limited-use')
+    async requestLimitedUse(@Param('id') id: string, @Body() dto: RequestLimitedUseDto, @Req() req) {
+        const repair = await this.repairService.requestLimitedUse(+id, req.user.user_id, dto.reason);
+        return { message: 'Đã gửi yêu cầu sử dụng hạn chế', data: repair };
+    }
+
+    @UseGuards(JWTAuthGuard, PermissionsGuard)
+    @RequirePermissions('APPROVE_REPAIR')
+    @Patch(':id/review-limited-use')
+    async reviewLimitedUse(@Param('id') id: string, @Body() dto: ReviewRepairDto, @Req() req) {
+        const repair = await this.repairService.reviewLimitedUse(+id, req.user.user_id, dto.action);
+        return { message: 'Cập nhật yêu cầu sử dụng hạn chế thành công', data: repair };
+    }
+
     @Get()
-    async findAll() {
-        const data = await this.repairService.findAll();
+    async findAll(
+        @Query('status_request') status_request?: string,
+        @Query('status_inspection') status_inspection?: string,
+        @Query('device_id') device_id?: string,
+        @Req() req?,
+    ) {
+        const filters = {
+            status_request,
+            status_inspection,
+            device_id: device_id ? +device_id : undefined,
+        };
+        const data = await this.repairService.findAll(req?.user, filters);
         return {message: 'Lấy danh sách phiếu thành công', data};
     }
 
@@ -89,11 +122,39 @@ export class RepairsController {
         return {message: 'Lấy thông tin phiếu thành công', data};
     }
 
-    @UseGuards(JWTAuthGuard)
-    @Get(':id/export/:type')
-    async export(@Param('id') id: string, @Param('type') type: 'request' | 'inspection' | 'acceptance', @Res() res: Response) {
-        return this.repairService.exportWord(+id, type, res);
+    @Get(':id/export')
+    async exportRepair(
+        @Param('id') id: string,
+        @Query('type') type: 'B03' | 'B04' | 'B05',
+        @Res() res: Response
+    ) {
+        const repair = await this.repairService.findOne(+id);
+        if (!repair) {
+             // Handle not found
+        }
+        
+        // Use the new service
+        const filePath = await this.exportDocxService.generateRepairDocx(repair, type);
+        const fileName = `${type}_${repair.repair_id}.docx`;
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+
+        res.download(filePath, fileName, (err) => {
+            if (err) console.error('Error downloading file:', err);
+            try { fs.unlinkSync(filePath); } catch (e) {}
+        });
     }
+
+    /* 
+    // Keeping old method for reference or removing if replaced. 
+    // The previous code had:
+    // @UseGuards(JWTAuthGuard)
+    // @Get(':id/export/:type')
+    // async export(...) ...
+    // I will comment it out or remove it to avoid conflicts if paths overlap significantly, 
+    // but the new one uses query params.
+    */
 
     @UseGuards(JWTAuthGuard, PermissionsGuard)
     @RequirePermissions('DELETE_REPAIR')

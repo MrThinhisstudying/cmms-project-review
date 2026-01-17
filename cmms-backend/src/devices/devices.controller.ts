@@ -1,4 +1,5 @@
-import {Controller, Get, Post, Body, Patch, Param, Delete, HttpException, HttpStatus, UseGuards, UploadedFile, UseInterceptors} from '@nestjs/common';
+import {Controller, Get, Post, Body, Patch, Param, Delete, HttpException, HttpStatus, UseGuards, UploadedFile, UseInterceptors, Res, Query, Req} from '@nestjs/common';
+import { Response, Request } from 'express';
 import {DevicesService} from './devices.service';
 import {CreateDeviceDto} from './dto/create-device.dto';
 import {ApiTags} from '@nestjs/swagger';
@@ -7,6 +8,7 @@ import {PermissionsGuard} from 'src/auth/guards/permissions.guard';
 import {RequirePermissions} from 'src/auth/decorators/permissions.decorator';
 import {FileInterceptor} from '@nestjs/platform-express';
 import * as path from 'path';
+import { DeviceStatus } from './enums/device-status.enum';
 
 @ApiTags('Devices')
 @Controller('devices')
@@ -14,9 +16,22 @@ export class DevicesController {
     constructor(private readonly devicesService: DevicesService) {}
 
     @Get()
-    async findAll() {
+    @UseGuards(JWTAuthGuard)
+    async findAll(
+        @Query('status') status?: DeviceStatus,
+        @Query('name') name?: string,
+        @Query('groupId') groupId?: string,
+        @Req() request?: Request,
+    ) {
         try {
-            const devices = await this.devicesService.findAll();
+            const filter = {
+                status,
+                name,
+                groupId: groupId ? Number(groupId) : undefined
+            };
+             
+            const user = (request as any).user;
+            const devices = await this.devicesService.findAll(filter, user);
             return {message: 'Lấy danh sách trang thiết bị thành công', data: devices};
         } catch {
             throw new HttpException('Lấy danh sách trang thiết bị thất bại', HttpStatus.INTERNAL_SERVER_ERROR);
@@ -30,6 +45,31 @@ export class DevicesController {
             return {message: 'Thống kê thiết bị thành công', data: result};
         } catch {
             throw new HttpException('Thống kê thất bại', HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @Get('analytics/monthly')
+    async getMonthlyAnalytics() {
+        try {
+            return await this.devicesService.getMonthlyAnalytics();
+        } catch (e) {
+             throw new HttpException('Lấy dữ liệu phân tích thất bại', HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    @Get('export/pdf')
+    async exportPdf(@Res() res: Response) {
+        try {
+            const buffer = await this.devicesService.exportDevicesToPdf();
+            res.set({
+                'Content-Type': 'application/pdf',
+                'Content-Disposition': 'attachment; filename=devices.pdf',
+                'Content-Length': buffer.length,
+            });
+            res.end(buffer);
+        } catch (e) {
+            console.log(e);
+            throw new HttpException('Xuất PDF thất bại', HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
 

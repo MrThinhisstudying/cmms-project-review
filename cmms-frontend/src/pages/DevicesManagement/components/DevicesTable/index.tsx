@@ -1,163 +1,153 @@
-import React, { useMemo, useState } from "react";
-import { IconButton, TableBody, TableCell, TableHead } from "@mui/material";
-import { IDevice } from "../../../../types/devicesManagement.types";
-import {
-  CustomTable,
-  TableCellHeader,
-  TableRowBody,
-  TableRowContainer,
-} from "./style";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import ConfirmModal from "../../../../components/Modal";
-import { mapStatus } from "../../../../constants/statusOptions";
-import InfoIcon from "@mui/icons-material/Info";
+import React from 'react';
+import { Table, Button, Space, Tag, Popconfirm, Tooltip } from 'antd';
+import { EditOutlined, DeleteOutlined, EyeOutlined, WarningOutlined } from '@ant-design/icons';
+import { IDevice, DeviceStatus } from '../../../../types/devicesManagement.types';
+import dayjs from 'dayjs';
 
 interface DevicesTableProps {
-  filteredData: IDevice[];
-  rowsPerPage: number;
-  page: number;
+  dataSource: IDevice[];
+  loading: boolean;
   onEdit: (device: IDevice) => void;
-  onDelete: (device_id?: number) => void;
-  onDetail: (device: IDevice) => void;
-  canEdit?: boolean;
-  canDelete?: boolean;
+  onDelete: (id?: number) => void;
+  onView: (device: IDevice) => void;
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
 const DevicesTable: React.FC<DevicesTableProps> = ({
-  filteredData,
-  rowsPerPage,
-  page,
+  dataSource,
+  loading,
   onEdit,
   onDelete,
-  onDetail,
-  canEdit = false,
-  canDelete = false,
+  onView,
+  canEdit,
+  canDelete
 }) => {
-  const [open, setOpen] = useState(false);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<
-    number | undefined
-  >();
-
-  const paginatedDevices = useMemo(() => {
-    const start = (page - 1) * rowsPerPage;
-    const end = start + rowsPerPage;
-    return filteredData.slice(start, end);
-  }, [filteredData, page, rowsPerPage]);
-
-  const handleDeleteClick = (device_id?: number) => {
-    setSelectedDeviceId(device_id);
-    setOpen(true);
+  // Helpers
+  const isExpiringSoon = (dateStr?: string) => {
+    if (!dateStr) return false;
+    const date = dayjs(dateStr);
+    const diff = date.diff(dayjs(), 'days');
+    return diff >= 0 && diff <= 30;
   };
 
-  const handleConfirmDelete = () => {
-    onDelete(selectedDeviceId);
-    setOpen(false);
-    setSelectedDeviceId(undefined);
+  const isExpired = (dateStr?: string) => {
+    if (!dateStr) return false;
+    return dayjs(dateStr).isBefore(dayjs());
   };
+
+  const columns = [
+    {
+      title: '#',
+      dataIndex: 'device_id',
+      key: 'device_id',
+      width: 60,
+      render: (_: any, __: any, index: number) => index + 1,
+    },
+    {
+      title: 'Tên thiết bị',
+      dataIndex: 'name',
+      key: 'name',
+    },
+    {
+        title: 'Biển số',
+        dataIndex: 'reg_number',
+        key: 'reg_number',
+        render: (text: string) => text || '-',
+    },
+    {
+      title: 'Nhãn hiệu',
+      dataIndex: 'brand',
+      key: 'brand',
+    },
+    {
+      title: 'Trạng thái',
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: DeviceStatus) => {
+        let color = 'default';
+        let text: string = status;
+        switch (status) {
+          case 'MOI': color = 'blue'; text = 'Mới'; break;
+          case 'DANG_SU_DUNG': color = 'green'; text = 'Đang sử dụng'; break;
+          case 'SU_DUNG_HAN_CHE': color = 'orange'; text = 'Sử dụng hạn chế'; break;
+          case 'DANG_SUA_CHUA': color = 'red'; text = 'Đang sửa chữa'; break;
+          case 'THANH_LY': color = 'gray'; text = 'Thanh lý'; break;
+          case 'HUY_BO': color = 'red'; text = 'Hủy bỏ'; break;
+        }
+        return <Tag color={color}>{text}</Tag>;
+      }
+    },
+    {
+       title: 'Hạn đăng kiểm',
+       dataIndex: 'inspection_expiry',
+       key: 'inspection_expiry',
+       render: (date: string) => {
+           if (!date) return '-';
+           const expiring = isExpiringSoon(date);
+           const expired = isExpired(date);
+           return (
+               <Space>
+                   <span style={{ color: expired ? 'red' : expiring ? 'orange' : 'inherit' }}>
+                       {dayjs(date).format('DD/MM/YYYY')}
+                   </span>
+                   {(expired || expiring) && (
+                       <Tooltip title={expired ? "Đã hết hạn" : "Sắp hết hạn (<30 ngày)"}>
+                           <WarningOutlined style={{ color: expired ? 'red' : 'orange' }} />
+                       </Tooltip>
+                   )}
+               </Space>
+           );
+       }
+    },
+    {
+        title: 'Hành động',
+        key: 'action',
+        render: (_: any, record: IDevice) => (
+            <Space size="small">
+                <Button 
+                    icon={<EyeOutlined />} 
+                    size="small" 
+                    onClick={() => onView(record)} 
+                />
+                {canEdit && (
+                    <Button 
+                        icon={<EditOutlined />} 
+                        type="primary" 
+                        ghost 
+                        size="small" 
+                        onClick={() => onEdit(record)} 
+                    />
+                )}
+                {canDelete && (
+                    <Popconfirm 
+                        title="Bạn có chắc chắn muốn xóa?" 
+                        onConfirm={() => onDelete(record.device_id)}
+                        okText="Xóa"
+                        cancelText="Hủy"
+                    >
+                        <Button 
+                            icon={<DeleteOutlined />} 
+                            danger 
+                            size="small" 
+                        />
+                    </Popconfirm>
+                )}
+            </Space>
+        )
+    }
+  ];
 
   return (
-    <>
-      <CustomTable stickyHeader>
-        <TableHead>
-          <TableRowContainer>
-            <TableCellHeader>#</TableCellHeader>
-            <TableCellHeader>Tên Trang Thiết Bị</TableCellHeader>
-            <TableCellHeader>Nhãn hiệu thiết bị</TableCellHeader>
-            <TableCellHeader>Mục đích sử dụng thiết bị</TableCellHeader>
-            <TableCellHeader>Nước sản xuất</TableCellHeader>
-            <TableCellHeader>Năm sản xuất</TableCellHeader>
-            <TableCellHeader>Số máy (Serial Number)</TableCellHeader>
-            <TableCellHeader>Tình Trạng</TableCellHeader>
-            <TableCellHeader>Mã số, địa chỉ kỹ thuật</TableCellHeader>
-            <TableCellHeader>Thống kê</TableCellHeader>
-            {canEdit && <TableCellHeader>Sửa</TableCellHeader>}
-            {canDelete && <TableCellHeader>Xoá</TableCellHeader>}
-          </TableRowContainer>
-        </TableHead>
-
-        <TableBody>
-          {paginatedDevices.map((item, index) => (
-            <TableRowBody key={item.device_id || index} index={index}>
-              <TableCell>{(page - 1) * rowsPerPage + index + 1}</TableCell>
-              <TableCell>{item.name}</TableCell>
-              <TableCell>{item.brand}</TableCell>
-              <TableCell>{item.usage_purpose}</TableCell>
-              <TableCell>{item.country_of_origin}</TableCell>
-              <TableCell>{item.manufacture_year}</TableCell>
-              <TableCell>{item.serial_number}</TableCell>
-              <TableCell>
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  <span
-                    style={{
-                      display: "inline-block",
-                      width: "10px",
-                      height: "10px",
-                      borderRadius: "50%",
-                      backgroundColor: mapStatus(item.status).color,
-                    }}
-                  />
-                  {mapStatus(item.status).label}
-                </span>
-              </TableCell>
-              <TableCell>{item.technical_code_address}</TableCell>
-              <TableCell>
-                <IconButton
-                  color="primary"
-                  onClick={() => onDetail(item)}
-                  aria-label="detail"
-                >
-                  <InfoIcon />
-                </IconButton>
-              </TableCell>
-
-              {canEdit && (
-                <TableCell>
-                  <IconButton
-                    color="primary"
-                    onClick={() => onEdit(item)}
-                    aria-label="edit"
-                  >
-                    <EditIcon />
-                  </IconButton>
-                </TableCell>
-              )}
-
-              {canDelete && (
-                <TableCell>
-                  <IconButton
-                    color="error"
-                    onClick={() => handleDeleteClick(item.device_id)}
-                    aria-label="delete"
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
-              )}
-            </TableRowBody>
-          ))}
-        </TableBody>
-      </CustomTable>
-
-      <ConfirmModal
-        open={open}
-        title="Xác nhận xóa"
-        content="Bạn có chắc chắn muốn xóa trang thiết bị này?"
-        onClose={() => {
-          setOpen(false);
-          setSelectedDeviceId(undefined);
-        }}
-        onConfirm={handleConfirmDelete}
-      />
-    </>
+    <Table
+      columns={columns}
+      dataSource={dataSource}
+      loading={loading}
+      rowKey="device_id"
+      pagination={{ pageSize: 10 }}
+    />
   );
 };
 
 export default DevicesTable;
+

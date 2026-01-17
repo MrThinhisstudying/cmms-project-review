@@ -1,16 +1,17 @@
-import React, { useMemo, useRef, useState } from "react";
-import { Box, Grid, Typography } from "@mui/material";
-import { IDevice } from "../../types/devicesManagement.types";
+import React, { useEffect, useState } from "react";
+import { Layout, Card, Row, Col, Statistic, Input, Select, Button, Space, notification } from "antd";
+import { IDevice, DeviceGroup } from "../../types/devicesManagement.types";
 import DevicesTable from "./components/DevicesTable";
-import StatusFilter from "./components/StatusFilter";
-import Pagination from "../../components/Pagination/Pagination";
-import DevicesManagementSearchBar from "./components/DevicesManagementSearchBar";
-import AddIcon from "@mui/icons-material/Add";
 import { useDevicesContext } from "../../context/DevicesContext/DevicesContext";
-import UsagePurposeFilter from "./components/UsagePurposeFilter";
-import UploadIcon from "@mui/icons-material/Upload";
-import DownloadIcon from "@mui/icons-material/Download";
-import Toast from "../../components/Toast";
+import {
+  PlusOutlined,
+  UploadOutlined,
+  DownloadOutlined,
+  CarOutlined,
+  ToolOutlined,
+  WarningOutlined,
+  SearchOutlined,
+} from "@ant-design/icons";
 import {
   uploadDevices,
   deleteDevice,
@@ -18,72 +19,32 @@ import {
   createDevice,
 } from "../../apis/devices";
 import { exportDevicesToExcel } from "../../utils";
-import DevicesManagementSkeleton from "./components/DevicesManagementSkeleton";
-import { CustomButton } from "../../components/Button";
 import DeviceForm from "./components/DeviceForm";
-import { STATUS_LIST } from "../../constants/statusOptions";
 import { getToken } from "../../utils/auth";
 import DeviceDetailDrawer from "./components/DeviceDetailDrawer";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
+import { getAllDeviceGroups } from "../../apis/deviceGroups";
+
+const { Option } = Select;
 
 const DevicesManagement: React.FC = () => {
-  const { devices = [], loading, fetchDevices } = useDevicesContext();
-  const [selectedUsagePurpose, setSelectedUsagePurpose] = useState<string>("");
-  const [selectedStatus, setSelectedStatus] = useState<string>("");
-  const [page, setPage] = useState<number>(1);
-  const rowsPerPage = 10;
-  const [search, setSearch] = useState("");
+  const { devices, loading, fetchDevices, report, fetchReport } = useDevicesContext();
+  const { user } = useAuthContext();
+  
+  // Local Filter State
+  const [searchText, setSearchText] = useState("");
+  const [filterStatus, setFilterStatus] = useState<string | undefined>(undefined);
+  const [filterGroup, setFilterGroup] = useState<number | undefined>(undefined);
+  
+  // UI State
   const [openForm, setOpenForm] = useState(false);
-  const [selectedTTB, setSelectedTTB] = useState<IDevice | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [selectedDevice, setSelectedDevice] = useState<IDevice | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailDevice, setDetailDevice] = useState<IDevice | null>(null);
-  const { user } = useAuthContext();
+  const [deviceGroups, setDeviceGroups] = useState<DeviceGroup[]>([]);
+
   const userRole = user?.role;
   const userPermissions = user?.permissions || [];
-
-  const toast = useRef<{ type: "error" | "success"; content: string }>({
-    type: "success",
-    content: "",
-  });
-  const [openToast, setOpenToast] = useState(false);
-
-  const handleAddTTB = () => {
-    setSelectedTTB(null);
-    setOpenForm(true);
-  };
-
-  const handleEditDevice = (device: IDevice) => {
-    setSelectedTTB(device);
-    setOpenForm(true);
-  };
-
-  const handleDetail = (device: IDevice) => {
-    setDetailDevice(device);
-    setDetailOpen(true);
-  };
-
-  const handleDeleteDevice = async (device_id?: number) => {
-    try {
-      const token = getToken();
-      const result = await deleteDevice(device_id, token);
-      fetchDevices();
-      toast.current = {
-        content: result.message || "Xóa trang thiết bị thành công",
-        type: "success",
-      };
-      setOpenToast(true);
-    } catch (error) {
-      toast.current = {
-        content:
-          error instanceof Error
-            ? error.message
-            : "Xóa trang thiết bị thất bại",
-        type: "error",
-      };
-      setOpenToast(true);
-    }
-  };
 
   const canEdit =
     userRole === "admin" ||
@@ -95,281 +56,243 @@ const DevicesManagement: React.FC = () => {
     userRole === "admin" ||
     (userRole === "manager" && userPermissions.includes("DELETE_DEVICE"));
 
-  const handleDownloadTTB = () => {
+  // Fetch initial data
+  useEffect(() => {
+    fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup });
+    fetchReport(); // Fetch report stats
+    
+    // Fetch groups
+    const fetchGroups = async () => {
+        try {
+            const token = getToken();
+            const res = await getAllDeviceGroups(token);
+             // Ensure it returns array
+            setDeviceGroups(Array.isArray(res) ? res : []);
+        } catch (e) {
+            console.error("Failed to fetch groups", e);
+        }
+    };
+    fetchGroups();
+  }, [filterStatus, filterGroup, fetchDevices, fetchReport, searchText]); // Trigger when Selects change. Search text handled separately on wrapper or debounce.
+
+  const handleSearch = () => {
+      fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup });
+  };
+
+  const handleAdd = () => {
+    setSelectedDevice(null);
+    setOpenForm(true);
+  };
+
+  const handleEdit = (device: IDevice) => {
+    setSelectedDevice(device);
+    setOpenForm(true);
+  };
+
+  const handleView = (device: IDevice) => {
+    setDetailDevice(device);
+    setDetailOpen(true);
+  };
+
+  const handleDelete = async (id?: number) => {
+    if (!id) return;
     try {
-      exportDevicesToExcel(devices || []);
-      toast.current = {
-        content:
-          devices && devices.length > 0
-            ? "Tải xuống danh sách thiết bị thành công"
-            : "Tải xuống mẫu nhập thiết bị thành công",
-        type: "success",
-      };
-      setOpenToast(true);
-    } catch (error) {
-      toast.current = {
-        content:
-          error instanceof Error
-            ? `Tải xuống thất bại: ${error.message}`
-            : "Tải xuống thất bại",
-        type: "error",
-      };
-      setOpenToast(true);
+      const token = getToken();
+      await deleteDevice(id, token);
+      notification.success({ message: "Xoá thành công", title: "Thành công" });
+      fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup });
+    } catch (error: any) {
+       console.error(error);
+       notification.error({ message: "Xoá thất bại", title: "Lỗi", description: error?.message });
     }
   };
 
-  const onPageChange = (newPage: number) => {
-    setPage(newPage);
-  };
-
-  const handleUploadTTB = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    try {
+  const handleFormSubmit = async (data: Partial<IDevice>) => {
       const token = getToken();
-      const result = await uploadDevices(token, file);
-      toast.current = { content: result.message, type: "success" };
-      setOpenToast(true);
-      fetchDevices();
-    } catch (error) {
-      toast.current = {
-        content:
-          error instanceof Error ? error.message : "Tải thiết bị thất bại",
-        type: "error",
-      };
-      setOpenToast(true);
-    } finally {
-      event.target.value = "";
-    }
-  };
-
-  const usagePurposes = useMemo(() => {
-    return devices
-      .map((item: IDevice) => item.usage_purpose)
-      .filter((s): s is string => typeof s === "string" && s.trim() !== "")
-      .reduce((unique: string[], cur: string) => {
-        if (!unique.includes(cur)) unique.push(cur);
-        return unique;
-      }, [] as string[]);
-  }, [devices]);
-
-  const handleClearFilterData = () => {
-    setSelectedUsagePurpose("");
-    setSelectedStatus("");
-    setSearch("");
-    setPage(1);
-  };
-
-  const handleSelectUsagePurpose = (sagePurpose: string) => {
-    setSelectedUsagePurpose(sagePurpose);
-  };
-
-  const handleChangeStatus = (status: string) => {
-    setSelectedStatus(status);
-  };
-
-  const filteredData = useMemo(() => {
-    return devices.filter((item: IDevice) => {
-      const matchesUsagePurpose =
-        selectedUsagePurpose === "" ||
-        (item.usage_purpose ?? "").includes(selectedUsagePurpose);
-      const matchesStatus =
-        selectedStatus === "" || (item.status ?? "").includes(selectedStatus);
-      return matchesUsagePurpose && matchesStatus;
-    });
-  }, [devices, selectedUsagePurpose, selectedStatus]);
-
-  const searchedData = useMemo(() => {
-    if (!search.trim()) return filteredData;
-    return filteredData.filter((device) =>
-      device.name?.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [search, filteredData]);
-
-  const handleSubmitUpsert = async (data: Partial<IDevice>) => {
-    try {
-      setSaving(true);
-      const token = getToken();
-      if (selectedTTB?.device_id) {
-        const res = await updateDevice(selectedTTB.device_id, token, data);
-        toast.current = {
-          type: "success",
-          content: res?.message || "Cập nhật thành công",
-        };
-      } else {
-        const res = await createDevice(token, data);
-        toast.current = {
-          type: "success",
-          content: res?.message || "Tạo thiết bị thành công",
-        };
+      try {
+        if (selectedDevice?.device_id) {
+            await updateDevice(selectedDevice.device_id, token, data);
+            notification.success({ message: "Cập nhật thành công", title: "Thành công" });
+        } else {
+            await createDevice(token, data);
+            notification.success({ message: "Thêm mới thành công", title: "Thành công" });
+        }
+        setOpenForm(false);
+        fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup });
+      } catch (error: any) {
+          throw error;
       }
-      setOpenToast(true);
-      setOpenForm(false);
-      setSelectedTTB(null);
-      fetchDevices();
-    } catch (err) {
-      toast.current = {
-        type: "error",
-        content: err instanceof Error ? err.message : "Lưu thiết bị thất bại",
-      };
-      setOpenToast(true);
-    } finally {
-      setSaving(false);
-    }
+  };
+
+  const handleExportExcel = () => {
+      exportDevicesToExcel(devices);
+  };
+
+  const handleUpload = async (file: File) => {
+       const token = getToken();
+       await uploadDevices(token, file);
+       fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup });
   };
 
   return (
-    <>
-      {loading ? (
-        <DevicesManagementSkeleton />
-      ) : (
-        <Grid container spacing={2}>
-          <Grid
-            item
-            xs={3}
-            display={{ xs: "none", md: "flex" }}
-            flexDirection="column"
-            gap="16px"
-            padding="16px"
-            height="calc(100vh - 130px)"
-            overflow="auto"
-          >
-            <UsagePurposeFilter
-              usagePurposes={usagePurposes}
-              selectedUsagePurpose={selectedUsagePurpose}
-              onSelectUsagePurpose={handleSelectUsagePurpose}
+    <Layout style={{ padding: "16px", background: "#f0f2f5", minHeight: "100vh" }}>
+      {/* 1. Stats Bar */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={12} sm={6} md={4}>
+          <Card bordered={false} bodyStyle={{ padding: 16 }}>
+            <Statistic
+              title="Tổng thiết bị"
+              value={report?.total || 0}
+              prefix={<CarOutlined />}
             />
-            <StatusFilter
-              status={STATUS_LIST}
-              selectedStatus={selectedStatus}
-              onChangeStatus={handleChangeStatus}
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} md={4}>
+          <Card bordered={false} bodyStyle={{ padding: 16 }}>
+            <Statistic
+              title="Sẵn sàng (Mới)"
+              value={report?.MOI || 0}
+              valueStyle={{ color: '#1890ff' }}
             />
-          </Grid>
-          <Grid
-            item
-            xs={12}
-            md={9}
-            sx={{
-              height: "calc(100vh - 130px)",
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <Box
-              display="flex"
-              justifyContent={{ lg: "space-between", xs: "flex-start" }}
-              alignItems={{ lg: "center", xs: "flex-start" }}
-              flexDirection={{ lg: "row", xs: "column" }}
-              gap={2}
-              paddingBottom="16px"
-            >
-              <Typography variant="h6">Quản lý TTB_PT</Typography>
-              {canEdit && (
-                <Box
-                  display="flex"
-                  gap={1}
-                  flexWrap="wrap"
-                  width={{ lg: "auto", xs: "100%" }}
-                  ml={{ xs: "auto", lg: "auto" }}
-                  justifyContent="space-between"
-                >
-                  <Box position="relative">
-                    <input
-                      type="file"
-                      accept=".csv,.xlsx,.xls,.json"
-                      onChange={handleUploadTTB}
-                      style={{
-                        position: "absolute",
-                        width: "100%",
-                        height: "100%",
-                        opacity: 0,
-                        cursor: "pointer",
-                        zIndex: 2,
-                      }}
-                    />
-                    <CustomButton
-                      variant="contained"
-                      startIcon={<UploadIcon />}
-                      sx={{ height: "40px" }}
-                      component="span"
-                    >
-                      Tải tệp
-                    </CustomButton>
-                  </Box>
-                  <CustomButton
-                    variant="contained"
-                    startIcon={<DownloadIcon />}
-                    sx={{ height: "40px" }}
-                    onClick={handleDownloadTTB}
-                  >
-                    Xuất dữ liệu
-                  </CustomButton>
-                  <CustomButton
-                    variant="contained"
-                    startIcon={<AddIcon />}
-                    onClick={handleAddTTB}
-                    sx={{ height: "40px" }}
-                  >
-                    Thêm mới TTB_PT
-                  </CustomButton>
-                </Box>
-              )}
-            </Box>
-
-            <DevicesManagementSearchBar
-              search={search}
-              setSearch={setSearch}
-              handleClearFilterData={handleClearFilterData}
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} md={4}>
+          <Card bordered={false} bodyStyle={{ padding: 16 }}>
+            <Statistic
+              title="Đang sử dụng"
+              value={report?.DANG_SU_DUNG || 0}
+              valueStyle={{ color: '#3f8600' }}
             />
-
-            <Box sx={{ flex: 1, overflow: "auto", minHeight: 0 }}>
-              <DevicesTable
-                filteredData={searchedData}
-                rowsPerPage={rowsPerPage}
-                page={page}
-                onEdit={handleEditDevice}
-                onDelete={handleDeleteDevice}
-                onDetail={handleDetail}
-                canEdit={canEdit}
-                canDelete={canDelete}
-              />
-            </Box>
-
-            <Pagination
-              data={searchedData}
-              rowsPerPage={rowsPerPage}
-              onPageChange={onPageChange}
-              page={page}
+          </Card>
+        </Col>
+         <Col xs={12} sm={6} md={4}>
+          <Card bordered={false} bodyStyle={{ padding: 16 }}>
+            <Statistic
+              title="Đang sửa chữa"
+              value={report?.DANG_SUA_CHUA || 0}
+              valueStyle={{ color: '#cf1322' }}
+              prefix={<ToolOutlined />}
             />
-          </Grid>
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} md={4}>
+          <Card bordered={false} bodyStyle={{ padding: 16 }}>
+            <Statistic
+              title="Sử dụng hạn chế"
+              value={report?.SU_DUNG_HAN_CHE || 0}
+              valueStyle={{ color: '#faad14' }}
+              prefix={<WarningOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={12} sm={6} md={4}>
+             <Card bordered={false} bodyStyle={{ padding: 16 }}>
+                <Statistic
+                    title="Thanh lý/Hủy"
+                    value={(report?.THANH_LY || 0) + (report?.HUY_BO || 0)}
+                    valueStyle={{ color: '#8c8c8c' }}
+                />
+             </Card>
+        </Col>
+      </Row>
 
-          <Toast
-            content={toast.current?.content}
-            variant={toast.current?.type}
-            open={openToast}
-            onClose={() => setOpenToast(false)}
+      {/* 2. Filters & Actions */}
+      <Card bodyStyle={{ padding: "16px 24px" }} style={{ marginBottom: 16 }}>
+         <Row justify="space-between" align="middle" gutter={[16, 16]}>
+             <Col flex="auto">
+                 <Space wrap>
+                     <Input 
+                        placeholder="Tìm theo tên, mã..." 
+                        prefix={<SearchOutlined />} 
+                        style={{ width: 250 }}
+                        value={searchText}
+                        onChange={(e) => setSearchText(e.target.value)}
+                        onPressEnter={handleSearch}
+                     />
+                     <Select
+                        placeholder="Trạng thái"
+                        allowClear
+                        style={{ width: 180 }}
+                        onChange={setFilterStatus}
+                     >
+                         <Option value="MOI">Mới</Option>
+                         <Option value="DANG_SU_DUNG">Đang sử dụng</Option>
+                         <Option value="SU_DUNG_HAN_CHE">Sử dụng hạn chế</Option>
+                         <Option value="DANG_SUA_CHUA">Đang sửa chữa</Option>
+                         <Option value="THANH_LY">Thanh lý</Option>
+                     </Select>
+                     <Select
+                        placeholder="Đội/Nhóm"
+                        allowClear
+                        style={{ width: 200 }}
+                        onChange={setFilterGroup}
+                     >
+                         {deviceGroups.map((g) => (
+                             <Option key={g.id} value={g.id}>{g.name}</Option>
+                         ))}
+                     </Select>
+                     <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>
+                         Lọc
+                     </Button>
+                 </Space>
+             </Col>
+             <Col>
+                 <Space>
+                    {canEdit && (
+                        <>
+                             <Button icon={<UploadOutlined />} onClick={() => document.getElementById('upload-excel')?.click()}>
+                                 Nhập Excel
+                             </Button>
+                             <input 
+                                 id="upload-excel" 
+                                 type="file" 
+                                 accept=".xlsx,.xls" 
+                                 hidden 
+                                 onChange={(e) => e.target.files && handleUpload(e.target.files[0])} 
+                             />
+                        </>
+                    )}
+                     <Button icon={<DownloadOutlined />} onClick={handleExportExcel}>
+                         Xuất Excel
+                     </Button>
+                    {canEdit && (
+                     <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+                         Thêm mới
+                     </Button>
+                    )}
+                 </Space>
+             </Col>
+         </Row>
+      </Card>
+
+      {/* 3. Table */}
+      <Card bodyStyle={{ padding: 0 }} style={{ flex: 1, overflow: 'hidden' }}>
+          <DevicesTable
+             dataSource={devices}
+             loading={loading}
+             onEdit={handleEdit}
+             onDelete={handleDelete}
+             onView={handleView}
+             canEdit={canEdit}
+             canDelete={canDelete}
           />
-        </Grid>
-      )}
+      </Card>
+
+      {/* Modals */}
       <DeviceForm
-        open={openForm}
-        initialData={selectedTTB}
-        onClose={() => {
-          setOpenForm(false);
-          setSelectedTTB(null);
-        }}
-        onSubmit={handleSubmitUpsert}
-        loading={saving}
+         open={openForm}
+         initialData={selectedDevice}
+         onClose={() => setOpenForm(false)}
+         onSubmit={handleFormSubmit}
+         loading={loading}
       />
+
       <DeviceDetailDrawer
-        open={detailOpen}
-        onClose={() => setDetailOpen(false)}
-        deviceId={detailDevice?.device_id}
-        deviceName={detailDevice?.name}
+         open={detailOpen}
+         onClose={() => setDetailOpen(false)}
+         device={detailDevice}
       />
-    </>
+    </Layout>
   );
 };
 

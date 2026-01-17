@@ -30,8 +30,8 @@ export class Repair {
     @Column({nullable: true})
     note?: string;
 
-    @Column({default: 'pending'})
-    status_request: 'pending' | 'manager_approved' | 'admin_approved' | 'rejected';
+    @Column({default: 'WAITING_TECH'})
+    status_request: 'WAITING_TECH' | 'WAITING_MANAGER' | 'WAITING_DIRECTOR' | 'REJECTED_B03' | 'COMPLETED';
 
     @ManyToOne(() => User, {eager: true, nullable: true})
     @JoinColumn({name: 'approved_by_manager_request'})
@@ -46,6 +46,7 @@ export class Repair {
         item_id?: number;
         item_name?: string;
         unit?: string;
+        specifications?: string;
         quantity?: number;
         is_new?: boolean;
         notes?: string;
@@ -84,7 +85,7 @@ export class Repair {
     inspection_committee?: User[];
 
     @Column({default: 'inspection_pending'})
-    status_inspection: 'inspection_pending' | 'inspection_manager_approved' | 'inspection_admin_approved' | 'inspection_rejected';
+    status_inspection: 'inspection_pending' | 'inspection_lead_approved' | 'inspection_manager_approved' | 'inspection_admin_approved' | 'REJECTED_B04';
 
     @ManyToOne(() => User, {eager: true, nullable: true})
     @JoinColumn({name: 'approved_by_manager_inspection'})
@@ -144,7 +145,7 @@ export class Repair {
     acceptance_committee?: User[];
 
     @Column({default: 'acceptance_pending'})
-    status_acceptance: 'acceptance_pending' | 'acceptance_manager_approved' | 'acceptance_admin_approved' | 'acceptance_rejected';
+    status_acceptance: 'acceptance_pending' | 'acceptance_lead_approved' | 'acceptance_manager_approved' | 'acceptance_admin_approved' | 'REJECTED_B05';
 
     @ManyToOne(() => User, {eager: true, nullable: true})
     @JoinColumn({name: 'approved_by_manager_acceptance'})
@@ -153,6 +154,26 @@ export class Repair {
     @ManyToOne(() => User, {eager: true, nullable: true})
     @JoinColumn({name: 'approved_by_admin_acceptance'})
     approved_by_admin_acceptance?: User;
+
+    // --- Strict Workflow Additions ---
+
+    @ManyToOne(() => User, { eager: true, nullable: true })
+    @JoinColumn({ name: 'approved_by_operator_lead_inspection' })
+    approved_by_operator_lead_inspection?: User;
+
+    @ManyToOne(() => User, { eager: true, nullable: true })
+    @JoinColumn({ name: 'approved_by_operator_lead_acceptance' })
+    approved_by_operator_lead_acceptance?: User;
+
+    @Column({ type: 'text', nullable: true })
+    rejection_reason?: string;
+
+    @ManyToOne(() => User, { eager: true, nullable: true })
+    @JoinColumn({ name: 'rejected_by' })
+    rejected_by?: User;
+
+    @Column({ default: 'PENDING', nullable: true })
+    limited_use_status?: 'PENDING' | 'APPROVED' | 'REJECTED';
 
     @OneToMany(() => StockOut, (s) => s.repair)
     stock_outs?: StockOut[];

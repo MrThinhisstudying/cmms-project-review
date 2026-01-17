@@ -35,7 +35,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
     textColor: "#fff",
     color: "#FFC900",
     path: "/trang_chu",
-    roles: ["admin", "staff", "manager"],
+    roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR"],
   },
   {
     name: Menu.QUAN_LY_NGUOI_DUNG,
@@ -43,7 +43,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
     color: "#FFC900",
     textColor: "#fff",
     path: "/quan_ly_nguoi_dung",
-    roles: ["admin"],
+    roles: ["ADMIN"],
   },
   {
     name: Menu.QUAN_LY_TTB_PT,
@@ -51,7 +51,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
     textColor: "#fff",
     color: "#FFC900",
     path: "/quan_ly_ttb_pt",
-    roles: ["admin", "staff", "manager"],
+    roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR"],
   },
   {
     name: Menu.QUAN_LY_SUA_CHUA,
@@ -59,7 +59,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
     textColor: "#fff",
     color: "#FFC900",
     path: "/quan_ly_sua_chua",
-    roles: ["admin", "staff", "manager"],
+    roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR"],
   },
   {
     name: Menu.QUAN_LY_BAO_DUONG,
@@ -67,7 +67,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
     textColor: "#fff",
     color: "#FFC900",
     path: "/quan_ly_bao_duong",
-    roles: ["admin", "staff", "manager"],
+    roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR"],
   },
   {
     name: Menu.THU_VIEN_QUY_TRINH,
@@ -75,7 +75,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
     textColor: "#fff",
     color: "#FFC900",
     path: "/maintenance-procedures",
-    roles: ["admin", "staff", "manager"],
+    roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR"],
   },
   {
     name: Menu.QUAN_LY_LICH_SU_PHIEU,
@@ -83,7 +83,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
     textColor: "#fff",
     color: "#FFC900",
     path: "/maintenance-history",
-    roles: ["admin", "staff", "manager"],
+    roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR"],
   },
   {
     name: Menu.QUAN_LY_VAT_TU,
@@ -91,7 +91,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
     textColor: "#fff",
     color: "#FFC900",
     path: "/quan_ly_vat_tu",
-    roles: ["admin", "staff", "manager"],
+    roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR"],
   },
   {
     name: "Xuất vật tư",
@@ -99,7 +99,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
     textColor: "#fff",
     color: "#FFC900",
     path: "/lay_vat_tu",
-    roles: ["admin", "manager"],
+    roles: ["ADMIN", "MANAGER", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR"],
   },
   {
     name: Menu.BAO_CAO_THONG_KE,
@@ -107,7 +107,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
     textColor: "#fff",
     color: "#FFC900",
     path: "/bao_cao_thong_ke",
-    roles: ["admin", "manager"],
+    roles: ["ADMIN", "MANAGER", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR"],
   },
   {
     name: Menu.ROLLBACK,
@@ -115,7 +115,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
     textColor: "#fff",
     color: "#FFC900",
     path: "/lich_su",
-    roles: ["admin"],
+    roles: ["ADMIN"],
   },
   {
     name: Menu.DANG_XUAT,
@@ -124,6 +124,6 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
     color: "#fd0505",
     path: "/logout",
     logout: true,
-    roles: ["admin", "staff", "manager"],
+    roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR"],
   },
 ];

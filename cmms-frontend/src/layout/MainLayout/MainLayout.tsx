@@ -1,9 +1,8 @@
 import React, { useState } from "react";
-import { Box, useMediaQuery } from "@mui/material";
+import { Layout } from "antd";
 import { Outlet } from "react-router-dom";
 import TopBar from "./TopBar";
 import Sidebar from "./SideBar";
-import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { UsersProvider } from "../../context/UsersContext/UsersContext";
 import { DevicesProvider } from "../../context/DevicesContext/DevicesContext";
 import { DepartmentsProvider } from "../../context/DepartmentsContext/DepartmentsContext";
@@ -14,18 +13,16 @@ import { MaintenanceTasksProvider } from "../../context/MaintenanceTasksContext/
 import { InventoryProvider } from "../../context/InventoryContext/InventoryContext";
 import { RepairsProvider } from "../../context/RepairsContext/RepairsContext";
 
-const defaultTheme = createTheme();
+const { Content } = Layout;
 
 const MainLayout = () => {
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const isMobile = useMediaQuery("(max-width:900px)");
+  const [collapsed, setCollapsed] = useState(false);
 
-  const handleToggleSidebar = () => {
-    setMobileOpen(!mobileOpen);
+  const toggleCollapsed = () => {
+    setCollapsed(!collapsed);
   };
 
   return (
-    <ThemeProvider theme={defaultTheme}>
       <UsersProvider>
         <DepartmentsProvider>
           <DevicesProvider>
@@ -35,24 +32,15 @@ const MainLayout = () => {
                   <InventoryProvider>
                     <AuditProvider>
                       <NotificationProvider>
-                        <Box height="100vh" width="100%" margin="auto">
-                          <TopBar onMenuClick={handleToggleSidebar} />
-                          <Box display="flex">
-                            <Sidebar
-                              mobileOpen={mobileOpen}
-                              onClose={handleToggleSidebar}
-                              isMobile={isMobile}
-                            />
-                            <Box
-                              flexGrow={1}
-                              padding={3}
-                              marginTop="70px"
-                              overflow="hidden"
-                            >
-                              <Outlet />
-                            </Box>
-                          </Box>
-                        </Box>
+                        <Layout style={{ minHeight: '100vh' }}>
+                          <Sidebar collapsed={collapsed} onCollapse={setCollapsed} />
+                          <Layout>
+                            <TopBar collapsed={collapsed} onToggle={toggleCollapsed} />
+                            <Content style={{ margin: '24px 16px', padding: 24, minHeight: 280, background: '#fff', borderRadius: 8 }}>
+                                <Outlet />
+                            </Content>
+                          </Layout>
+                        </Layout>
                       </NotificationProvider>
                     </AuditProvider>
                   </InventoryProvider>
@@ -62,7 +50,6 @@ const MainLayout = () => {
           </DevicesProvider>
         </DepartmentsProvider>
       </UsersProvider>
-    </ThemeProvider>
   );
 };
 

@@ -1,20 +1,22 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  Box,
+  Button,
+  Select,
   Typography,
-  CircularProgress,
-  TextField,
-  Autocomplete,
-} from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import { CustomButton } from "../../components/Button";
-import Toast from "../../components/Toast";
-import Pagination from "../../components/Pagination/Pagination";
+  Space,
+  Row,
+  Col,
+  message,
+  Card,
+  Spin,
+  Statistic
+} from "antd";
+import { PlusOutlined, FileTextOutlined, ToolOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
 import { useRepairsContext } from "../../context/RepairsContext/RepairsContext";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
 import RepairForm from "./components/RepairForm";
 import RepairsTable from "./components/RepairsTable";
-import RepairDetailDialog from "./components/RepairDetailDialog";
+import RepairDetailDrawer from "./components/RepairDetailDrawer";
 import RepairInspectionForm from "./components/RepairInspectionForm";
 import RepairAcceptanceForm from "./components/RepairAcceptanceForm";
 import { useDevicesContext } from "../../context/DevicesContext/DevicesContext";
@@ -24,6 +26,9 @@ import {
   RepairInspectionPayload,
   RepairAcceptancePayload,
 } from "../../types/repairs.types";
+
+const { Title } = Typography;
+const { Option } = Select;
 
 const RepairsManagement: React.FC = () => {
   const {
@@ -37,12 +42,12 @@ const RepairsManagement: React.FC = () => {
     requestStockOutForRepair,
     exportRepairItem,
     deleteRepairItem,
+    reload,
   } = useRepairsContext();
 
   const { user } = useAuthContext();
   const role = user?.role ?? "";
   const perms = user?.permissions ?? [];
-  // Lấy danh sách thiết bị giống như trong RepairForm
   const { devices } = useDevicesContext();
 
   const availableDevices = useMemo(
@@ -55,65 +60,53 @@ const RepairsManagement: React.FC = () => {
     [devices]
   );
 
-  const [searchDevice, setSearchDevice] = useState<any | null>(null);
+  const [filterDevice, setFilterDevice] = useState<number | undefined>(undefined);
+  const [filterStatusRequest, setFilterStatusRequest] = useState<string | undefined>(undefined);
 
-  const canCreate = role === "admin" || perms.includes("CREATE_REPAIR");
-  const canUpdate = role === "admin" || perms.includes("UPDATE_REPAIR");
-  const canReview = role === "admin" || perms.includes("APPROVE_REPAIR");
-  const canDelete = role === "admin" || perms.includes("DELETE_REPAIR");
-  const canExport = role === "admin" || perms.includes("EXPORT_REPAIR");
+  useEffect(() => {
+    reload({
+      device_id: filterDevice,
+      status_request: filterStatusRequest,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterDevice, filterStatusRequest]);
 
-  const [page, setPage] = useState(1);
+  // Strict Role Check: Only Admin, Technician, Operator can create (Unit Head/Director only approve)
+  const canCreate = role === "ADMIN" || role === "TECHNICIAN" || role === "OPERATOR";
+  // Assuming strict RBAC logic for button visibility is handled here or in children.
+
   const [openForm, setOpenForm] = useState(false);
-  const [openDetail, setOpenDetail] = useState(false);
   const [openInspection, setOpenInspection] = useState(false);
   const [openAcceptance, setOpenAcceptance] = useState(false);
   const [selectedRepair, setSelectedRepair] = useState<IRepair | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const toast = useRef<{ type: "success" | "error"; content: string }>({
-    type: "success",
-    content: "",
-  });
-
-  const [openToast, setOpenToast] = useState(false);
-
-  const filteredData = useMemo(() => {
-    let data = repairs;
-
-    if (searchDevice) {
-      data = data.filter((r) => r.device?.device_id === searchDevice.device_id);
-    }
-
-    return data;
-  }, [repairs, searchDevice]);
+  // Stats Calculation
+  const stats = useMemo(() => {
+    const total = repairs.length;
+    const requests = repairs.filter(r => r.status_request !== 'COMPLETED' && r.status_request !== 'REJECTED' && !r.canceled).length;
+    const inspections = repairs.filter(r => r.status_request === 'COMPLETED' && r.status_inspection !== 'inspection_admin_approved' && !r.canceled).length;
+    const acceptances = repairs.filter(r => r.status_inspection === 'inspection_admin_approved' && r.status_acceptance !== 'acceptance_admin_approved' && !r.canceled).length;
+    const cancelled = repairs.filter(r => r.canceled).length;
+    return { total, requests, inspections, acceptances, cancelled };
+  }, [repairs]);
 
   const handleSubmit = async (data: RepairUpsertPayload) => {
     try {
       setSaving(true);
       if (selectedRepair) {
         await updateRepairItem(selectedRepair.repair_id, data);
-        toast.current = {
-          type: "success",
-          content: "Cập nhật phiếu thành công",
-        };
+        message.success("Cập nhật phiếu thành công");
       } else {
         await createRepairItem(data);
-        toast.current = {
-          type: "success",
-          content: "Tạo phiếu mới thành công",
-        };
+        message.success("Tạo phiếu mới thành công");
       }
+      setOpenForm(false);
+      setSelectedRepair(null);
     } catch (e) {
-      toast.current = {
-        type: "error",
-        content: e instanceof Error ? e.message : "Thao tác thất bại",
-      };
+      message.error(e instanceof Error ? e.message : "Thao tác thất bại");
     } finally {
       setSaving(false);
-      setSelectedRepair(null);
-      setOpenForm(false);
-      setOpenToast(true);
     }
   };
 
@@ -126,15 +119,12 @@ const RepairsManagement: React.FC = () => {
     try {
       setSaving(true);
       await reviewRepairItem(id, { action, reason, phase });
-      toast.current = { type: "success", content: "Cập nhật duyệt thành công" };
+      message.success(action === 'approve' ? "Đã duyệt phiếu thành công" : "Đã từ chối phiếu");
+      setSelectedRepair(null); // Close Drawer/Modal
     } catch (e) {
-      toast.current = {
-        type: "error",
-        content: e instanceof Error ? e.message : "Duyệt thất bại",
-      };
+      message.error(e instanceof Error ? e.message : "Thao tác thất bại");
     } finally {
       setSaving(false);
-      setOpenToast(true);
     }
   };
 
@@ -142,7 +132,6 @@ const RepairsManagement: React.FC = () => {
     if (!selectedRepair) return;
     try {
       setSaving(true);
-
       if (payload.inspection_materials?.length) {
         for (const m of payload.inspection_materials) {
           if (m.item_id) {
@@ -151,27 +140,20 @@ const RepairsManagement: React.FC = () => {
               quantity: m.quantity,
               purpose: "Sửa chữa",
               repair_id: selectedRepair.repair_id,
+              // Using helper which mimics context logic? 
+              // RepairsContext likely wraps api calls.
             });
           }
         }
       }
-
       await submitInspectionStep(selectedRepair.repair_id, payload);
-
-      toast.current = {
-        type: "success",
-        content: "Đã cập nhật & duyệt kiểm nghiệm",
-      };
+      message.success("Đã cập nhật kiểm nghiệm");
+      setOpenInspection(false);
+      setSelectedRepair(null);
     } catch (e) {
-      toast.current = {
-        type: "error",
-        content: e instanceof Error ? e.message : "Kiểm nghiệm thất bại",
-      };
+      message.error(e instanceof Error ? e.message : "Kiểm nghiệm thất bại");
     } finally {
       setSaving(false);
-      setSelectedRepair(null);
-      setOpenInspection(false);
-      setOpenToast(true);
     }
   };
 
@@ -179,148 +161,185 @@ const RepairsManagement: React.FC = () => {
     if (!selectedRepair) return;
     try {
       setSaving(true);
-
       await submitAcceptanceStep(selectedRepair.repair_id, payload);
-      toast.current = {
-        type: "success",
-        content: "Đã cập nhật & duyệt nghiệm thu",
-      };
+      message.success("Đã cập nhật nghiệm thu");
+      setOpenAcceptance(false);
+      setSelectedRepair(null);
     } catch (e) {
-      toast.current = {
-        type: "error",
-        content: e instanceof Error ? e.message : "Nghiệm thu thất bại",
-      };
+      message.error(e instanceof Error ? e.message : "Nghiệm thu thất bại");
     } finally {
       setSaving(false);
-      setSelectedRepair(null);
-      setOpenAcceptance(false);
-      setOpenToast(true);
     }
   };
 
-  const handleExport = async (
-    id: number,
-    type: "request" | "inspection" | "acceptance"
-  ) => {
+  const handlePrev = () => {
+    if (!selectedRepair) return;
+    const currentIndex = repairs.findIndex(r => r.repair_id === selectedRepair.repair_id);
+    if (currentIndex > 0) {
+        setSelectedRepair(repairs[currentIndex - 1]);
+    }
+  };
+
+  const handleNext = () => {
+    if (!selectedRepair) return;
+    const currentIndex = repairs.findIndex(r => r.repair_id === selectedRepair.repair_id);
+    if (currentIndex !== -1 && currentIndex < repairs.length - 1) {
+        setSelectedRepair(repairs[currentIndex + 1]);
+    }
+  };
+
+  const hasPrev = selectedRepair ? repairs.findIndex(r => r.repair_id === selectedRepair.repair_id) > 0 : false;
+  const hasNext = selectedRepair ? repairs.findIndex(r => r.repair_id === selectedRepair.repair_id) < repairs.length - 1 : false;
+
+  /* New state for export loading */
+  const [exportLoading, setExportLoading] = useState(false);
+
+  const handleExport = async (id: number, type: "request" | "inspection" | "acceptance") => {
     try {
+      setExportLoading(true);
       await exportRepairItem(id, type);
-      toast.current = { type: "success", content: "Đã xuất file Word" };
+      message.success("Tải xuống thành công");
     } catch {
-      toast.current = { type: "error", content: "Xuất file thất bại" };
+      message.error("Xuất file thất bại");
     } finally {
-      setOpenToast(true);
+      setExportLoading(false);
     }
   };
 
   const handleDelete = async (id: number) => {
     try {
       await deleteRepairItem(id);
-      toast.current = { type: "success", content: "Đã xóa phiếu" };
+      message.success("Đã xóa phiếu");
     } catch {
-      toast.current = { type: "error", content: "Xóa phiếu thất bại" };
-    } finally {
-      setOpenToast(true);
+      message.error("Xóa phiếu thất bại");
     }
   };
 
   return (
-    <>
-      {loading ? (
-        <Box textAlign="center" mt={4}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <Box display="flex" flexDirection="column" height="calc(100vh - 130px)">
-          <Box
-            display="flex"
-            justifyContent="space-between"
-            alignItems="center"
-            pb={2}
-          >
-            <Box display="flex" flexDirection="column">
-              <Typography variant="h6" fontWeight="bold" mb={1}>
-                Quản lý quy trình phiếu sửa chữa
-              </Typography>
+    <div style={{ padding: 24, minHeight: "100vh", backgroundColor: "#f0f2f5" }}>
+      <Space direction="vertical" size="large" style={{ width: "100%" }}>
+        
+        {/* Stats Bar */}
+        <Row gutter={[16, 16]}>
+            <Col span={5}>
+                <Card bordered={false}>
+                    <Statistic title="Tổng phiếu" value={stats.total} prefix={<FileTextOutlined />} />
+                </Card>
+            </Col>
+            <Col span={5}>
+                <Card bordered={false}>
+                    <Statistic title="Yêu cầu sửa chữa" value={stats.requests} valueStyle={{ color: '#faad14' }} prefix={<ToolOutlined />} />
+                </Card>
+            </Col>
+            <Col span={5}>
+                <Card bordered={false}>
+                    <Statistic title="Đang kiểm nghiệm" value={stats.inspections} valueStyle={{ color: '#1890ff' }} prefix={<CheckCircleOutlined />} />
+                </Card>
+            </Col>
+            <Col span={5}>
+                <Card bordered={false}>
+                    <Statistic title="Đang nghiệm thu" value={stats.acceptances} valueStyle={{ color: '#52c41a' }} prefix={<CheckCircleOutlined />} />
+                </Card>
+            </Col>
+            <Col span={4}>
+                <Card bordered={false}>
+                    <Statistic title="Đã hủy / Từ chối" value={stats.cancelled} valueStyle={{ color: '#cf1322' }} prefix={<CloseCircleOutlined />} />
+                </Card>
+            </Col>
+        </Row>
 
-              <Autocomplete
-                options={availableDevices}
-                getOptionLabel={(d: any) => `${d.name} (${d.brand || ""})`}
-                value={searchDevice}
-                onChange={(_, newValue) => setSearchDevice(newValue)}
-                renderInput={(params) => (
-                  <TextField
-                    {...params}
-                    size="small"
-                    label="Tìm theo thiết bị"
-                    placeholder="Nhập tên TTB..."
-                  />
-                )}
-                sx={{ width: 320, background: "#fff" }}
-              />
-            </Box>
+        <Card>
+          <Row justify="space-between" align="middle" gutter={[16, 16]}>
+            <Col>
+              <Title level={4} style={{ margin: 0 }}>
+                Quản lý sửa chữa
+              </Title>
+            </Col>
+            <Col>
+              <Space>
+                 <Select
+                    placeholder="Lọc thiết bị"
+                    allowClear
+                    showSearch
+                    optionFilterProp="children"
+                    style={{ width: 250 }}
+                    value={filterDevice}
+                    onChange={(val) => setFilterDevice(val)}
+                 >
+                    {availableDevices.map((d: any) => (
+                        <Option key={d.device_id} value={d.device_id}>
+                            {d.name} ({d.reg_number || d.serial_number})
+                        </Option>
+                    ))}
+                 </Select>
+                 
+                 <Select
+                    placeholder="Trạng thái"
+                    allowClear
+                    style={{ width: 180 }}
+                    value={filterStatusRequest}
+                    onChange={(val) => setFilterStatusRequest(val)}
+                  >
+                    <Option value="WAITING_TECH">Chờ tiếp nhận</Option>
+                    <Option value="WAITING_MANAGER">Chờ QL duyệt</Option>
+                    <Option value="WAITING_DIRECTOR">Chờ GĐ duyệt</Option>
+                    <Option value="COMPLETED">Đã duyệt YC</Option>
+                    <Option value="CANCELED">Đã hủy</Option>
+                    <Option value="REJECTED">Đã từ chối</Option>
+                  </Select>
 
-            {canCreate && (
-              <CustomButton
-                variant="contained"
-                startIcon={<AddIcon />}
-                padding="6px 16px"
-                onClick={() => {
-                  setSelectedRepair(null);
-                  setOpenForm(true);
-                }}
-              >
-                Lập phiếu
-              </CustomButton>
-            )}
-          </Box>
+                 {canCreate && (
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                            setSelectedRepair(null);
+                            setOpenForm(true);
+                        }}
+                    >
+                        Lập phiếu
+                    </Button>
+                 )}
+              </Space>
+            </Col>
+          </Row>
+        </Card>
 
-          <Box sx={{ flex: 1, overflow: "auto" }}>
-            <RepairsTable
-              rows={filteredData}
-              rowsPerPage={10}
-              page={page}
-              onReview={handleReview}
-              onDelete={handleDelete}
-              onEdit={(r) => {
-                setSelectedRepair(r);
-                setOpenForm(true);
-              }}
-              onView={(r) => {
-                setSelectedRepair(r);
-                setOpenDetail(true);
-              }}
-              onOpenInspection={(r) => {
-                setSelectedRepair(r);
-                setOpenInspection(true);
-              }}
-              onOpenAcceptance={(r) => {
-                setSelectedRepair(r);
-                setOpenAcceptance(true);
-              }}
-              onExport={(r, t) => handleExport(r.repair_id, t)}
-              canReview={canReview}
-              canDelete={canDelete}
-              canUpdate={canUpdate}
-              userRole={role}
-              hasPermission={(code) => perms.includes(code)}
-            />
-          </Box>
-
-          <Pagination
-            data={filteredData}
-            rowsPerPage={10}
-            page={page}
-            onPageChange={setPage}
-          />
-        </Box>
-      )}
-
-      <Toast
-        content={toast.current.content}
-        variant={toast.current.type}
-        open={openToast}
-        onClose={() => setOpenToast(false)}
-      />
+        <Card bodyStyle={{ padding: 0 }}>
+             <Spin spinning={loading}>
+                <RepairsTable
+                    rows={repairs}
+                    rowsPerPage={10}
+                    page={1}
+                    onReview={handleReview}
+                    onDelete={handleDelete}
+                    onEdit={(r) => {
+                        setSelectedRepair(r);
+                        setOpenForm(true);
+                    }}
+                    onView={(r) => {
+                        setSelectedRepair(r);
+                    }}
+                    onOpenInspection={(r) => {
+                        setSelectedRepair(r);
+                        setOpenInspection(true);
+                    }}
+                    onOpenAcceptance={(r) => {
+                        setSelectedRepair(r);
+                        setOpenAcceptance(true);
+                    }}
+                    onExport={(r, t) => handleExport(r.repair_id, t)}
+                    canReview={perms.includes("APPROVE_REPAIR") || role === "ADMIN"}
+                    canDelete={perms.includes("DELETE_REPAIR") || role === "ADMIN"}
+                    canUpdate={perms.includes("UPDATE_REPAIR") || role === "ADMIN"}
+                    canExport={perms.includes("EXPORT_REPAIR") || role === "ADMIN"}
+                    userRole={role}
+                    currentUser={user}
+                    hasPermission={(code) => perms.includes(code)}
+                />
+            </Spin>
+        </Card>
+      </Space>
 
       <RepairForm
         open={openForm}
@@ -333,17 +352,23 @@ const RepairsManagement: React.FC = () => {
         initialData={selectedRepair}
       />
 
-      {selectedRepair && openDetail && (
-        <RepairDetailDialog
-          open={openDetail}
-          data={selectedRepair}
-          onClose={() => {
-            setOpenDetail(false);
-            setSelectedRepair(null);
-          }}
-          onExport={(type) => handleExport(selectedRepair.repair_id, type)}
-          canExport={canExport}
-        />
+      {selectedRepair && (
+        <RepairDetailDrawer
+        open={Boolean(selectedRepair) && !openForm && !openInspection && !openAcceptance}
+        data={selectedRepair}
+        onClose={() => setSelectedRepair(null)}
+        onExport={(type) => selectedRepair && handleExport(selectedRepair.repair_id, type)}
+        canExport={role === "ADMIN" || perms.includes("EXPORT_REPAIR")}
+        onPrev={handlePrev}
+        onNext={handleNext}
+        hasPrev={hasPrev}
+        hasNext={hasNext}
+        onEdit={() => setOpenForm(true)}
+        onEditInspection={() => setOpenInspection(true)}
+        onEditAcceptance={() => setOpenAcceptance(true)}
+        currentUser={user}
+        onReview={(action, reason, phase) => { if (selectedRepair) handleReview(selectedRepair.repair_id, action, reason, phase || 'request'); }}
+      />
       )}
 
       {selectedRepair && openInspection && (
@@ -371,8 +396,9 @@ const RepairsManagement: React.FC = () => {
           initialData={selectedRepair}
         />
       )}
-    </>
+    </div>
   );
 };
 
 export default RepairsManagement;
+

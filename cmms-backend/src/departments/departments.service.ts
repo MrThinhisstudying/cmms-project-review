@@ -14,7 +14,7 @@ export class DepartmentService {
 
     async findAll(): Promise<Department[]> {
         return await this.departmentRepository.find({
-            relations: ['users'],
+            relations: ['users', 'manager'],
             order: {
                 updated_at: 'DESC',
             },
@@ -24,7 +24,7 @@ export class DepartmentService {
     async findOne(id: number): Promise<Department> {
         const dept = await this.departmentRepository.findOne({
             where: {dept_id: id},
-            relations: ['users'],
+            relations: ['users', 'manager'],
         });
         if (!dept) throw new NotFoundException('Không tìm thấy phòng ban');
         return dept;

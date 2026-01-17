@@ -1,5 +1,5 @@
 import {ApiProperty} from '@nestjs/swagger';
-import {IsArray, IsIn, IsNotEmpty, IsOptional, IsString} from 'class-validator';
+import {IsArray, IsIn, IsNotEmpty, IsOptional, IsString, IsNumber} from 'class-validator';
 import {DEPARTMENT_PERMISSION_CODES} from '../constant/department-permissions.constant';
 
 export class CreateDepartmentDto {
@@ -11,6 +11,17 @@ export class CreateDepartmentDto {
     @IsOptional()
     @IsString()
     description?: string;
+
+    @ApiProperty({required: false})
+    @IsOptional()
+    @IsNumber()
+    manager_id?: number;
+
+    @ApiProperty({ enum: ['PERSONAL', 'GROUP', 'DEPARTMENT', 'ALL'], default: 'DEPARTMENT' })
+    @IsOptional()
+    @IsString()
+    @IsIn(['PERSONAL', 'GROUP', 'DEPARTMENT', 'ALL'])
+    scope?: 'PERSONAL' | 'GROUP' | 'DEPARTMENT' | 'ALL';
 
     @ApiProperty({
         required: false,

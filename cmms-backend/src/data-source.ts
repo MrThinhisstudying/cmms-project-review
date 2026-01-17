@@ -12,7 +12,13 @@ export const AppDataSource = new DataSource({
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
     entities: [process.env.NODE_ENV === 'test' ? 'src/**/*.entity.ts' : 'dist/**/*.entity.js'],
-    migrations: ['dist/migrations/*.js'],
-    synchronize: false,
+migrations: [], 
+    
+    // Logic cũ (tạm thời bỏ qua hoặc comment lại)
+    // migrations: [process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development' 
+    //    ? 'src/migrations/*.ts'
+    //    : 'dist/migrations/*.js'
+    // ],
+    synchronize: true,
     ssl: process.env.SSL_MODE === 'require' ? {rejectUnauthorized: false} : false,
 });

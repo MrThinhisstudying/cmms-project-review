@@ -1,118 +1,138 @@
 import React, { useState } from "react";
-import {
-  Typography,
-  Box,
-  IconButton,
-  Badge,
-  Menu,
-  MenuItem,
-  ListItemText,
-} from "@mui/material";
-import MenuIcon from "@mui/icons-material/Menu";
+import { Layout, Dropdown, MenuProps, Avatar, Badge, Space, Breadcrumb, Button } from "antd";
+import { 
+    UserOutlined, 
+    LogoutOutlined, 
+    BellOutlined, 
+    MenuFoldOutlined, 
+    MenuUnfoldOutlined, 
+    HomeOutlined 
+} from "@ant-design/icons";
 import { useAuthContext } from "../../../context/AuthContext/AuthContext";
-import LOGO_ACV from "../../../assets/images/acv-logo.png";
-import { AppBarContainer, ToolbarContainer } from "./style";
 import { useNotificationContext } from "../../../context/NotificationContext/NotificationContext";
-import NotificationsIcon from "@mui/icons-material/Notifications";
-import { INotification } from "../../../types/index.types";
+import { Link, useLocation } from "react-router-dom";
+import ProfileModal from "../../../pages/Users/components/ProfileModal";
+import { IUser } from "../../../types/user.types";
+
+const { Header } = Layout;
 
 interface TopBarProps {
-  onMenuClick?: () => void;
+  collapsed?: boolean;
+  onToggle?: () => void;
 }
 
-const TopBar: React.FC<TopBarProps> = ({ onMenuClick }) => {
-  const { user } = useAuthContext();
-  const { notifications, unreadCount, readAll } = useNotificationContext();
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const open = Boolean(anchorEl);
+const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
+  const { user, logoutUser, setUser } = useAuthContext();
+  const { notifications, unreadCount } = useNotificationContext(); // Assume readAll available if needed
+  const [openProfile, setOpenProfile] = useState(false);
+  const location = useLocation();
 
-  const handleOpen = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
+  // Generate breadcrumbs from path
+  const pathSnippets = location.pathname.split('/').filter(i => i);
+  const breadcrumbItems = [
+      {
+          key: 'home',
+          title: <Link to="/trang_chu"><HomeOutlined /></Link>
+      },
+      ...pathSnippets.map((_, index) => {
+          const url = `/${pathSnippets.slice(0, index + 1).join('/')}`;
+          // Ensure meaningful names map. For now capitalize.
+          // Maps can be added in constants/routes.
+          const title = pathSnippets[index].replace(/_/g, ' ').toUpperCase(); 
+          return {
+              key: url,
+              title: <Link to={url}>{title}</Link>
+          };
+      })
+  ];
 
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
+  const userMenu: MenuProps['items'] = [
+      {
+          key: 'profile',
+          label: 'Cập nhật thông tin',
+          icon: <UserOutlined />,
+          onClick: () => setOpenProfile(true)
+      },
+      {
+          type: 'divider'
+      },
+      {
+          key: 'logout',
+          label: 'Đăng xuất',
+          icon: <LogoutOutlined />,
+          danger: true,
+          onClick: () => logoutUser()
+      }
+  ];
 
-  const handleReadAll = () => {
-    readAll();
-    handleClose();
-  };
+  const notificationItems: MenuProps['items'] = notifications.length > 0 ? 
+      notifications.map((n, idx) => ({
+          key: n.id || idx,
+          label: (
+              <div style={{ maxWidth: 300, whiteSpace: 'normal' }}>
+                  <div style={{ fontWeight: 500 }}>{n.message}</div>
+                  <div style={{ fontSize: 11, color: '#888' }}>{new Date(n.created_at).toLocaleString()}</div>
+              </div>
+          )
+      })) : [{ key: 'empty', label: 'Không có thông báo' }];
+
 
   return (
-    <AppBarContainer>
-      <ToolbarContainer>
-        <Box display="flex" alignItems="center" gap={2}>
-          {onMenuClick && (
-            <IconButton
-              edge="start"
-              onClick={onMenuClick}
-              sx={{ display: { xs: "inline-flex", md: "none" } }}
-            >
-              <MenuIcon sx={{ color: "#000" }} />
-            </IconButton>
-          )}
-          <img
-            src={LOGO_ACV}
-            style={{ height: "60px", width: "220px" }}
-            alt="LOGO_ACV"
-          />
-        </Box>
-        <Box display="flex" alignItems="center" gap={2}>
-          {user?.avatar ? (
-            <img
-              src={user.avatar}
-              alt="User Avatar"
-              style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "50%",
-                objectFit: "cover",
-              }}
-            />
-          ) : (
-            <Typography variant="h6" color="textPrimary">
-              {user?.name}
-            </Typography>
-          )}
-          <IconButton
-            onClick={handleOpen}
-            sx={{
-              backgroundColor: "#f0f0f0",
-              "&:hover": { backgroundColor: "#e0e0e0" },
-            }}
-          >
-            <Badge badgeContent={unreadCount} color="error">
-              <NotificationsIcon sx={{ color: "#000" }} />
-            </Badge>
-          </IconButton>
-          <Menu anchorEl={anchorEl} open={open} onClose={handleClose}>
-            {notifications.length === 0 ? (
-              <MenuItem>
-                <ListItemText primary="Không có thông báo" />
-              </MenuItem>
-            ) : (
-              <>
-                {notifications.map((n: INotification, idx: number) => (
-                  <MenuItem key={n.id ?? idx}>
-                    <ListItemText
-                      primary={n.message}
-                      secondary={new Date(n.created_at).toLocaleString()}
+    <>
+        <Header style={{ padding: '0 24px', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 4px rgba(0,21,41,.08)', zIndex: 1 }}>
+            <Space>
+                {onToggle && (
+                    <Button 
+                        type="text" 
+                        icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} 
+                        onClick={onToggle}
+                        style={{ fontSize: '16px', width: 64, height: 64 }}
                     />
-                  </MenuItem>
-                ))}
-                <MenuItem onClick={handleReadAll}>
-                  <ListItemText
-                    primary="Đánh dấu đã đọc tất cả"
-                    sx={{ textAlign: "center" }}
-                  />
-                </MenuItem>
-              </>
-            )}
-          </Menu>
-        </Box>
-      </ToolbarContainer>
-    </AppBarContainer>
+                )}
+                <Breadcrumb items={breadcrumbItems} />
+            </Space>
+
+            <Space size={24}>
+                <Dropdown menu={{ items: notificationItems }} trigger={['click']} placement="bottomRight">
+                    <Badge count={unreadCount} size="small">
+                        <BellOutlined style={{ fontSize: 20, cursor: 'pointer' }} />
+                    </Badge>
+                </Dropdown>
+
+                <Dropdown menu={{ items: userMenu }} trigger={['click']}>
+                    <Space style={{ cursor: 'pointer' }}>
+                        <Avatar src={user?.avatar} icon={<UserOutlined />} />
+                        <span style={{ fontWeight: 500 }}>{user?.name}</span>
+                    </Space>
+                </Dropdown>
+            </Space>
+        </Header>
+
+        <ProfileModal 
+            open={openProfile} 
+            onCancel={() => setOpenProfile(false)} 
+            user={user as any} // Cast user types match mostly
+            onUpdateSuccess={(updatedUser) => {
+                // Update global context by merging, preserving relations like department/role if missing in response
+                if (setUser) {
+                    setUser((prevUser) => {
+                         if (!prevUser) return updatedUser as any;
+                         
+                         // Normalize role similar to AuthContext logic
+                         const normalizedRole = updatedUser.role === "Administrator" 
+                            ? "admin" 
+                            : updatedUser.role?.toLowerCase();
+
+                         return { 
+                             ...prevUser, 
+                             ...updatedUser,
+                             role: normalizedRole || prevUser.role 
+                         };
+                    });
+                }
+            }}
+        />
+    </>
   );
 };
 

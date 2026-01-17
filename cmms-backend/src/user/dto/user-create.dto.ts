@@ -1,5 +1,6 @@
 import {ApiProperty} from '@nestjs/swagger';
-import {IsNumber, IsOptional, IsString} from 'class-validator';
+import {IsNumber, IsOptional, IsString, IsEnum} from 'class-validator';
+import { UserRole } from '../user-role.enum';
 
 export class CreateUserDto {
     @ApiProperty({required: false})
@@ -27,10 +28,10 @@ export class CreateUserDto {
     @IsString()
     status?: string;
 
-    @ApiProperty({required: false})
+    @ApiProperty({required: false, enum: UserRole})
     @IsOptional()
-    @IsString()
-    role?: string;
+    @IsEnum(UserRole)
+    role?: UserRole;
 
     @ApiProperty({required: false})
     @IsOptional()
@@ -42,8 +43,22 @@ export class CreateUserDto {
     @IsString()
     avatar?: string;
 
+    @ApiProperty({required: false})
+    @IsOptional()
+    @IsString()
+    signature_url?: string;
+
     @ApiProperty({required: false, description: 'ID phòng ban'})
     @IsOptional()
     @IsNumber()
     dept_id?: number;
+
+    @ApiProperty({required: false, description: 'ID nhóm thiết bị'})
+    @IsOptional()
+    @IsNumber()
+    group_id?: number;
+
+    @ApiProperty({required: false, description: 'Là trưởng nhóm?'})
+    @IsOptional()
+    is_group_lead?: boolean;
 }
