@@ -151,5 +151,10 @@ export class CreateDeviceDto {
     @IsArray()
     @IsNumber({}, {each: true})
     userIds?: number[];
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    @IsNumber()
+    groupId?: number;
 }
 
