@@ -30,6 +30,6 @@ export const columnMapping: Record<string, string> = {
     'Khối lượng thiết bị': 'weight',
     'Nguồn điện cung cấp': 'power_source',
     'Công suất tiêu thụ': 'power_consumption',
-    'Tình trạng kỹ thuật': 'other_specifications',
+    'Tình trạng kỹ thuật': 'status_import_raw',
     // Add new fields if they appear in Excel, for now mapping Reg Number is key
 };

@@ -128,22 +128,15 @@ export class RepairsController {
         @Query('type') type: 'B03' | 'B04' | 'B05',
         @Res() res: Response
     ) {
-        const repair = await this.repairService.findOne(+id);
-        if (!repair) {
-             // Handle not found
-        }
-        
-        // Use the new service
-        const filePath = await this.exportDocxService.generateRepairDocx(repair, type);
-        const fileName = `${type}_${repair.repair_id}.docx`;
+        const buffer = await this.repairService.exportPdf(+id, type);
 
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-        res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
-
-        res.download(filePath, fileName, (err) => {
-            if (err) console.error('Error downloading file:', err);
-            try { fs.unlinkSync(filePath); } catch (e) {}
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="${type}_Repair_${id}.pdf"`,
+            'Content-Length': buffer.length,
         });
+
+        res.end(buffer);
     }
 
     /* 

@@ -109,7 +109,7 @@ export const RepairsProvider = ({
 
   const exportRepairItem = async (
     id: number,
-    type: "request" | "inspection" | "acceptance" = "request"
+    type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" = "request"
   ) => await exportRepair(id, getToken(), type);
 
   const deleteRepairItem = async (id: number) => {

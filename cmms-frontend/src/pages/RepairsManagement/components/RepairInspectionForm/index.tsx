@@ -105,6 +105,7 @@ export default function RepairInspectionForm({
       name: m.item_name || (m.item_id ? items.find(i => i.item_id === m.item_id)?.name || "Unknown Item" : ""),
       unit: m.unit || (m.item_id ? items.find(i => i.item_id === m.item_id)?.quantity_unit || "" : ""),
       item_code: m.item_code || (m.item_id ? items.find(i => i.code === m.item_code)?.code || "" : ""),
+      specifications: m.specifications || "",
       quantity: m.quantity || 0,
       is_new: !!m.is_new,
       notes: m.notes || "",
@@ -148,7 +149,8 @@ export default function RepairInspectionForm({
       unit: "",
       quantity: 1,
       is_new: false, 
-      notes: ""
+      notes: "",
+      specifications: ""
     };
     setMaterials([...materials, newMat]);
   };
@@ -164,6 +166,7 @@ export default function RepairInspectionForm({
              name: selectedItem?.name || "",
              unit: selectedItem?.quantity_unit || "",
              item_code: selectedItem?.code || "",
+             specifications: selectedItem?.code || "",
              is_new: false
          };
       }

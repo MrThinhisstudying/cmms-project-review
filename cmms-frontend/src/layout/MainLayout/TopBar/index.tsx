@@ -23,7 +23,7 @@ interface TopBarProps {
 
 const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
   const { user, logoutUser, setUser } = useAuthContext();
-  const { notifications, unreadCount } = useNotificationContext(); // Assume readAll available if needed
+  const { notifications, unreadCount, readAll, readOne } = useNotificationContext();
   const [openProfile, setOpenProfile] = useState(false);
   const location = useLocation();
 
@@ -93,9 +93,95 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
             </Space>
 
             <Space size={24}>
-                <Dropdown menu={{ items: notificationItems }} trigger={['click']} placement="bottomRight">
-                    <Badge count={unreadCount} size="small">
-                        <BellOutlined style={{ fontSize: 20, cursor: 'pointer' }} />
+                <Dropdown 
+                    dropdownRender={() => (
+                        <div style={{ 
+                            width: 400, 
+                            backgroundColor: '#fff', 
+                            boxShadow: '0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 9px 28px 8px rgba(0, 0, 0, 0.05)', 
+                            borderRadius: 8,
+                            padding: 0
+                        }}>
+                            <div style={{ 
+                                display: 'flex', 
+                                justifyContent: 'space-between', 
+                                alignItems: 'center', 
+                                padding: '12px 16px',
+                                borderBottom: '1px solid #f0f0f0'
+                            }}>
+                                <span style={{ fontWeight: 600, fontSize: 16 }}>Thông báo</span>
+                                {notifications.length > 0 && (
+                                    <Button type="link" size="small" onClick={(e) => {
+                                        e.preventDefault();
+                                        readAll();
+                                    }} style={{ padding: 0 }}>
+                                        Đánh dấu tất cả đã đọc
+                                    </Button>
+                                )}
+                            </div>
+                            <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+                                {notifications.length === 0 ? (
+                                    <div style={{ padding: '24px 0', textAlign: 'center', color: '#999' }}>
+                                        <BellOutlined style={{ fontSize: 24, marginBottom: 8, opacity: 0.5 }} />
+                                        <div>Không có thông báo mới</div>
+                                    </div>
+                                ) : (
+                                    notifications.map((n: any) => (
+                                        <div 
+                                            key={n.id}
+                                            onClick={() => readOne(n.id)}
+                                            style={{ 
+                                                padding: '12px 16px', 
+                                                cursor: 'pointer',
+                                                backgroundColor: n.is_read ? '#fff' : '#e6f7ff',
+                                                borderBottom: '1px solid #f0f0f0',
+                                                transition: 'background 0.3s'
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = n.is_read ? '#fafafa' : '#d6e4ff'}
+                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = n.is_read ? '#fff' : '#e6f7ff'}
+                                        >
+                                            <div style={{ display: 'flex', gap: 12 }}>
+                                                <div style={{ marginTop: 4 }}>
+                                                    {n.is_read ? (
+                                                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#d9d9d9' }} />
+                                                    ) : (
+                                                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1890ff' }} />
+                                                    )}
+                                                </div>
+                                                <div style={{ flex: 1 }}>
+                                                    <div style={{ color: n.is_read ? '#666' : '#000', fontWeight: n.is_read ? 400 : 500, marginBottom: 4 }}>
+                                                        {n.message}
+                                                    </div>
+                                                    <div style={{ fontSize: 12, color: '#999' }}>
+                                                        {new Date(n.created_at).toLocaleString('vi-VN')}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    trigger={['click']} 
+                    placement="bottomRight"
+                >
+                    <Badge count={unreadCount} size="small" style={{ boxShadow: 'none' }}>
+                        <div style={{ 
+                            width: 40, 
+                            height: 40, 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            borderRadius: '50%', 
+                            cursor: 'pointer',
+                            transition: 'background 0.3s'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.025)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                        >
+                            <BellOutlined style={{ fontSize: 20, color: '#000' }} />
+                        </div>
                     </Badge>
                 </Dropdown>
 

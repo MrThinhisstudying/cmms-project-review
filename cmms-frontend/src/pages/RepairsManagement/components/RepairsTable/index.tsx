@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { generateRepairPDF } from "../../../../utils/pdfGenerator";
+
 import { Table, Button, Tag, Space, Modal, Input, Tooltip, Popconfirm } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { IRepair } from "../../../../types/repairs.types";
@@ -10,7 +10,11 @@ import {
   FileDoneOutlined,
   DeleteOutlined,
   PrinterOutlined,
+  DownOutlined,
 } from "@ant-design/icons";
+import { getToken } from "../../../../utils/auth";
+import type { MenuProps } from 'antd';
+import { Dropdown, message } from 'antd';
 
 interface RepairsTableProps {
   rows: IRepair[];
@@ -176,6 +180,27 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
       onReview(selectedAction.id, "reject", rejectReason, selectedAction.phase);
     }
     setRejectModalOpen(false);
+    setRejectModalOpen(false);
+  };
+
+  const handleExportPdf = async (id: number, type: 'B03' | 'B04' | 'B05') => {
+      try {
+          message.loading({ content: "Đang tạo PDF...", key: "pdf_export" });
+          const token = getToken();
+          const response = await fetch(`${process.env.REACT_APP_BASE_URL}/repairs/${id}/export?type=${type}`, {
+              headers: { Authorization: `Bearer ${token}` }
+          });
+          
+          if (!response.ok) throw new Error('Failed to export');
+          
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          window.open(url, '_blank');
+          message.success({ content: "Đã mở PDF", key: "pdf_export" });
+      } catch (e) {
+          console.error(e);
+          message.error({ content: "Lỗi tải PDF", key: "pdf_export" });
+      }
   };
 
   const columns: ColumnsType<IRepair> = [
@@ -345,17 +370,34 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
 
 
 
-             {record.status_acceptance === 'acceptance_admin_approved' && (
-                  <Tooltip title="In phiếu tổng hợp (B03+B04+B05)">
-                      <Button 
-                        icon={<PrinterOutlined />} 
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            generateRepairPDF(record, 'consolidated');
-                        }}
-                      />
-                  </Tooltip>
-             )}
+             {(() => {
+                 const items: MenuProps['items'] = [];
+                 
+                 // B03: Show only if Request is COMPLETED (fully approved)
+                 if (record.status_request === 'COMPLETED') {
+                     items.push({ key: 'B03', label: 'B03: Phiếu Yêu Cầu', onClick: () => handleExportPdf(record.repair_id, 'B03') });
+                 }
+
+                 // B04: Show only if Inspection is Admin Approved
+                 if (record.status_inspection === 'inspection_admin_approved') {
+                     items.push({ key: 'B04', label: 'B04: Phiếu Kiểm Nghiệm', onClick: () => handleExportPdf(record.repair_id, 'B04') });
+                 }
+
+                 // B05: Show only if Acceptance is Admin Approved
+                 if (record.status_acceptance === 'acceptance_admin_approved') {
+                     items.push({ key: 'B05', label: 'B05: Phiếu Nghiệm Thu', onClick: () => handleExportPdf(record.repair_id, 'B05') });
+                 }
+
+                 if (items.length === 0) return null;
+
+                 return (
+                  <Dropdown menu={{ items }} trigger={['click']}>
+                       <Button icon={<PrinterOutlined />}>
+                          In phiếu <DownOutlined />
+                       </Button>
+                   </Dropdown>
+                 );
+             })()}
 
              {showDelete && (
                 <Popconfirm title="Bạn có chắc chắn muốn xóa phiếu này?" onConfirm={() => onDelete?.(record.repair_id)}>

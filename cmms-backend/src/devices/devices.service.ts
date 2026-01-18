@@ -90,7 +90,7 @@ export class DevicesService {
                 power_source: mapped.power_source,
                 power_consumption: mapped.power_consumption,
                 other_specifications: mapped.other_specifications,
-                status: DeviceStatus.MOI // Default for import
+                status: this.mapImportStatus(mapped.status_import_raw)
             };
 
             const device = await this.create(deviceDto as CreateDeviceDto);
@@ -102,7 +102,7 @@ export class DevicesService {
 
     async create(createDeviceDto: CreateDeviceDto): Promise<Device> {
         try {
-            const {userIds, ...deviceData} = createDeviceDto;
+            const {userIds, groupId, ...deviceData} = createDeviceDto;
 
             const device = this.deviceRepository.create(deviceData);
             // Validation for enums handled by DTO or database constraints
@@ -110,6 +110,10 @@ export class DevicesService {
             if (userIds && userIds.length > 0) {
                 const users = await this.userRepository.findByIds(userIds);
                 device.users = users;
+            }
+
+            if (groupId) {
+                device.device_group = { id: groupId } as any; 
             }
 
             const savedDevice = await this.deviceRepository.save(device);
@@ -200,13 +204,17 @@ export class DevicesService {
                 throw new NotFoundException(`Lấy thông tin trang thiết bị thất bại`);
             }
 
-            const {userIds, ...deviceData} = updateDeviceDto;
+            const {userIds, groupId, ...deviceData} = updateDeviceDto;
 
             Object.assign(device, deviceData);
 
             if (userIds) {
                 const users = await this.userRepository.findByIds(userIds);
                 device.users = users;
+            }
+            
+            if (groupId) {
+                device.device_group = { id: groupId } as any;
             }
 
             const updatedDevice = await this.deviceRepository.save(device);
@@ -344,5 +352,14 @@ export class DevicesService {
             relations: ['users'],
         });
         return devices.map((device) => this.sanitizeDeviceUsers(device));
+    }
+    private mapImportStatus(statusString: string): DeviceStatus {
+        if (!statusString) return DeviceStatus.MOI;
+        const normalized = statusString.trim().toLowerCase();
+        if (normalized.includes('đang sử dụng')) return DeviceStatus.DANG_SU_DUNG;
+        if (normalized.includes('thanh lý')) return DeviceStatus.THANH_LY;
+        if (normalized.includes('hỏng') || normalized.includes('sửa chữa')) return DeviceStatus.DANG_SUA_CHUA;
+        if (normalized.includes('mới')) return DeviceStatus.MOI;
+        return DeviceStatus.MOI;
     }
 }

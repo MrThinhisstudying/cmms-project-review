@@ -154,14 +154,14 @@ export const submitAcceptance = async (
 export const exportRepair = async (
   id: number,
   token: string | null,
-  type: "request" | "inspection" | "acceptance" = "request"
+  type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" = "request"
 ) => {
   const typeMap: Record<string, string> = {
     request: "B03",
     inspection: "B04",
     acceptance: "B05",
   };
-  const code = typeMap[type] || "B03";
+  const code = typeMap[type] || type;
   // GET /repairs/:id/export?type=...
   const url = `${BASE_URL}/${id}/export?type=${code}`;
   
@@ -180,9 +180,12 @@ export const exportRepair = async (
     request: "PHIẾU YÊU CẦU KIỂM TRA BẢO DƯỠNG - SỬA CHỮA",
     inspection: "BIÊN BẢN KIỂM NGHIỆM KỸ THUẬT",
     acceptance: "BIÊN BẢN NGHIỆM THU",
+    B03: "PHIẾU YÊU CẦU KIỂM TRA BẢO DƯỠNG - SỬA CHỮA",
+    B04: "BIÊN BẢN KIỂM NGHIỆM KỸ THUẬT",
+    B05: "BIÊN BẢN NGHIỆM THU",
   };
   
-  a.download = `${fileNameMap[type] || "Export"}.docx`;
+  a.download = `${fileNameMap[type] || "Export"}.pdf`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

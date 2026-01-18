@@ -9,7 +9,8 @@ import {
   message,
   Card,
   Spin,
-  Statistic
+  Statistic,
+  notification
 } from "antd";
 import { PlusOutlined, FileTextOutlined, ToolOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
 import { useRepairsContext } from "../../context/RepairsContext/RepairsContext";
@@ -71,6 +72,17 @@ const RepairsManagement: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterDevice, filterStatusRequest]);
 
+  // Polling for Real-time updates (every 10s)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      reload({
+        device_id: filterDevice,
+        status_request: filterStatusRequest,
+      });
+    }, 10000); 
+    return () => clearInterval(interval);
+  }, [filterDevice, filterStatusRequest, reload]);
+
   // Strict Role Check: Only Admin, Technician, Operator can create (Unit Head/Director only approve)
   const canCreate = role === "ADMIN" || role === "TECHNICIAN" || role === "OPERATOR";
   // Assuming strict RBAC logic for button visibility is handled here or in children.
@@ -96,15 +108,28 @@ const RepairsManagement: React.FC = () => {
       setSaving(true);
       if (selectedRepair) {
         await updateRepairItem(selectedRepair.repair_id, data);
-        message.success("Cập nhật phiếu thành công");
+        notification.success({
+            message: "Cập nhật thành công",
+            title: "Cập nhật thành công",
+            description: "Thông tin phiếu sửa chữa đã được cập nhật."
+        });
       } else {
         await createRepairItem(data);
-        message.success("Tạo phiếu mới thành công");
+        const nextApprover = (role === 'TECHNICIAN' || role === 'OPERATOR') ? 'Đội trưởng / Quản lý' : 'Ban Giám đốc';
+        notification.success({
+            message: "Tạo phiếu thành công",
+            title: "Tạo phiếu thành công",
+            description: `Đã gửi thông báo cho ${nextApprover} duyệt.`
+        });
       }
       setOpenForm(false);
       setSelectedRepair(null);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "Thao tác thất bại");
+      notification.error({
+        message: "Thao tác thất bại",
+        title: "Thao tác thất bại",
+        description: e instanceof Error ? e.message : "Đã xảy ra lỗi không xác định"
+      });
     } finally {
       setSaving(false);
     }
@@ -194,7 +219,7 @@ const RepairsManagement: React.FC = () => {
   /* New state for export loading */
   // const [exportLoading, setExportLoading] = useState(false);
 
-  const handleExport = async (id: number, type: "request" | "inspection" | "acceptance") => {
+  const handleExport = async (id: number, type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05") => {
     try {
       // setExportLoading(true);
       await exportRepairItem(id, type);
