@@ -17,6 +17,9 @@ import { Item } from 'src/inventory_item/entities/item.entity';
 import { StockOutStatus } from 'src/stock-out/enum/stock-out.enum';
 import { UserRole } from 'src/user/user-role.enum';
 
+import { buildRepairPdfTemplate } from './utils/repair-pdf-template.util';
+import * as puppeteer from 'puppeteer';
+
 @Injectable()
 export class RepairsService {
     constructor(
@@ -309,12 +312,24 @@ export class RepairsService {
                 if (repair.status_request === 'WAITING_TECH') {
                     // Tech approvals (Normally specific Permission check here)
                     repair.status_request = 'WAITING_MANAGER';
-                    // Notification...
+                    repair.approved_by_tech_request = user; 
+                    
+                    // Notify Unit Head
+                    const managers = await this.userRepo.find({ where: { role: UserRole.UNIT_HEAD }, relations: ['department'] });
+                    const deptManagers = managers.filter(m => m.department?.dept_id === repair.created_department?.dept_id);
+                    for (const manager of deptManagers) {
+                         await this.notificationService.createForUser(manager, `Phiếu sửa chữa #${repair.repair_id} ("${repair.device?.name}") đã được Tổ kỹ thuật tiếp nhận và đang chờ Quản lý duyệt.`);
+                    }
                 } else if (repair.status_request === 'WAITING_MANAGER') {
                     if (user.role !== UserRole.UNIT_HEAD) throw new ForbiddenException('Chỉ Trưởng bộ phận mới được duyệt bước này');
                     repair.status_request = 'WAITING_DIRECTOR';
                     repair.approved_by_manager_request = user;
-                    // Notification...
+                    
+                    // Notify Admin/Director
+                    const admins = await this.userRepo.find({ where: [ { role: UserRole.ADMIN }, { role: UserRole.DIRECTOR } ] });
+                    for (const admin of admins) {
+                        await this.notificationService.createForUser(admin, `Phiếu sửa chữa #${repair.repair_id} ("${repair.device?.name}") đã được Trưởng bộ phận duyệt và đang chờ Ban Giám đốc phê duyệt.`);
+                    }
                 } else if (repair.status_request === 'WAITING_DIRECTOR') {
                     if (![UserRole.ADMIN, UserRole.DIRECTOR].includes(user.role)) throw new ForbiddenException('Chỉ Ban Giám đốc mới được duyệt bước này');
                     repair.status_request = 'COMPLETED';
@@ -375,10 +390,27 @@ export class RepairsService {
                     repair.status_inspection = 'inspection_lead_approved';
                     repair.approved_by_operator_lead_inspection = user;
                     repair.inspection_approved_at = new Date(); 
+                    
+                    // Notify Unit Head
+                    const managers = await this.userRepo.find({ where: { role: UserRole.UNIT_HEAD }, relations: ['department'] });
+                    // Usually notify Manager of "Tổ VHTTBMĐ" (Operator)? Or Creator's manager?
+                    // Inspection is usually approved by Operator Manager.
+                    // Let's notify all Managers of the Operator Dept (Tổ VHTTBMĐ) if obtainable, or just Creator's as fallback.
+                    // Assuming Operator Manager manages the inspection.
+                    const opManagers = managers.filter(m => m.department?.name === 'Tổ VHTTBMĐ' || m.department?.dept_id === repair.created_department?.dept_id);
+                    for (const manager of opManagers) {
+                         await this.notificationService.createForUser(manager, `Biên bản kiểm nghiệm #${repair.repair_id} đã được Tổ trưởng duyệt và đang chờ Quản lý duyệt.`);
+                    } 
                 } else if (repair.status_inspection === 'inspection_lead_approved') {
                     if (user.role !== UserRole.UNIT_HEAD) throw new ForbiddenException('Chỉ Trưởng bộ phận mới được duyệt bước này');
                     repair.status_inspection = 'inspection_manager_approved';
                     repair.approved_by_manager_inspection = user;
+
+                    // Notify Admin/Director
+                    const admins = await this.userRepo.find({ where: [ { role: UserRole.ADMIN }, { role: UserRole.DIRECTOR } ] });
+                    for (const admin of admins) {
+                        await this.notificationService.createForUser(admin, `Biên bản kiểm nghiệm #${repair.repair_id} đã được Quản lý duyệt và đang chờ Ban Giám đốc phê duyệt.`);
+                    }
                 } else if (repair.status_inspection === 'inspection_manager_approved') {
                      if (![UserRole.ADMIN, UserRole.DIRECTOR].includes(user.role)) throw new ForbiddenException('Chỉ Ban Giám đốc mới được duyệt bước này');
                     repair.status_inspection = 'inspection_admin_approved';
@@ -450,14 +482,32 @@ export class RepairsService {
                     repair.status_acceptance = 'acceptance_lead_approved';
                     repair.approved_by_operator_lead_acceptance = user;
                     repair.acceptance_approved_at = new Date();
+
+                    // Notify Unit Head
+                    const managers = await this.userRepo.find({ where: { role: UserRole.UNIT_HEAD }, relations: ['department'] });
+                    const opManagers = managers.filter(m => m.department?.name === 'Tổ VHTTBMĐ' || m.department?.dept_id === repair.created_department?.dept_id);
+                    for (const manager of opManagers) {
+                         await this.notificationService.createForUser(manager, `Phiếu nghiệm thu #${repair.repair_id} đã được Tổ trưởng duyệt và đang chờ Quản lý duyệt.`);
+                    }
                 } else if (repair.status_acceptance === 'acceptance_lead_approved') {
                     if (user.role !== UserRole.UNIT_HEAD) throw new ForbiddenException('Chỉ Trưởng bộ phận mới được duyệt bước này');
                     repair.status_acceptance = 'acceptance_manager_approved';
                     repair.approved_by_manager_acceptance = user;
+
+                    // Notify Admin/Director
+                    const admins = await this.userRepo.find({ where: [ { role: UserRole.ADMIN }, { role: UserRole.DIRECTOR } ] });
+                    for (const admin of admins) {
+                        await this.notificationService.createForUser(admin, `Phiếu nghiệm thu #${repair.repair_id} đã được Quản lý duyệt và đang chờ Ban Giám đốc phê duyệt.`);
+                    }
                 } else if (repair.status_acceptance === 'acceptance_manager_approved') {
                     if (![UserRole.ADMIN, UserRole.DIRECTOR].includes(user.role)) throw new ForbiddenException('Chỉ Ban Giám đốc mới được duyệt bước này');
                     repair.status_acceptance = 'acceptance_admin_approved';
                     repair.approved_by_admin_acceptance = user;
+                    
+                    // Final Success Notification?
+                    if (repair.created_by) {
+                         await this.notificationService.createForUser(repair.created_by, `Phiếu nghiệm thu #${repair.repair_id} đã được Ban Giám đốc duyệt hoàn tất.`);
+                    }
 
                     if (repair.device) {
                         repair.device.status = DeviceStatus.DANG_SU_DUNG;
@@ -559,7 +609,7 @@ export class RepairsService {
             } else if (user.role === UserRole.UNIT_HEAD) {
                  // Manager sees tickets from their department
                  if (user.department) {
-                     query.andWhere('created_department.department_id = :deptId', { deptId: user.department.department_id });
+                     query.andWhere('created_department.dept_id = :deptId', { deptId: user.department.dept_id });
                  }
             }
             // Admin/Director sees all (no extra filter)
@@ -635,6 +685,7 @@ export class RepairsService {
                 'created_department',
                 'approved_by_manager_request',
                 'approved_by_admin_request',
+                'approved_by_tech_request',
                 'approved_by_manager_inspection',
                 'approved_by_admin_inspection',
                 'approved_by_manager_acceptance',
@@ -1974,5 +2025,50 @@ export class RepairsService {
 
             ...this.buildFooterCommon(repair),
         ];
+    }
+
+    async exportPdf(id: number, type: 'B03' | 'B04' | 'B05') {
+        const repair = await this.findOne(id);
+        
+        const htmlContent = buildRepairPdfTemplate(repair, type);
+
+        const browser = await puppeteer.launch({
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        });
+
+        const page = await browser.newPage();
+        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+
+        const formCode = type === 'B03' ? 'B03.QT08/VCS-KT' :
+                         type === 'B04' ? 'B04.QT08/VCS-KT' :
+                         'B05.QT08/VCS-KT';
+
+        const footerHTML = `
+            <div style="font-size: 10pt; font-family: 'Times New Roman', serif; width: 100%; border-top: 1px solid black; padding-top: 5px; margin-left: 2cm; margin-right: 2cm; display: flex; justify-content: space-between;">
+                <div style="font-style: italic;">${formCode}</div>
+                <div style="font-style: italic;">Lần ban hành/sửa đổi: 01/00</div>
+                <div style="font-style: italic;">
+                    <span class="pageNumber"></span>/<span class="totalPages"></span>
+                </div>
+            </div>
+        `;
+
+        const buffer = await page.pdf({
+            format: 'A4',
+            printBackground: true,
+            displayHeaderFooter: true, 
+            footerTemplate: footerHTML,
+            headerTemplate: '<div></div>', // Empty header to avoid default date/title
+            margin: {
+                top: '20px',
+                bottom: '50px', // Allocating space for footer
+                left: '20px',
+                right: '20px',
+            },
+        });
+
+        await browser.close();
+        return buffer;
     }
 }

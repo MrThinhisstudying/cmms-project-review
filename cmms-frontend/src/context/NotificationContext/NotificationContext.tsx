@@ -34,7 +34,11 @@ export const NotificationProvider = ({ children }: any) => {
   }, [user?.user_id]);
 
   useEffect(() => {
-    if (user) fetchNotifications();
+    if (user) {
+        fetchNotifications();
+        const interval = setInterval(fetchNotifications, 30000);
+        return () => clearInterval(interval);
+    }
   }, [user, fetchNotifications]);
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;

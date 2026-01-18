@@ -1,20 +1,34 @@
-# Versioning and metadata
+# ===== Git =====
 .git
 .gitignore
 .dockerignore
 
-# Build dependencies
-dist
+# ===== Node / Build =====
 node_modules
+dist
 coverage
-upload
-test
+.tmp
+.cache
+npm-debug.log*
+yarn-error.log*
 
-# Environment (contains sensitive data)
+# ===== Uploads / Assets =====
+uploads
+assets
+public
+
+# ===== Environment =====
 .env
+.env.*
 
-# Files not required for production
+# ===== IDE / Tooling =====
+.vscode
+.idea
 .editorconfig
-Dockerfile
-README.md
+.prettierrc*
+.eslintrc*
 tslint.json
+
+# ===== Docs =====
+README.md
+*.md

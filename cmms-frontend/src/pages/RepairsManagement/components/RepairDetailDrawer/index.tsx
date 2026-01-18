@@ -14,6 +14,7 @@ import {
   Empty,
   Divider,
   Alert,
+  Dropdown
 } from "antd";
 import {
   PrinterOutlined,
@@ -21,7 +22,8 @@ import {
   CloseOutlined,
   LeftOutlined,
   RightOutlined,
-  FilePdfOutlined
+  FilePdfOutlined,
+  DownOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useRepairsContext } from "../../../../context/RepairsContext/RepairsContext";
@@ -34,7 +36,7 @@ interface RepairDetailDrawerProps {
   open: boolean;
   data: IRepair | null;
   onClose: () => void;
-  onExport?: (type: "request" | "inspection" | "acceptance") => void;
+  onExport?: (type: "B03" | "B04" | "B05") => void;
   canExport?: boolean;
   onNext?: () => void;
   onPrev?: () => void;
@@ -443,13 +445,7 @@ export default function RepairDetailDrawer({
           children: (
             <div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-                 <Button 
-                        size="small" 
-                        icon={<PrinterOutlined />} 
-                        onClick={() => onExport && onExport('request')}
-                     >
-                        Xuất phiếu B03
-                     </Button>
+                  {/* Print button moved to top-right actions */}
                 </div>
                 {renderB03()}
             </div>
@@ -462,13 +458,7 @@ export default function RepairDetailDrawer({
             <div>
                  {data.status_inspection === 'inspection_admin_approved' && (
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-                        <Button 
-                            size="small" 
-                            icon={<PrinterOutlined />} 
-                            onClick={() => onExport && onExport('inspection')}
-                        >
-                            Xuất phiếu B04
-                        </Button>
+                         {/* Print button moved to top-right actions */}
                     </div>
                  )}
             {renderB04()}
@@ -480,15 +470,9 @@ export default function RepairDetailDrawer({
           label: <Space>III. BIÊN BẢN NGHIỆM THU (B05) {(data.status_acceptance === 'REJECTED_B05' || data.status_acceptance === 'acceptance_rejected') && <Tag color="red">Từ chối</Tag>}</Space>,
           children: (
             <div>
-                {data.status_acceptance === 'acceptance_admin_approved' && (
+            {data.status_acceptance === 'acceptance_admin_approved' && (
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
-                        <Button 
-                            size="small" 
-                            icon={<PrinterOutlined />} 
-                            onClick={() => onExport && onExport('acceptance')}
-                        >
-                            Xuất phiếu B05
-                        </Button>
+                        {/* Print button moved to top-right actions */}
                     </div>
                  )}
                 {renderB05()}
@@ -554,11 +538,34 @@ export default function RepairDetailDrawer({
                    {/* Removed per user request */}
                 </>
             )}
-            {canExport && !data.canceled && !rejectedStatus && (
-                <Button icon={<PrinterOutlined />} onClick={() => onExport && onExport(currentPhase as any)}>
-                    In phiếu
-                </Button>
-            )}
+            {(() => {
+                 const items: any[] = [];
+                 
+                 // B03: Show only if Request is COMPLETED (fully approved)
+                 if (data.status_request === 'COMPLETED') {
+                     items.push({ key: 'B03', label: 'B03: Phiếu Yêu Cầu', onClick: () => onExport && onExport('B03') });
+                 }
+
+                 // B04: Show only if Inspection is Admin Approved
+                 if (data.status_inspection === 'inspection_admin_approved') {
+                     items.push({ key: 'B04', label: 'B04: Phiếu Kiểm Nghiệm', onClick: () => onExport && onExport('B04') });
+                 }
+
+                 // B05: Show only if Acceptance is Admin Approved
+                 if (data.status_acceptance === 'acceptance_admin_approved') {
+                     items.push({ key: 'B05', label: 'B05: Phiếu Nghiệm Thu', onClick: () => onExport && onExport('B05') });
+                 }
+
+                 if (items.length === 0) return null;
+
+                 return (
+                  <Dropdown menu={{ items }} trigger={['click']}>
+                       <Button icon={<PrinterOutlined />}>
+                          In phiếu <DownOutlined />
+                       </Button>
+                   </Dropdown>
+                 );
+             })()}
         </Space>
       }
       footer={
