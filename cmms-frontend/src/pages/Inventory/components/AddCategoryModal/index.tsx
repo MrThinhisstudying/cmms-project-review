@@ -1,121 +1,56 @@
 import React from "react";
-import { Dialog, Box, Typography, TextField } from "@mui/material";
-import { useForm, Controller, SubmitHandler } from "react-hook-form";
-import { yupResolver } from "@hookform/resolvers/yup";
-import * as yup from "yup";
+import { Modal, Form, Input, message } from "antd";
 import { useInventoryContext } from "../../../../context/InventoryContext/InventoryContext";
-import { CustomButton } from "../../../../components/Button";
 
-interface FormValues {
-  name: string;
-  description?: string;
-}
-
-const schema = yup.object().shape({
-  name: yup
-    .string()
-    .trim()
-    .required("Vui lòng nhập tên danh mục")
-    .max(100, "Tên danh mục tối đa 100 ký tự"),
-  description: yup.string().max(255, "Mô tả tối đa 255 ký tự").optional(),
-});
-
-export default function AddCategoryModal({
-  open,
-  handleClose,
-}: {
-  open: boolean;
-  handleClose: () => void;
-}) {
+export default function AddCategoryModal({ open, handleClose }: { open: boolean; handleClose: () => void }) {
   const { createCategory, refreshAll } = useInventoryContext();
+  const [form] = Form.useForm();
+  const [loading, setLoading] = React.useState(false);
 
-  const {
-    control,
-    handleSubmit,
-    reset,
-    formState: { errors },
-  } = useForm({
-    resolver: yupResolver(schema),
-    defaultValues: { name: "", description: "" },
-  });
-
-  const onSubmit: SubmitHandler<FormValues> = async (values) => {
+  const handleSubmit = async (values: { name: string; description?: string }) => {
     try {
+      setLoading(true);
       await createCategory({
         name: values.name.trim(),
-        description: values.description ?? "",
+        description: values.description || "",
       });
+      message.success("Thêm danh mục thành công");
       await refreshAll();
-      reset();
+      form.resetFields();
       handleClose();
-    } catch {
-      handleClose();
+    } catch (err: any) {
+      message.error(err.message || "Thêm danh mục thất bại");
+    } finally {
+        setLoading(false);
     }
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
-      <Box sx={{ p: 3 }}>
-        <Typography fontSize={18} fontWeight={600} mb={2}>
-          Thêm danh mục mới
-        </Typography>
-
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <Controller
-            name="name"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                label="Tên danh mục"
-                fullWidth
-                size="small"
-                error={!!errors.name}
-                helperText={errors.name?.message as string}
-                sx={{ mb: 2 }}
-              />
-            )}
-          />
-
-          <Controller
-            name="description"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                label="Mô tả (tùy chọn)"
-                fullWidth
-                size="small"
-                error={!!errors.description}
-                helperText={errors.description?.message as string}
-              />
-            )}
-          />
-
-          <Box
-            sx={{ display: "flex", justifyContent: "flex-end", mt: 3, gap: 2 }}
-          >
-            <CustomButton
-              variant="contained"
-              id="cancel_add_category"
-              fullWidth={false}
-              onClick={handleClose}
-              sx={{ height: "40px" }}
-            >
-              Huỷ
-            </CustomButton>
-            <CustomButton
-              variant="contained"
-              id="confirm_add_category"
-              fullWidth={false}
-              type="submit"
-              sx={{ height: "40px" }}
-            >
-              Thêm
-            </CustomButton>
-          </Box>
-        </form>
-      </Box>
-    </Dialog>
+    <Modal
+      title="Thêm danh mục mới"
+      open={open}
+      onCancel={handleClose}
+      onOk={() => form.submit()}
+      confirmLoading={loading}
+      okText="Thêm"
+      cancelText="Hủy"
+    >
+      <Form form={form} layout="vertical" onFinish={handleSubmit}>
+        <Form.Item
+          name="name"
+          label="Tên danh mục"
+          rules={[{ required: true, message: 'Vui lòng nhập tên danh mục' }, { max: 100, message: 'Tên quá dài' }]}
+        >
+          <Input placeholder="Nhập tên danh mục" />
+        </Form.Item>
+        <Form.Item
+          name="description"
+          label="Mô tả (tùy chọn)"
+          rules={[{ max: 255, message: 'Mô tả quá dài' }]}
+        >
+          <Input.TextArea placeholder="Nhập mô tả" />
+        </Form.Item>
+      </Form>
+    </Modal>
   );
 }

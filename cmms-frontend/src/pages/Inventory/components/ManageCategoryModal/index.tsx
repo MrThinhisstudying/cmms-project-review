@@ -1,314 +1,108 @@
-import React, { useEffect, useState } from "react";
-import { Dialog, Box, Typography, IconButton, TextField } from "@mui/material";
-import { DndProvider } from "react-dnd";
+import React, { useState } from "react";
+import { Modal, Button, List, Input, message, Popconfirm } from "antd";
+import { EditOutlined, SaveOutlined, DeleteOutlined, CloseOutlined } from "@ant-design/icons";
 import { useInventoryContext } from "../../../../context/InventoryContext/InventoryContext";
-import CategoryItem from "../CategoryItem";
-import { HTML5Backend } from "react-dnd-html5-backend";
-import { CustomButton } from "../../../../components/Button";
-import EditIcon from "@mui/icons-material/Edit";
-import SaveIcon from "@mui/icons-material/Save";
-import DeleteIcon from "@mui/icons-material/Delete";
 import AddCategoryModal from "../AddCategoryModal";
-import ConfirmModal from "../../../../components/Modal";
 
-export default function ManageCategoryModal({
-  open,
-  handleClose,
-  categories,
-}: any) {
+export default function ManageCategoryModal({ open, handleClose, categories }: any) {
   const { updateCategory, deleteCategory, refreshAll } = useInventoryContext();
-  const [local, setLocal] = useState<any[]>([]);
-  const [editingMap, setEditingMap] = useState<Record<string, boolean>>({});
-  const [editValues, setEditValues] = useState<
-    Record<string, { name: string; description: string }>
-  >({});
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<{name: string, description: string}>({ name: '', description: '' });
   const [openAdd, setOpenAdd] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  useEffect(() => {
-    setLocal((categories || []).map((c: any) => ({ ...c })));
-    setEditingMap({});
-    setEditValues({});
-  }, [categories]);
-
-  const handleAdd = () => {
-    setOpenAdd(true);
+  const startEdit = (item: any) => {
+      setEditingId(item.id);
+      setEditForm({ name: item.name, description: item.description || '' });
   };
 
-  const move = (from: number, to: number) => {
-    const copied = [...local];
-    const [m] = copied.splice(from, 1);
-    copied.splice(to, 0, m);
-    setLocal(copied);
+  const cancelEdit = () => {
+      setEditingId(null);
+      setEditForm({ name: '', description: '' });
   };
 
-  const startEdit = (
-    id: any,
-    currentName: string,
-    currentDescription?: string
-  ) => {
-    setEditingMap((s) => ({ ...s, [id]: true }));
-    setEditValues((s) => ({
-      ...(s ?? {}),
-      [id]: { name: currentName, description: currentDescription ?? "" },
-    }));
+  const saveEdit = async (id: number) => {
+      try {
+          await updateCategory(id, editForm);
+          message.success("Cập nhật thành công");
+          await refreshAll();
+          cancelEdit();
+      } catch(err) {
+          message.error("Cập nhật phần mục thất bại");
+      }
   };
 
-  const cancelEdit = (id: any) => {
-    setEditingMap((s) => ({ ...s, [id]: false }));
-    setEditValues((s) => {
-      const copy = { ...(s ?? {}) };
-      delete copy[id];
-      return copy;
-    });
-  };
-
-  const handleSave = async (id: any) => {
-    const vals = (editValues ?? {})[id];
-    if (!vals) return;
-    const name = (vals.name ?? "").trim();
-    const description = vals.description ?? "";
-    if (!name) return;
-    try {
-      await updateCategory(id, { name, description });
-      await refreshAll();
-      cancelEdit(id);
-    } catch (err) {}
-  };
-
-  const handleDeleteClick = (id: number) => {
-    setSelectedId(id);
-    setConfirmOpen(true);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!selectedId) return;
-    try {
-      await deleteCategory(selectedId);
-      await refreshAll();
-    } finally {
-      setSelectedId(null);
-      setConfirmOpen(false);
-    }
+  const handleDelete = async (id: number) => {
+      try {
+          await deleteCategory(id);
+          message.success("Xóa danh mục thành công");
+          await refreshAll();
+      } catch(err) {
+          message.error("Xóa thất bại");
+      }
   };
 
   return (
     <>
-      <Dialog open={open} onClose={handleClose} fullWidth maxWidth="md">
-        <Box sx={{ p: 3 }}>
-          <Box
-            sx={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              mb: 2,
-            }}
-          >
-            <Typography fontSize={18} fontWeight={600}>
-              Quản lý danh mục
-            </Typography>
-            <CustomButton
-              variant="contained"
-              id="add_category_btn"
-              fullWidth={false}
-              onClick={handleAdd}
-              sx={{ height: "40px" }}
-            >
-              Thêm mới
-            </CustomButton>
-          </Box>
-
-          <DndProvider backend={HTML5Backend}>
-            <Box>
-              {local.length === 0 ? (
-                <Box
-                  sx={{
-                    border: "1px dashed #D0D5DD",
-                    borderRadius: 2,
-                    p: 4,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#98A2B3",
-                    textAlign: "center",
-                    gap: 1,
-                    background: "#FAFAFA",
-                  }}
-                >
-                  <Typography fontSize={16} fontWeight={500}>
-                    Chưa có danh mục nào
-                  </Typography>
-                  <Typography fontSize={14} color="#98A2B3">
-                    Nhấn nút <b>Thêm mới</b> để thêm danh mục mới
-                  </Typography>
-                </Box>
-              ) : (
-                local.map((c, i) => (
-                  <CategoryItem
-                    key={c.id}
-                    category={c}
-                    index={i}
-                    moveCategory={move}
-                  >
-                    <Box
-                      sx={{
-                        p: 2,
-                        border: "1px solid #E8EAF0",
-                        borderRadius: 1,
-                        mb: 1,
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: 2,
-                        transition: "0.2s",
-                        "&:hover": { backgroundColor: "#F9FAFB" },
-                      }}
+    <Modal
+        title="Quản lý danh mục"
+        open={open}
+        onCancel={handleClose}
+        footer={[
+            <Button key="close" onClick={handleClose}>Đóng</Button>
+        ]}
+        width={700}
+    >
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button type="primary" onClick={() => setOpenAdd(true)}>Thêm mới</Button>
+        </div>
+        
+        <List
+            rowKey="id"
+            dataSource={categories}
+            pagination={{ pageSize: 5 }}
+            renderItem={(item: any) => {
+                const isEditing = editingId === item.id;
+                return (
+                    <List.Item
+                        actions={isEditing ? [
+                            <Button key="save" type="link" icon={<SaveOutlined />} onClick={() => saveEdit(item.id)} />,
+                            <Button key="cancel" type="link" danger icon={<CloseOutlined />} onClick={cancelEdit} />
+                        ] : [
+                            <Button key="edit" type="link" icon={<EditOutlined />} onClick={() => startEdit(item)} />,
+                            <Popconfirm key="delete" title="Xóa danh mục?" onConfirm={() => handleDelete(item.id)}>
+                                <Button type="link" danger icon={<DeleteOutlined />} />
+                            </Popconfirm>
+                        ]}
                     >
-                      <Box
-                        sx={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 1,
-                          flex: 1,
-                        }}
-                      >
-                        {editingMap[c.id] ? (
-                          <>
-                            <TextField
-                              value={(editValues ?? {})[c.id]?.name ?? ""}
-                              onChange={(e) =>
-                                setEditValues((s: any) => ({
-                                  ...(s ?? {}),
-                                  [c.id]: {
-                                    ...(s?.[c.id] ?? {
-                                      name: "",
-                                      description: "",
-                                    }),
-                                    name: e.target.value,
-                                  },
-                                }))
-                              }
-                              placeholder="Tên danh mục"
-                              fullWidth
-                              size="small"
-                            />
-                            <TextField
-                              value={
-                                (editValues ?? {})[c.id]?.description ?? ""
-                              }
-                              onChange={(e) =>
-                                setEditValues((s: any) => ({
-                                  ...(s ?? {}),
-                                  [c.id]: {
-                                    ...(s?.[c.id] ?? {
-                                      name: "",
-                                      description: "",
-                                    }),
-                                    description: e.target.value,
-                                  },
-                                }))
-                              }
-                              placeholder="Mô tả (tùy chọn)"
-                              fullWidth
-                              size="small"
-                            />
-                          </>
+                        {isEditing ? (
+                            <div style={{ width: '100%', display: 'flex', gap: 8 }}>
+                                <Input 
+                                    value={editForm.name} 
+                                    onChange={e => setEditForm(prev => ({...prev, name: e.target.value}))} 
+                                    placeholder="Tên danh mục"
+                                />
+                                <Input 
+                                    value={editForm.description} 
+                                    onChange={e => setEditForm(prev => ({...prev, description: e.target.value}))} 
+                                    placeholder="Mô tả"
+                                />
+                            </div>
                         ) : (
-                          <>
-                            <Typography
-                              sx={{ wordBreak: "break-word", fontWeight: 600 }}
-                            >
-                              {c.name}
-                            </Typography>
-                            <Typography
-                              sx={{
-                                wordBreak: "break-word",
-                                color: "text.secondary",
-                                fontSize: 13,
-                                fontStyle: c.description ? "normal" : "italic",
-                                opacity: c.description ? 1 : 0.7,
-                              }}
-                            >
-                              {c.description ? c.description : "Chưa có mô tả"}
-                            </Typography>
-                          </>
+                            <List.Item.Meta
+                                title={item.name}
+                                description={item.description || <span style={{ fontStyle: 'italic', color: '#ccc' }}>Chưa có mô tả</span>}
+                            />
                         )}
-                      </Box>
+                    </List.Item>
+                );
+            }}
+        />
+    </Modal>
 
-                      <Box sx={{ display: "flex", gap: 1 }}>
-                        {editingMap[c.id] ? (
-                          <>
-                            <IconButton
-                              size="small"
-                              color="primary"
-                              onClick={() => handleSave(c.id)}
-                            >
-                              <SaveIcon />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              onClick={() => cancelEdit(c.id)}
-                            >
-                              <EditIcon />
-                            </IconButton>
-                          </>
-                        ) : (
-                          <>
-                            <IconButton
-                              size="small"
-                              onClick={() =>
-                                startEdit(c.id, c.name, c.description)
-                              }
-                            >
-                              <EditIcon />
-                            </IconButton>
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={() => handleDeleteClick(c.id)}
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          </>
-                        )}
-                      </Box>
-                    </Box>
-                  </CategoryItem>
-                ))
-              )}
-            </Box>
-          </DndProvider>
-
-          <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 2 }}>
-            <CustomButton
-              variant="contained"
-              id="done_button"
-              fullWidth={false}
-              onClick={handleClose}
-              sx={{ height: "40px" }}
-            >
-              Tải lại
-            </CustomButton>
-          </Box>
-        </Box>
-      </Dialog>
-
-      <AddCategoryModal
-        open={openAdd}
-        handleClose={async () => {
-          setOpenAdd(false);
-          await refreshAll();
-        }}
-      />
-      <ConfirmModal
-        open={confirmOpen}
-        title="Xóa danh mục"
-        content="Bạn có chắc chắn muốn xóa danh mục này? Hành động này không thể hoàn tác."
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={handleConfirmDelete}
-      />
+    <AddCategoryModal 
+        open={openAdd} 
+        handleClose={() => setOpenAdd(false)} 
+    />
     </>
   );
 }

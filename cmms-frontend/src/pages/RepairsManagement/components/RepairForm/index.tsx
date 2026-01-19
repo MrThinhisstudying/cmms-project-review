@@ -104,7 +104,7 @@ const RepairForm: React.FC<RepairFormProps> = ({
             }
             options={devices.map((d) => ({
               value: d.device_id,
-              label: `${d.name} (${d.serial_number}) - ${d.brand || 'No Brand'}`,
+              label: `${d.name} (${d.reg_number || 'N/A'}) - ${d.brand || 'N/A'}`,
             }))}
             onChange={() => {
                 // Force re-render descriptions below

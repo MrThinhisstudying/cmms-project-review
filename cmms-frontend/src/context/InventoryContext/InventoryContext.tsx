@@ -148,8 +148,9 @@ const InventoryProvider = ({ children }: { children: ReactNode }) => {
   const loadItems = useCallback(async () => {
     try {
       const data = await getItems();
+      const role = user?.role?.toLowerCase() || "";
       const filtered =
-        user?.role === "admin" || user?.role === "manager"
+        role === "admin" || role === "manager"
           ? data
           : data.filter((it: any) => it.enabled !== false);
       setItems(filtered);
@@ -159,7 +160,9 @@ const InventoryProvider = ({ children }: { children: ReactNode }) => {
   }, [user]);
 
   const loadStockOuts = useCallback(async () => {
-    if (user?.role !== "admin" && user?.role !== "manager") {
+    const role = user?.role?.toLowerCase() || "";
+    const allowedRoles = ["admin", "manager", "team_lead", "unit_head", "director", "technician"];
+    if (!allowedRoles.some(r => role.includes(r))) {
       setStockOuts([]);
       return;
     }
@@ -173,7 +176,9 @@ const InventoryProvider = ({ children }: { children: ReactNode }) => {
 
   const refreshAll = useCallback(async () => {
     setLoading(true);
-    if (user?.role === "admin" || user?.role === "manager") {
+    const role = user?.role?.toLowerCase() || "";
+    const allowedRoles = ["admin", "manager", "team_lead", "unit_head", "director", "technician"];
+    if (allowedRoles.some(r => role.includes(r))) {
       await Promise.all([loadCategories(), loadItems(), loadStockOuts()]);
     } else {
       await Promise.all([loadCategories(), loadItems()]);

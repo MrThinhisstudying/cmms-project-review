@@ -1,58 +1,43 @@
 import React from "react";
-import Box from "@mui/material/Box";
-import Grid from "@mui/material/Grid";
-import Loader from "../Loader";
+import { List, Typography } from "antd";
+import { InboxOutlined } from "@ant-design/icons";
 import ItemCard from "../ItemCard";
-import { Typography } from "@mui/material";
-import InventoryOutlinedIcon from "@mui/icons-material/InventoryOutlined";
+import Loader from "../Loader"; 
 
-export default function ListItems({
-  result,
-  loading,
-  toggleDrawer,
-  refreshAll,
-}: any) {
-  if (loading) return <Loader />;
+export default function ListItems({ result, loading, toggleDrawer, refreshAll }: any) {
+  if (loading) return <Loader />; 
 
   if (!result || result.length === 0)
     return (
-      <Box
-        sx={{
-          p: 6,
-          textAlign: "center",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "60vh",
-          color: "text.secondary",
-        }}
-      >
-        <InventoryOutlinedIcon
-          sx={{ fontSize: 80, color: "grey.400", mb: 2 }}
-        />
-        <Typography variant="h6" sx={{ mb: 1 }}>
-          Không có vật tư nào
-        </Typography>
-        <Typography variant="body2" sx={{ mb: 3, color: "text.disabled" }}>
-          Hãy thử thêm vật tư mới hoặc làm mới danh sách.
-        </Typography>
-      </Box>
+        <div style={{ padding: '48px 0', textAlign: 'center' }}>
+            <InboxOutlined style={{ fontSize: 60, color: '#d9d9d9' }} />
+            <Typography.Title level={4} style={{ marginTop: 16, color: '#999' }}>Không có vật tư nào</Typography.Title>
+            <Typography.Text type="secondary">Hãy thử thêm vật tư mới hoặc làm mới danh sách.</Typography.Text>
+        </div>
     );
 
   return (
-    <Box sx={{ p: 3 }}>
-      <Grid container spacing={{ xs: 2, md: 3 }}>
-        {result.map((item: any, index: number) => (
-          <Grid item xs={12} sm={12} md={6} lg={3} key={index}>
-            <ItemCard
-              item={item}
-              toggleDrawer={toggleDrawer}
-              refreshAll={refreshAll}
-            />
-          </Grid>
-        ))}
-      </Grid>
-    </Box>
+    <List
+      rowKey={(item: any) => {
+        if (item && item.item_id) return item.item_id;
+        console.warn("Item missing item_id:", item);
+        return Math.random(); // Fallback to prevent crash
+      }}
+      grid={{
+        gutter: 16,
+        xs: 1,
+        sm: 1,
+        md: 2,
+        lg: 4,
+        xl: 4,
+        xxl: 4,
+      }}
+      dataSource={Array.isArray(result) ? result.filter((i: any) => i && typeof i === 'object') : []}
+      renderItem={(item: any) => (
+        <List.Item>
+          <ItemCard item={item} toggleDrawer={toggleDrawer} refreshAll={refreshAll} />
+        </List.Item>
+      )}
+    />
   );
 }

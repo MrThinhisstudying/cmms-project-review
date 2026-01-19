@@ -34,7 +34,7 @@ export class StockOutController {
     }
 
     @Get()
-    @UseGuards(JWTAuthGuard, AdminOrManageGuard)
+    @UseGuards(JWTAuthGuard)
     async listAll() {
         try {
             const data = await this.svc.listAll();

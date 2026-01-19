@@ -22,7 +22,6 @@ import {
   CloseOutlined,
   LeftOutlined,
   RightOutlined,
-  FilePdfOutlined,
   DownOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";

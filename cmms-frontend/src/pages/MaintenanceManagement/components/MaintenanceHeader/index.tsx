@@ -11,13 +11,18 @@ import OriginalPlanModal from "../OriginalPlanModal";
 const { Title } = Typography;
 
 interface Props {
-  onCreate: () => void; // Hàm callback mở Modal tạo phiếu
-  onRefresh?: () => void; // Hàm callback reload lại dữ liệu
-  onImport?: () => void; // Hàm mở modal import
+  onCreate: () => void;
+  onCreatePlan: () => void;
+  onRefresh?: () => void;
+  onImport?: () => void;
 }
 
-const MaintenanceHeader: React.FC<Props> = ({ onCreate, onRefresh, onImport }) => {
-  // State loading riêng cho từng nút để UX tốt hơn
+const MaintenanceHeader: React.FC<Props> = ({
+  onCreate,
+  onCreatePlan,
+  onRefresh,
+  onImport,
+}) => {
   const [isMasterOpen, setIsMasterOpen] = useState(false);
   const [isOriginalViewOpen, setIsOriginalViewOpen] = useState(false);
 
@@ -44,13 +49,8 @@ const MaintenanceHeader: React.FC<Props> = ({ onCreate, onRefresh, onImport }) =
       </div>
 
       <Space>
-        {/* Nút 1: Import Quy trình - Tạm ẩn theo code gốc hoặc để nguyên nếu cần */}
-        
-        {/* Nút 2: Import Kế hoạch (Mới) */}
-        <Button
-          icon={<CalendarOutlined />}
-          onClick={onImport} // Gọi hàm mở modal
-        >
+        {/* Nút Import Kế hoạch */}
+        <Button icon={<CalendarOutlined />} onClick={onImport}>
           Import Kế hoạch (Excel)
         </Button>
 
@@ -66,11 +66,15 @@ const MaintenanceHeader: React.FC<Props> = ({ onCreate, onRefresh, onImport }) =
         >
           Kế hoạch tổng thể
         </Button>
-        {/* Nút 3: Tạo Phiếu Mới */}
+        <Button onClick={onCreatePlan} icon={<PlusOutlined />}>
+          Thêm kế hoạch
+        </Button>
+        {/* Nút Tạo Phiếu Mới */}
         <Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>
           Lập Phiếu Bảo Dưỡng
         </Button>
       </Space>
+
       <MasterPlanModal
         open={isMasterOpen}
         onCancel={() => setIsMasterOpen(false)}

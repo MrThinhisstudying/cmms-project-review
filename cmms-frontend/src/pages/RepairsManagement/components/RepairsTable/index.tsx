@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React from "react";
 
-import { Table, Button, Tag, Space, Modal, Input, Tooltip, Popconfirm } from "antd";
+import { Table, Button, Tag, Space, Tooltip, Popconfirm } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { IRepair } from "../../../../types/repairs.types";
 import {
@@ -61,12 +61,10 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
   currentUser,
   hasPermission,
 }) => {
-  const [rejectReason, setRejectReason] = useState("");
-  const [rejectModalOpen, setRejectModalOpen] = useState(false);
-  const [selectedAction, setSelectedAction] = useState<{
-    id: number;
-    phase: "request" | "inspection" | "acceptance";
-  } | null>(null);
+  // Unused state removed
+  // const [rejectReason, setRejectReason] = useState("");
+  // const [rejectModalOpen, setRejectModalOpen] = useState(false);
+  // const [selectedAction, setSelectedAction] = useState...
 
   const getPhase = (r: IRepair) => {
     // If Admin Approved Acceptance, it's strictly done.
@@ -173,14 +171,6 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
     }
 
     return <Tag color={color}>{label}</Tag>;
-  };
-
-  const submitReject = () => {
-    if (selectedAction && onReview) {
-      onReview(selectedAction.id, "reject", rejectReason, selectedAction.phase);
-    }
-    setRejectModalOpen(false);
-    setRejectModalOpen(false);
   };
 
   const handleExportPdf = async (id: number, type: 'B03' | 'B04' | 'B05') => {
@@ -420,19 +410,6 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
         pagination={{ pageSize: 10 }}
         sticky
       />
-      <Modal
-        title="Lý do từ chối"
-        open={rejectModalOpen}
-        onCancel={() => setRejectModalOpen(false)}
-        onOk={submitReject}
-      >
-          <Input.TextArea 
-            rows={4} 
-            value={rejectReason} 
-            onChange={(e) => setRejectReason(e.target.value)} 
-            placeholder="Nhập lý do từ chối..."
-          />
-      </Modal>
     </>
   );
 };

@@ -18,6 +18,7 @@ import MaintenanceTable from "./components/MaintenanceTable";
 import MaintenanceForm from "./components/MaintenanceForm";
 import EditPlanModal from "./components/EditPlanModal";
 import MaintenanceImportModal from "./components/MaintenanceImportModal";
+import CreatePlanModal from "./components/CreatePlanModal";
 import { getDashboardOverview } from "../../apis/maintenance";
 import moment from "moment";
 
@@ -27,13 +28,14 @@ const { RangePicker } = DatePicker;
 const MaintenanceManagement: React.FC = () => {
   // --- STATE QUẢN LÝ MODAL ---
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreatePlanOpen, setIsCreatePlanOpen] = useState(false);
   const [initialData, setInitialData] = useState<any>(null);
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<any>(null);
 
-  // --- STATE DỮ LIỆU ---
+  // ... (keep existing state)
   const [allData, setAllData] = useState<any[]>([]);
   const [filteredData, setFilteredData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -121,6 +123,7 @@ const MaintenanceManagement: React.FC = () => {
     fetchData();
     setIsModalOpen(false);
     setIsEditOpen(false);
+    setIsCreatePlanOpen(false);
   };
 
   const handleCreateNew = () => {
@@ -154,6 +157,7 @@ const MaintenanceManagement: React.FC = () => {
       {/* Header */}
       <MaintenanceHeader 
         onCreate={handleCreateNew} 
+        onCreatePlan={() => setIsCreatePlanOpen(true)}
         onRefresh={fetchData} 
         onImport={() => setIsImportOpen(true)} // Pass trigger
       />
@@ -245,6 +249,13 @@ const MaintenanceManagement: React.FC = () => {
           onCancel={() => setIsModalOpen(false)}
         />
       </Modal>
+
+      {/* Modal Tạo Kế Hoạch Mới (Create Plan) */}
+      <CreatePlanModal
+        open={isCreatePlanOpen}
+        onCancel={() => setIsCreatePlanOpen(false)}
+        onSuccess={handleRefresh}
+      />
 
       {/* Modal Sửa kế hoạch */}
       <EditPlanModal

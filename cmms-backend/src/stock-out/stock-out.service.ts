@@ -42,6 +42,7 @@ export class StockOutService {
             if (repair.canceled) throw new BadRequestException('Phiếu đã bị hủy');
         }
 
+
         const stockOut = this.repo.create({
             item,
             quantity: Number(dto.quantity),
@@ -51,6 +52,8 @@ export class StockOutService {
             repair: repair ?? null,
             status: StockOutStatus.PENDING,
         });
+
+
 
         return await this.repo.save(stockOut);
     }

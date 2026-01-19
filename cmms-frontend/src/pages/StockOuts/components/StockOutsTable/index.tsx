@@ -1,249 +1,211 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
+import { Table, Button, Tag, Space, Tooltip, Modal, message } from "antd";
 import {
-  Box,
-  IconButton,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  CircularProgress,
-  Typography,
-  Tooltip,
-  Chip,
-} from "@mui/material";
-import InfoIcon from "@mui/icons-material/Info";
-import CheckIcon from "@mui/icons-material/Check";
-import CancelIcon from "@mui/icons-material/Cancel";
-import ConfirmModal from "../../../../components/Modal";
+  EyeOutlined,
+  CheckOutlined,
+  CloseOutlined,
+  InfoCircleOutlined,
+} from "@ant-design/icons";
 import { useInventoryContext } from "../../../../context/InventoryContext/InventoryContext";
 import { IStockOut } from "../../../../types/inventory.types";
-import {
-  CustomTable,
-  TableCellHeader,
-  TableRowContainer,
-  TableRowBody,
-} from "./style";
 
 interface Props {
   data: IStockOut[];
   loading: boolean;
-  rowsPerPage: number;
-  page: number;
+  rowsPerPage?: number; // kept for compatibility but AntD handles it
+  page?: number;        // kept for compatibility
   onDetail: (so: IStockOut) => void;
   onError?: (msg: string) => void;
   onSuccess?: (msg: string) => void;
 }
 
-const statusChip = (status?: string) => {
-  const s = String(status ?? "").toLowerCase();
-  if (s === "approved")
-    return <Chip label="Đã duyệt" color="success" size="small" />;
-  if (s === "pending")
-    return <Chip label="Đang chờ duyệt" color="warning" size="small" />;
-  if (s === "canceled")
-    return <Chip label="Đã huỷ" color="error" size="small" />;
-  return <Chip label="Không xác định" size="small" />;
-};
-
 export default function StockOutsTable({
   data = [],
   loading,
-  rowsPerPage,
-  page,
   onDetail,
   onError,
   onSuccess,
 }: Props) {
   const { approveStockOut, cancelStockOut } = useInventoryContext();
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<
-    "approve" | "cancel" | null
-  >(null);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const paginated = useMemo(() => {
-    const start = (page - 1) * rowsPerPage;
-    return (data || []).slice(start, start + rowsPerPage);
-  }, [data, page, rowsPerPage]);
-
-  const openConfirm = (id: number, action: "approve" | "cancel") => {
-    setSelectedId(id);
-    setConfirmAction(action);
-    setConfirmOpen(true);
+  // Status Helper
+  const renderStatus = (status?: string) => {
+    const s = String(status ?? "").toLowerCase();
+    if (s === "approved") return <Tag color="success">Đã duyệt</Tag>;
+    if (s === "pending") return <Tag color="warning">Đang chờ</Tag>;
+    if (s === "canceled") return <Tag color="error">Đã huỷ</Tag>;
+    return <Tag color="default">Unknown</Tag>;
   };
 
-  const doConfirm = async () => {
-    if (!selectedId || !confirmAction) return;
-    setBusy(true);
-    try {
-      if (confirmAction === "approve") {
-        await approveStockOut(selectedId);
-        onSuccess?.("Duyệt yêu cầu thành công");
-      } else {
-        await cancelStockOut(selectedId);
-        onSuccess?.("Huỷ yêu cầu thành công");
-      }
-    } catch (err: any) {
-      onError?.(err?.message ?? "Thao tác thất bại");
-    } finally {
-      setBusy(false);
-      setConfirmOpen(false);
-      setConfirmAction(null);
-      setSelectedId(null);
-    }
+  const handleConfirmAction = (
+    id: number,
+    action: "approve" | "cancel"
+  ) => {
+    Modal.confirm({
+      title: action === "approve" ? "Duyệt yêu cầu" : "Huỷ yêu cầu",
+      content:
+        action === "approve"
+          ? "Bạn có chắc muốn duyệt yêu cầu xuất kho này?"
+          : "Bạn có chắc muốn huỷ yêu cầu xuất kho này?",
+      okText: action === "approve" ? "Duyệt" : "Huỷ yêu cầu",
+      okType: action === "approve" ? "primary" : "danger",
+      cancelText: "Thôi",
+      onOk: async () => {
+        setBusy(true);
+        try {
+          if (action === "approve") {
+            await approveStockOut(id);
+            message.success("Đã duyệt yêu cầu");
+            onSuccess?.("Đã duyệt yêu cầu");
+          } else {
+            await cancelStockOut(id);
+            message.success("Đã huỷ yêu cầu");
+            onSuccess?.("Đã huỷ yêu cầu");
+          }
+        } catch (err: any) {
+          const msg = err?.message ?? "Thao tác thất bại";
+          message.error(msg);
+          onError?.(msg);
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
   };
 
-  if (loading)
-    return (
-      <Box display="flex" justifyContent="center" alignItems="center" p={4}>
-        <CircularProgress />
-      </Box>
-    );
+  const columns = [
+    {
+      title: "#",
+      key: "index",
+      width: 60,
+      render: (_: any, __: any, index: number) => index + 1,
+    },
+    {
+      title: "Vật tư",
+      dataIndex: ["item", "name"],
+      key: "item_name",
+      render: (text: string, record: IStockOut) => (
+        <Space direction="vertical" size={0}>
+          <span style={{ fontWeight: 500 }}>{text || "-"}</span>
+          {record.repair && <Tag color="blue" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>Sửa chữa</Tag>}
+        </Space>
+      ),
+    },
+    {
+      title: "Danh mục",
+      dataIndex: ["item", "category", "name"],
+      key: "category",
+      render: (text: string) => text || "-",
+    },
+    {
+      title: "Người yêu cầu",
+      key: "requested_by",
+      render: (_: any, record: IStockOut) => {
+        const u = record.requested_by;
+        if (!u) return "-";
+        if (typeof u === "object") return u.name || u.email;
+        return "-";
+      },
+    },
+    {
+      title: "Người duyệt",
+      key: "approved_by",
+      render: (_: any, record: IStockOut) => {
+        const u = record.approved_by;
+        if (!u) return "-";
+        if (typeof u === "object") return u.name || u.email;
+        return "-";
+      },
+    },
+    {
+      title: "Trạng thái",
+      dataIndex: "status",
+      key: "status",
+      width: 140,
+      render: (status: string) => renderStatus(status),
+    },
+    {
+      title: "Số lượng",
+      key: "qty",
+      render: (_: any, record: IStockOut) => (
+        <span>
+          <strong>{record.quantity}</strong> {record.item?.quantity_unit || ""}
+        </span>
+      ),
+    },
+    {
+      title: "Ngày tạo",
+      dataIndex: "created_at",
+      key: "created_at",
+      render: (date: any) =>
+        date ? new Date(date).toLocaleString("vi-VN") : "-",
+    },
+    {
+      title: "Hành động",
+      key: "action",
+      width: 120,
+      fixed: "right" as const,
+      render: (_: any, record: IStockOut) => {
+        const isPending = record.status === "PENDING";
+        const isRepair = !!record.repair; // Automations are handled by system primarily
 
-  if (!data || data.length === 0)
-    return (
-      <Box
-        p={6}
-        textAlign="center"
-        color="text.secondary"
-        display="flex"
-        flexDirection="column"
-        alignItems="center"
-      >
-        <Typography variant="h6">Chưa có yêu cầu xuất kho</Typography>
-        <Typography variant="body2" mt={1}>
-          Nhấn “Làm mới” để tải lại danh sách hoặc tạo yêu cầu mới.
-        </Typography>
-      </Box>
-    );
+        return (
+          <Space>
+            <Tooltip title="Xem chi tiết">
+              <Button
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => onDetail(record)}
+              />
+            </Tooltip>
+            {isPending && !isRepair && (
+              <>
+                <Tooltip title="Duyệt">
+                  <Button
+                    size="small"
+                    type="primary"
+                    ghost
+                    icon={<CheckOutlined />}
+                    onClick={() => handleConfirmAction(record.id, "approve")}
+                    disabled={busy}
+                  />
+                </Tooltip>
+                <Tooltip title="Huỷ">
+                  <Button
+                    size="small"
+                    danger
+                    icon={<CloseOutlined />}
+                    onClick={() => handleConfirmAction(record.id, "cancel")}
+                    disabled={busy}
+                  />
+                </Tooltip>
+              </>
+            )}
+            {isPending && isRepair && (
+                 <Tooltip title="Tự động duyệt theo quy trình sửa chữa">
+                    <InfoCircleOutlined style={{ color: '#1890ff' }} />
+                 </Tooltip>
+            )}
+          </Space>
+        );
+      },
+    },
+  ];
 
   return (
-    <>
-      <CustomTable stickyHeader>
-        <TableHead>
-          <TableRowContainer>
-            <TableCellHeader>#</TableCellHeader>
-            <TableCellHeader>Vật tư</TableCellHeader>
-            <TableCellHeader>Danh mục</TableCellHeader>
-            <TableCellHeader>Người yêu cầu</TableCellHeader>
-            <TableCellHeader>Người duyệt</TableCellHeader>
-            <TableCellHeader>Trạng thái</TableCellHeader>
-            <TableCellHeader>Số lượng</TableCellHeader>
-            <TableCellHeader>Ngày tạo</TableCellHeader>
-            <TableCellHeader>Hành động</TableCellHeader>
-          </TableRowContainer>
-        </TableHead>
-        <TableBody>
-          {paginated.map((row, idx) => {
-            const isPending = row.status === "PENDING";
-            const isRepairRelated = !!row.repair;
-            return (
-              <TableRowBody key={row.id} index={idx}>
-                <TableCell>{(page - 1) * rowsPerPage + idx + 1}</TableCell>
-                <TableCell>
-                  <Box display="flex" alignItems="center" gap={1}>
-                    {row.item?.name ?? "-"}
-                    {isRepairRelated && (
-                      <Chip
-                        label="Sửa chữa"
-                        size="small"
-                        color="info"
-                        sx={{ fontSize: "0.7rem" }}
-                      />
-                    )}
-                  </Box>
-                </TableCell>
-                <TableCell>{row.item?.category?.name ?? "-"}</TableCell>
-                <TableCell>
-                  {typeof row.requested_by === "object"
-                    ? row.requested_by?.name ?? row.requested_by?.email
-                    : "-"}
-                </TableCell>
-                <TableCell>
-                  {typeof row.approved_by === "object"
-                    ? row.approved_by?.name ?? row.approved_by?.email
-                    : "-"}
-                </TableCell>
-                <TableCell>{statusChip(row.status)}</TableCell>
-                <TableCell>
-                  {row.quantity} {row.item?.quantity_unit ?? ""}
-                </TableCell>
-                <TableCell>
-                  {new Date(row.created_at ?? Date.now()).toLocaleString(
-                    "vi-VN"
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Box display="flex" gap={1} alignItems="center">
-                    <Tooltip title="Xem chi tiết">
-                      <IconButton
-                        size="small"
-                        onClick={() => onDetail(row)}
-                        disabled={busy}
-                      >
-                        <InfoIcon />
-                      </IconButton>
-                    </Tooltip>
-                    {isPending && !isRepairRelated && (
-                      <>
-                        <Tooltip title="Duyệt yêu cầu">
-                          <IconButton
-                            size="small"
-                            color="primary"
-                            onClick={() => openConfirm(row.id, "approve")}
-                            disabled={busy}
-                          >
-                            <CheckIcon />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title="Huỷ yêu cầu">
-                          <IconButton
-                            size="small"
-                            color="error"
-                            onClick={() => openConfirm(row.id, "cancel")}
-                            disabled={busy}
-                          >
-                            <CancelIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </>
-                    )}
-                    {isPending && isRepairRelated && (
-                      <Chip
-                        label="Tự động duyệt"
-                        size="small"
-                        color="default"
-                        sx={{ fontSize: "0.7rem" }}
-                      />
-                    )}
-                  </Box>
-                </TableCell>
-              </TableRowBody>
-            );
-          })}
-        </TableBody>
-      </CustomTable>
-
-      <ConfirmModal
-        open={confirmOpen}
-        title={
-          confirmAction === "approve"
-            ? "Xác nhận duyệt"
-            : "Xác nhận huỷ yêu cầu"
-        }
-        content={
-          confirmAction === "approve"
-            ? "Bạn có chắc muốn duyệt yêu cầu này?"
-            : "Bạn có chắc muốn huỷ yêu cầu này?"
-        }
-        onClose={() => {
-          setConfirmOpen(false);
-          setConfirmAction(null);
-          setSelectedId(null);
-        }}
-        onConfirm={doConfirm}
-      />
-    </>
+    <Table
+      columns={columns}
+      dataSource={data}
+      rowKey="id"
+      loading={loading}
+      pagination={{
+        defaultPageSize: 10,
+        showSizeChanger: true,
+        pageSizeOptions: ["10", "20", "50"],
+      }}
+      scroll={{ x: 1000 }}
+      size="middle"
+    />
   );
 }

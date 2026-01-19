@@ -1,13 +1,19 @@
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 
 @Injectable()
 export class AdminOrManageGuard implements CanActivate {
   canActivate(context: ExecutionContext) {
     const req = context.switchToHttp().getRequest();
     const user = req.user;
+    const role = user?.role?.toLowerCase() || "";
+    console.log('AdminOrManageGuard Check:', { user, role });
     return (
       !!user &&
-      (user.role === 'admin' || user.role === 'manager' || user.isAdmin === true || user.isManager === true)
+      (role.includes('admin') || 
+       role.includes('manager') || 
+       role.includes('team_lead') || 
+       role.includes('unit_head') || 
+       role.includes('director'))
     );
   }
 }

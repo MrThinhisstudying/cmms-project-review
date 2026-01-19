@@ -12,6 +12,7 @@ import {NestExpressApplication} from '@nestjs/platform-express';
 import {join} from 'path';
 
 async function bootstrap() {
+    console.log('Backend starting...');
     const app = await NestFactory.create<NestExpressApplication>(AppModule);
     app.use(bodyParser.json({limit: '20mb'}));
     app.use(bodyParser.urlencoded({limit: '20mb', extended: true}));

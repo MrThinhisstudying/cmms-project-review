@@ -1,23 +1,27 @@
 import React, { useEffect, useState, useCallback } from "react";
 import {
   Drawer,
-  Box,
   Typography,
-  Divider,
-  Chip,
   Button,
   Card,
-  CardContent,
-  Grid,
-  CircularProgress,
+  Space,
+  Descriptions,
+  Tag,
   Alert,
-} from "@mui/material";
-import PersonIcon from "@mui/icons-material/Person";
-import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
-import InventoryIcon from "@mui/icons-material/Inventory";
-import BuildIcon from "@mui/icons-material/Build";
+  Spin,
+  Empty,
+  message,
+  Modal
+} from "antd";
+import {
+  UserOutlined,
+  CalendarOutlined,
+  DropboxOutlined
+} from "@ant-design/icons";
 import { useInventoryContext } from "../../../../context/InventoryContext/InventoryContext";
 import { IStockOut } from "../../../../types/inventory.types";
+
+const { Text, Paragraph } = Typography;
 
 export default function StockOutDetailDrawer({
   open,
@@ -30,14 +34,10 @@ export default function StockOutDetailDrawer({
   stockOutId?: number;
   onActionSuccess?: () => void;
 }) {
-  const { getStockOut, approveStockOut, cancelStockOut } =
-    useInventoryContext();
+  const { getStockOut, approveStockOut, cancelStockOut } = useInventoryContext();
   const [detail, setDetail] = useState<IStockOut | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-
 
   const fetchDetail = useCallback(async (id: number) => {
     setLoading(true);
@@ -45,7 +45,8 @@ export default function StockOutDetailDrawer({
       const so = await getStockOut(id);
       setDetail(so ?? null);
     } catch (err: any) {
-      setError(err?.message ?? "Không thể tải chi tiết");
+      console.error(err);
+      message.error("Không thể tải chi tiết yêu cầu");
     } finally {
       setLoading(false);
     }
@@ -55,286 +56,151 @@ export default function StockOutDetailDrawer({
     if (open && stockOutId) fetchDetail(stockOutId);
   }, [open, stockOutId, fetchDetail]);
 
-  const renderStatusChip = (status?: string) => {
+  const renderStatus = (status?: string) => {
     const s = String(status ?? "").toLowerCase();
-    if (s === "approved")
-      return <Chip label="Đã duyệt" color="success" size="small" />;
-    if (s === "pending")
-      return <Chip label="Đang chờ duyệt" color="warning" size="small" />;
-    if (s === "canceled")
-      return <Chip label="Đã huỷ" color="error" size="small" />;
-    return <Chip label="Không xác định" size="small" />;
+    if (s === "approved") return <Tag color="success">Đã duyệt</Tag>;
+    if (s === "pending") return <Tag color="warning">Đang chờ duyệt</Tag>;
+    if (s === "canceled") return <Tag color="error">Đã huỷ</Tag>;
+    return <Tag>Unknown</Tag>;
   };
 
-  const handleApprove = async () => {
+  const handleApprove = () => {
     if (!stockOutId) return;
-    setBusy(true);
-    try {
-      await approveStockOut(stockOutId);
-      onActionSuccess?.();
-      onClose();
-    } catch (err: any) {
-      setError(err?.message ?? "Không thể duyệt yêu cầu");
-    } finally {
-      setBusy(false);
-    }
+    Modal.confirm({
+        title: "Duyệt yêu cầu",
+        content: "Bạn có chắc chắn muốn duyệt yêu cầu này?",
+        onOk: async () => {
+            setBusy(true);
+            try {
+              await approveStockOut(stockOutId);
+              message.success("Duyệt thành công");
+              onActionSuccess?.();
+              onClose();
+            } catch (err: any) {
+              message.error(err?.message ?? "Lỗi khi duyệt");
+            } finally {
+              setBusy(false);
+            }
+        }
+    });
   };
 
-  const handleCancel = async () => {
+  const handleCancel = () => {
     if (!stockOutId) return;
-    setBusy(true);
-    try {
-      await cancelStockOut(stockOutId);
-      onActionSuccess?.();
-      onClose();
-    } catch (err: any) {
-      setError(err?.message ?? "Không thể huỷ yêu cầu");
-    } finally {
-      setBusy(false);
-    }
+     Modal.confirm({
+        title: "Huỷ yêu cầu",
+        content: "Bạn có chắc chắn muốn huỷ yêu cầu này?",
+        okType: 'danger',
+        onOk: async () => {
+            setBusy(true);
+            try {
+              await cancelStockOut(stockOutId);
+              message.success("Huỷ thành công");
+              onActionSuccess?.();
+              onClose();
+            } catch (err: any) {
+              message.error(err?.message ?? "Lỗi khi huỷ");
+            } finally {
+              setBusy(false);
+            }
+        }
+    });
   };
 
   const isRepairRelated = !!detail?.repair;
 
   return (
-    <Drawer anchor="right" open={open} onClose={onClose}>
-      <Box sx={{ width: 650, p: 3 }}>
-        <Box
-          display="flex"
-          justifyContent="space-between"
-          alignItems="center"
-          mb={3}
-        >
-          <Typography variant="h5" fontWeight={600}>
-            Chi tiết yêu cầu xuất kho
-          </Typography>
-          {detail && renderStatusChip(detail.status)}
-        </Box>
-
-        <Divider sx={{ mb: 3 }} />
-
-        {loading ? (
-          <Box
-            display="flex"
-            justifyContent="center"
-            alignItems="center"
-            py={8}
-          >
-            <CircularProgress />
-          </Box>
-        ) : detail ? (
-          <>
+    <Drawer 
+        title={<Space><DropboxOutlined /> Chi tiết xuất kho #{detail?.id}</Space>} 
+        open={open} 
+        onClose={onClose} 
+        width={600}
+        extra={
+            <Space>
+                {detail && renderStatus(detail.status)}
+            </Space>
+        }
+        footer={
+            <div style={{ textAlign: 'right' }}>
+                <Space>
+                    <Button onClick={onClose}>Đóng</Button>
+                    {detail?.status === "PENDING" && !isRepairRelated && (
+                        <>
+                            <Button danger onClick={handleCancel} loading={busy}>Từ chối / Huỷ</Button>
+                            <Button type="primary" onClick={handleApprove} loading={busy}>Duyệt yêu cầu</Button>
+                        </>
+                    )}
+                </Space>
+            </div>
+        }
+    >
+      {loading ? (
+        <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>
+      ) : !detail ? (
+        <Empty description="Không tìm thấy dữ liệu" />
+      ) : (
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
             {isRepairRelated && (
-              <Alert severity="info" icon={<BuildIcon />} sx={{ mb: 3 }}>
-                Yêu cầu này thuộc phiếu sửa chữa{" "}
-                <strong>#{detail.repair?.repair_id}</strong> và sẽ được tự động
-                duyệt khi Admin phê duyệt kiểm nghiệm.
-              </Alert>
+              <Alert 
+                type="info" 
+                showIcon 
+                message="Yêu cầu từ quy trình sửa chữa"
+                description={
+                    <span>
+                        Yêu cầu này thuộc phiếu sửa chữa <strong>#{detail.repair?.repair_id}</strong>. 
+                        Nó sẽ được tự động xử lý khi phiếu sửa chữa được duyệt.
+                    </span>
+                }
+              />
             )}
 
-            <Card variant="outlined" sx={{ mb: 3 }}>
-              <CardContent>
-                <Typography
-                  variant="h6"
-                  fontWeight={600}
-                  mb={2}
-                  color="primary"
-                >
-                  Thông tin chung
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12}>
-                    <Box display="flex" alignItems="center" gap={1}>
-                      <Typography variant="body2" color="text.secondary">
-                        Mã yêu cầu:
-                      </Typography>
-                      <Chip label={`#${detail.id}`} size="small" />
-                    </Box>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Box display="flex" alignItems="center" gap={1} mb={1}>
-                      <PersonIcon fontSize="small" color="action" />
-                      <Typography variant="body2" color="text.secondary">
-                        Người yêu cầu:
-                      </Typography>
-                    </Box>
-                    <Typography variant="body1" fontWeight={500} pl={4}>
-                      {typeof detail.requested_by === "object"
-                        ? detail.requested_by?.name ??
-                          detail.requested_by?.email
-                        : "Chưa xác định"}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6}>
-                    <Box display="flex" alignItems="center" gap={1} mb={1}>
-                      <PersonIcon fontSize="small" color="action" />
-                      <Typography variant="body2" color="text.secondary">
-                        Người duyệt:
-                      </Typography>
-                    </Box>
-                    <Typography variant="body1" fontWeight={500} pl={4}>
-                      {typeof detail.approved_by === "object"
-                        ? detail.approved_by?.name ?? detail.approved_by?.email
-                        : "Chưa duyệt"}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12}>
-                    <Box display="flex" alignItems="center" gap={1} mb={1}>
-                      <CalendarTodayIcon fontSize="small" color="action" />
-                      <Typography variant="body2" color="text.secondary">
-                        Ngày tạo:
-                      </Typography>
-                    </Box>
-                    <Typography variant="body1" fontWeight={500} pl={4}>
-                      {new Date(detail.created_at ?? Date.now()).toLocaleString(
-                        "vi-VN"
-                      )}
-                    </Typography>
-                  </Grid>
-                </Grid>
-              </CardContent>
+            <Card type="inner" title="Thông tin chung" size="small">
+                <Descriptions column={1} bordered size="small">
+                    <Descriptions.Item label="Mã yêu cầu">#{detail.id}</Descriptions.Item>
+                    <Descriptions.Item label="Người yêu cầu">
+                        <Space>
+                            <UserOutlined /> 
+                            {typeof detail.requested_by === "object" ? (detail.requested_by?.name || detail.requested_by?.email) : "—"}
+                        </Space>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Người duyệt">
+                         <Space>
+                            <UserOutlined />
+                            {typeof detail.approved_by === "object" ? (detail.approved_by?.name || detail.approved_by?.email) : "—"}
+                        </Space>
+                    </Descriptions.Item>
+                    <Descriptions.Item label="Ngày tạo">
+                         <Space>
+                            <CalendarOutlined />
+                            {new Date(detail.created_at || "").toLocaleString('vi-VN')}
+                        </Space>
+                    </Descriptions.Item>
+                </Descriptions>
             </Card>
 
-            <Card variant="outlined" sx={{ mb: 3 }}>
-              <CardContent>
-                <Typography
-                  variant="h6"
-                  fontWeight={600}
-                  mb={2}
-                  color="primary"
-                >
-                  <InventoryIcon sx={{ mr: 1, verticalAlign: "middle" }} />
-                  Thông tin vật tư
-                </Typography>
+            <Card type="inner" title="Thông tin vật tư" size="small">
                 {detail.item ? (
-                  <Box
-                    sx={{
-                      p: 2,
-                      bgcolor: "grey.50",
-                      borderRadius: 1,
-                      border: "1px solid",
-                      borderColor: "grey.200",
-                    }}
-                  >
-                    <Typography variant="body1" fontWeight={600} mb={1}>
-                      {detail.item.name}
-                    </Typography>
-                    <Grid container spacing={1}>
-                      <Grid item xs={6}>
-                        <Typography variant="body2" color="text.secondary">
-                          Danh mục:
-                        </Typography>
-                        <Typography variant="body2" fontWeight={500}>
-                          {detail.item.category?.name ?? "Chưa phân loại"}
-                        </Typography>
-                      </Grid>
-                      <Grid item xs={6}>
-                        <Typography variant="body2" color="text.secondary">
-                          Số lượng xuất:
-                        </Typography>
-                        <Typography
-                          variant="body2"
-                          fontWeight={500}
-                          color="primary"
-                        >
-                          {detail.quantity} {detail.item.quantity_unit ?? ""}
-                        </Typography>
-                      </Grid>
-                      {detail.purpose && (
-                        <Grid item xs={12}>
-                          <Typography variant="body2" color="text.secondary">
-                            Mục đích:
-                          </Typography>
-                          <Typography variant="body2" fontWeight={500}>
-                            {detail.purpose}
-                          </Typography>
-                        </Grid>
-                      )}
-                    </Grid>
-                  </Box>
+                    <Descriptions column={1} bordered size="small">
+                         <Descriptions.Item label="Tên vật tư"><strong>{detail.item.name}</strong></Descriptions.Item>
+                         <Descriptions.Item label="Danh mục">{detail.item.category?.name || "—"}</Descriptions.Item>
+                         <Descriptions.Item label="Số lượng xuất">
+                            <Text type="danger" strong>{detail.quantity} {detail.item.quantity_unit}</Text>
+                         </Descriptions.Item>
+                         <Descriptions.Item label="Tồn kho hiện tại">{detail.item.quantity} {detail.item.quantity_unit}</Descriptions.Item>
+                         <Descriptions.Item label="Mục đích">{detail.purpose || "—"}</Descriptions.Item>
+                    </Descriptions>
                 ) : (
-                  <Typography color="text.secondary">
-                    Không có vật tư trong phiếu
-                  </Typography>
+                    <Empty description="Không có thông tin vật tư" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                 )}
-              </CardContent>
             </Card>
 
             {detail.note && (
-              <Card variant="outlined" sx={{ mb: 3 }}>
-                <CardContent>
-                  <Typography
-                    variant="h6"
-                    fontWeight={600}
-                    mb={1}
-                    color="primary"
-                  >
-                    Ghi chú
-                  </Typography>
-                  <Typography
-                    variant="body2"
-                    sx={{
-                      p: 2,
-                      bgcolor: "grey.50",
-                      borderRadius: 1,
-                      border: "1px solid",
-                      borderColor: "grey.200",
-                      whiteSpace: "pre-wrap",
-                    }}
-                  >
-                    {detail.note}
-                  </Typography>
-                </CardContent>
-              </Card>
+                <Card type="inner" title="Ghi chú" size="small">
+                    <Paragraph style={{ whiteSpace: 'pre-wrap', marginBottom: 0 }}>{detail.note}</Paragraph>
+                </Card>
             )}
-
-            {error && (
-              <Alert severity="error" sx={{ mb: 3 }}>
-                {error}
-              </Alert>
-            )}
-
-            <Box display="flex" gap={2} justifyContent="flex-end" mt={4}>
-              <Button variant="outlined" onClick={onClose} size="large">
-                Đóng
-              </Button>
-              {detail.status === "PENDING" && !isRepairRelated && (
-                <>
-                  <Button
-                    variant="contained"
-                    color="error"
-                    onClick={handleCancel}
-                    disabled={busy}
-                    size="large"
-                  >
-                    Huỷ yêu cầu
-                  </Button>
-                  <Button
-                    variant="contained"
-                    color="primary"
-                    onClick={handleApprove}
-                    disabled={busy}
-                    size="large"
-                  >
-                    Duyệt yêu cầu
-                  </Button>
-                </>
-              )}
-            </Box>
-          </>
-        ) : (
-          <Box
-            display="flex"
-            justifyContent="center"
-            alignItems="center"
-            py={8}
-          >
-            <Typography color="text.secondary">
-              Không có dữ liệu hiển thị
-            </Typography>
-          </Box>
-        )}
-      </Box>
+        </Space>
+      )}
     </Drawer>
   );
 }

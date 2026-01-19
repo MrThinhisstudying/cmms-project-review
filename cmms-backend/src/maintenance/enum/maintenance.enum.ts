@@ -1,4 +1,5 @@
 export enum MaintenanceLevel {
+    ONE_WEEK = 'Tuần', // Thêm mới
     ONE_MONTH = '1M', // Thêm mới
     THREE_MONTH = '3M', // Đổi ngắn gọn cho dễ quản lý
     SIX_MONTH = '6M',

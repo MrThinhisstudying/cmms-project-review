@@ -101,6 +101,8 @@ const MaintenanceTable: React.FC<Props> = ({
       width: 130,
       render: (level: string) => {
         const map: any = {
+          "1W": "Tuần",
+          "Tuần": "Tuần",
           "1M": "01 Tháng",
           "3M": "03 Tháng",
           "6M": "06 Tháng",

@@ -1,245 +1,228 @@
 import React, { useState, useEffect } from "react";
-import Box from "@mui/material/Box";
-import Typography from "@mui/material/Typography";
-import AddIcon from "@mui/icons-material/Add";
-import { useStyles } from "./styles";
+import { 
+  Layout,
+  Typography, 
+  Button, 
+  Upload, 
+  Tabs, 
+  Space, 
+  message, 
+  Pagination,
+  Input
+} from "antd";
+import { 
+  PlusOutlined, 
+  UploadOutlined, 
+  DownloadOutlined 
+} from "@ant-design/icons";
 import { useInventoryContext } from "../../context/InventoryContext/InventoryContext";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
 import ListItems from "./components/ListItems";
 import ManageCategoryModal from "./components/ManageCategoryModal";
 import AddItemDrawer from "./components/AddItemDrawer";
-import Toast from "../../components/Toast";
-import TabHeader from "../../components/TabHeader/TabHeader";
-import { CustomButton } from "../../components/Button";
 import { getToken } from "../../utils/auth";
 import { uploadInventory } from "../../apis/inventory";
 import { exportInventoryToExcel } from "../../utils";
-import UploadIcon from "@mui/icons-material/Upload";
-import DownloadIcon from "@mui/icons-material/Download";
 import { IInventoryTab, IItem } from "../../types/inventory.types";
-import Pagination from "../../components/Pagination/Pagination";
+
+const { Content } = Layout;
+const { Title } = Typography;
 
 export function InventoryManagementPage() {
-  const classes = useStyles();
-  const { categories, items, loading, refreshAll, tabs } =
-    useInventoryContext();
+  const { categories, items, loading, refreshAll, tabs } = useInventoryContext();
   const { user } = useAuthContext();
-  const [value, setValue] = useState(0);
+  
+  // Tabs active key (string)
+  const [activeKey, setActiveKey] = useState<string>("0"); // Default to first tab (id=0 normally 'All')
+
+  // Pagination
   const [page, setPage] = useState<number>(1);
   const rowsPerPage = 24;
+
+  // Drawer / Modals
   const [openDrawer, setOpenDrawer] = useState(false);
   const [openCategoryModal, setOpenCategoryModal] = useState(false);
   const [editData, setEditData] = useState<IItem | null>(null);
-  const [openToast, setOpenToast] = useState(false);
-  const [toast, setToast] = useState<{
-    type: "error" | "success";
-    content: string;
-  }>({ type: "success", content: "" });
+
+  // Search
+  const [searchText, setSearchText] = useState("");
 
   const toggleDrawer = (open: boolean, data: IItem | null) => {
     setEditData(data);
     setOpenDrawer(open);
   };
 
+  // Reset page when switching tabs/search
   useEffect(() => {
     setPage(1);
-  }, [value]);
+  }, [activeKey, searchText]);
 
   const handleDownload = () => {
     try {
       exportInventoryToExcel(items);
-      setToast({
-        content:
-          items.length === 0
-            ? "Đã tải file mẫu vật tư thành công"
-            : "Xuất danh sách vật tư thành công",
-        type: "success",
-      });
-      setOpenToast(true);
+      message.success(
+        items.length === 0
+          ? "Đã tải file mẫu vật tư thành công"
+          : "Xuất danh sách vật tư thành công"
+      );
     } catch (error) {
-      setToast({
-        content: "Xuất dữ liệu thất bại",
-        type: "error",
-      });
-      setOpenToast(true);
+      message.error("Xuất dữ liệu thất bại");
     }
   };
 
-  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleUpload = async (file: File) => {
     try {
       const token = getToken();
       const res = await uploadInventory(token, file);
-      setToast({
-        content: res.message || "Nhập vật tư thành công",
-        type: "success",
-      });
+      message.success(res.message || "Nhập vật tư thành công");
       await refreshAll();
     } catch (err: any) {
-      setToast({
-        content: err.message || "Nhập vật tư thất bại",
-        type: "error",
-      });
-    } finally {
-      e.target.value = "";
-      setOpenToast(true);
+      message.error(err.message || "Nhập vật tư thất bại");
     }
   };
 
-  return (
-    <Box component="main" className={classes.Dashboard}>
-      <Box className={classes.Header}>
-        <Typography fontSize={24} fontWeight={500} lineHeight={"32px"}>
-          Quản lý vật tư
-        </Typography>
-        <Box className={classes.Action}>
-          {user?.role === "admin" && (
-            <>
-              <Box position="relative">
-                <input
-                  type="file"
-                  accept=".csv,.xlsx,.xls"
-                  onChange={handleUpload}
-                  style={{
-                    position: "absolute",
-                    width: "100%",
-                    height: "100%",
-                    opacity: 0,
-                    cursor: "pointer",
-                    zIndex: 2,
-                  }}
-                />
-                <CustomButton
-                  variant="contained"
-                  startIcon={<UploadIcon />}
-                  sx={{ height: "40px" }}
-                  component="span"
-                >
-                  Tải tệp
-                </CustomButton>
-              </Box>
-              <CustomButton
-                variant="contained"
-                startIcon={<DownloadIcon />}
-                sx={{ height: "40px" }}
-                onClick={handleDownload}
-              >
-                Xuất dữ liệu
-              </CustomButton>
-              <CustomButton
-                variant="contained"
-                id="manage_category"
-                onClick={() => setOpenCategoryModal(true)}
-                sx={{ height: "40px" }}
-              >
-                Quản lý Danh mục
-              </CustomButton>
-              <CustomButton
-                variant="contained"
-                id="add_new_item"
-                onClick={() => toggleDrawer(true, null)}
-                startIcon={<AddIcon sx={{ color: "#fff" }} />}
-                sx={{ height: "40px" }}
-              >
-                Thêm mới vật tư
-              </CustomButton>
-            </>
-          )}
-        </Box>
-      </Box>
+  const isAdminOrManager = user?.role === "ADMIN" || user?.role === "MANAGER" || user?.role === "admin";
 
-      <Box className={classes.TabPanel}>
-        <TabHeader
-          tabs={tabs}
-          handleChange={(v: number) => setValue(v)}
-          value={value}
-        />
-        {tabs.map((tab: IInventoryTab) => (
-          <Box
-            role="tabpanel"
-            hidden={value !== tab.id}
-            id={`tab-${tab.id}`}
-            aria-labelledby={`tab-${tab.id}`}
-            key={tab.id}
-          >
-            {value === tab.id && (
+  const tabItems = (Array.isArray(tabs) ? tabs : []).map((tab: IInventoryTab) => {
+    let currentData = tab.data || [];
+    
+    // Filter by search text
+    if (searchText && Array.isArray(currentData)) {
+        const lower = searchText.trim().toLowerCase();
+        currentData = currentData.filter(item => 
+            (item?.name || "").toLowerCase().includes(lower) || 
+            (item?.code || "").toLowerCase().includes(lower)
+        );
+    } else if (!Array.isArray(currentData)) {
+        currentData = [];
+    }
+
+    const totalItems = currentData.length;
+    const paginatedData = currentData.slice(
+      (page - 1) * rowsPerPage,
+      page * rowsPerPage
+    );
+
+    return {
+      key: String(tab.id),
+      label: tab.label || `Tab ${tab.id}`, 
+      children: (
+        <div style={{ paddingTop: 16 }}>
+          <ListItems
+            result={paginatedData}
+            loading={loading}
+            toggleDrawer={toggleDrawer}
+            refreshAll={refreshAll}
+          />
+          {totalItems > rowsPerPage && (
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
+              <Pagination
+                current={page}
+                pageSize={rowsPerPage}
+                total={totalItems}
+                onChange={(p) => setPage(p)}
+                showSizeChanger={false}
+              />
+            </div>
+          )}
+        </div>
+      )
+    };
+  });
+
+  return (
+    <Layout style={{ height: '100%', background: '#f5f5f5' }}>
+      <Content style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+        
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <Space>
+             <Title level={3} style={{ margin: 0 }}>Quản lý vật tư</Title>
+             <Input.Search 
+                placeholder="Tìm kiếm vật tư..." 
+                allowClear 
+                onSearch={val => setSearchText(val)}
+                onChange={e => setSearchText(e.target.value)}
+                style={{ width: 300, marginLeft: 16 }}
+             />
+          </Space>
+          
+          <Space>
+            {isAdminOrManager && (
               <>
-                <ListItems
-                  result={tab.data.slice(
-                    (page - 1) * rowsPerPage,
-                    (page - 1) * rowsPerPage + rowsPerPage
-                  )}
-                  loading={loading}
-                  toggleDrawer={toggleDrawer}
-                  refreshAll={refreshAll}
-                />
-                {tab.data && tab.data.length > rowsPerPage && (
-                  <Box
-                    sx={{
-                      display: "flex",
-                      justifyContent: "center",
-                      mt: 2,
-                      width: "100%",
-                    }}
-                  >
-                    <Pagination
-                      data={tab.data}
-                      rowsPerPage={rowsPerPage}
-                      page={page}
-                      onPageChange={(p: number) => setPage(p)}
-                    />
-                  </Box>
-                )}
+                <Upload 
+                  beforeUpload={(file) => {
+                    handleUpload(file);
+                    return false;
+                  }}
+                  showUploadList={false}
+                  accept=".csv,.xlsx,.xls"
+                >
+                  <Button icon={<UploadOutlined />}>Tải tệp</Button>
+                </Upload>
+
+                <Button icon={<DownloadOutlined />} onClick={handleDownload}>
+                  Xuất dữ liệu
+                </Button>
+                
+                <Button onClick={() => setOpenCategoryModal(true)}>
+                  Quản lý Danh mục
+                </Button>
+                
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => toggleDrawer(true, null)}>
+                  Thêm mới vật tư
+                </Button>
               </>
             )}
-          </Box>
-        ))}
-      </Box>
+          </Space>
+        </div>
 
-      <ManageCategoryModal
-        open={openCategoryModal}
-        handleClose={() => {
-          setOpenCategoryModal(false);
-          refreshAll();
-          setToast({
-            type: "success",
-            content: "Cập nhật danh mục thành công",
-          });
-          setOpenToast(true);
-        }}
-        categories={categories}
-      />
+        {/* Content Tabs */}
+        <div style={{ 
+          background: '#fff', 
+          padding: 24, 
+          borderRadius: 8, 
+          flex: 1, 
+          display: 'flex', 
+          flexDirection: 'column',
+          overflow: 'hidden' 
+        }}>
+          <Tabs 
+            activeKey={activeKey} 
+            onChange={setActiveKey} 
+            items={tabItems}
+            style={{ height: '100%' }}
+            // Ensure tab content scrolls if needed
+          />
+        </div>
 
-      <AddItemDrawer
-        openDrawer={openDrawer}
-        toggleDrawer={toggleDrawer}
-        data={editData}
-        categories={categories}
-        onSaved={(payload?: any) => {
-          setOpenDrawer(false);
-          refreshAll();
-          setToast({
-            type: "success",
-            content: payload?.message ?? "Lưu thành công",
-          });
-          setOpenToast(true);
-        }}
-        onError={(payload?: any) => {
-          setToast({
-            type: "error",
-            content: payload?.message ?? "Có lỗi xảy ra",
-          });
-          setOpenToast(true);
-        }}
-      />
+        {/* Modals */}
+        <ManageCategoryModal
+          open={openCategoryModal}
+          handleClose={() => {
+            setOpenCategoryModal(false);
+            refreshAll();
+            message.success("Cập nhật danh mục thành công");
+          }}
+          categories={categories}
+        />
 
-      <Toast
-        content={toast.content}
-        variant={toast.type}
-        open={openToast}
-        onClose={() => setOpenToast(false)}
-      />
-    </Box>
+        <AddItemDrawer
+          openDrawer={openDrawer}
+          toggleDrawer={toggleDrawer}
+          data={editData}
+          categories={categories}
+          onSaved={(payload: any) => {
+            setOpenDrawer(false);
+            refreshAll();
+            message.success(payload?.message ?? "Lưu thành công");
+          }}
+          onError={(payload: any) => {
+            message.error(payload?.message ?? "Có lỗi xảy ra");
+          }}
+        />
+
+      </Content>
+    </Layout>
   );
 }

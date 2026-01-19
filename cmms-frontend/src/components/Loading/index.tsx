@@ -1,23 +1,20 @@
-import { Box, CircularProgress, Typography } from '@mui/material';
+import React from "react";
+import { Spin } from "antd";
 
 const Loading = () => {
   return (
-    <Box
-      sx={{
-        boxShadow: '0px 3px 1px -2px rgba(0,0,0,0.2), 0px 2px 2px 0px rgba(0,0,0,0.14), 0px 1px 5px 0px rgba(0,0,0,0.12)',
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        height: "100vh",
+        flexDirection: "column",
+        gap: "1rem"
       }}
-      height="100vh"
-      maxWidth="1024px"
-      margin="auto"
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
     >
-      <Box display="flex" flexDirection="column" alignItems="center" gap="16px">
-        <CircularProgress color="success" />
-        <Typography>Loading</Typography>
-      </Box>
-    </Box>
+      <Spin size="large" tip="Đang tải..." />
+    </div>
   );
 };
 

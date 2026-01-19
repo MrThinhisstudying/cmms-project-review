@@ -1,25 +1,31 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  Box,
-  Typography,
-  CircularProgress,
-  Card,
-  CardContent,
-  Grid,
+  Table,
+  Tag,
   Button,
-  Chip,
-} from "@mui/material";
+  Popconfirm,
+  Card,
+  Typography,
+  Space,
+  message
+} from "antd";
+import { 
+  ReloadOutlined, 
+  RollbackOutlined,
+  HistoryOutlined
+} from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useAuditContext } from "../../../../context/AuditContext/AuditContext";
 import { AuditLog } from "../../../../types/audit.types";
-import Toast from "../../../../components/Toast";
-import ConfirmModal from "../../../../components/Modal";
+import { useUsersContext } from "../../../../context/UsersContext/UsersContext";
+
+const { Title, Text } = Typography;
 
 const ACTION_COLOR: Record<string, string> = {
-  INSERT: "#4caf50",
-  UPDATE: "#2196f3",
-  DELETE: "#f44336",
-  ROLLBACK: "#9e9e9e",
+  INSERT: "success",
+  UPDATE: "processing",
+  DELETE: "error",
+  ROLLBACK: "default",
 };
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -41,34 +47,28 @@ function getEntityDisplay(log: AuditLog): string {
 
 const AuditHistory: React.FC = () => {
   const { logs, fetchAll, rollbackTx, loading } = useAuditContext();
+  const { users } = useUsersContext();
   const [rollingTxId, setRollingTxId] = useState<number | null>(null);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [selectedTxId, setSelectedTxId] = useState<number | null>(null);
-
-  const toast = useRef<{ type: "error" | "success"; content: string }>({
-    type: "success",
-    content: "",
-  });
-  const [openToast, setOpenToast] = useState(false);
 
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
 
-  const handleConfirmRollback = async () => {
-    if (!selectedTxId) return;
-    setRollingTxId(selectedTxId);
-    const ok = await rollbackTx(selectedTxId, "admin rollback dữ liệu");
-    if (ok) {
-      toast.current = { type: "success", content: "Rollback thành công" };
-      fetchAll();
-    } else {
-      toast.current = { type: "error", content: "Rollback thất bại" };
+  const handleConfirmRollback = async (txId: number) => {
+    setRollingTxId(txId);
+    try {
+      const ok = await rollbackTx(txId, "admin rollback dữ liệu");
+      if (ok) {
+        message.success("Rollback thành công");
+        fetchAll();
+      } else {
+        message.error("Rollback thất bại");
+      }
+    } catch (error) {
+       message.error("Có lỗi xảy ra khi rollback");
+    } finally {
+      setRollingTxId(null);
     }
-    setOpenToast(true);
-    setRollingTxId(null);
-    setConfirmOpen(false);
-    setSelectedTxId(null);
   };
 
   const renderDescription = (log: AuditLog) => {
@@ -87,104 +87,106 @@ const AuditHistory: React.FC = () => {
     }
   };
 
+  const columns = [
+    {
+      title: "Hành động",
+      dataIndex: "action",
+      key: "action",
+      width: 120,
+      render: (action: string) => (
+        <Tag color={ACTION_COLOR[action]}>{action}</Tag>
+      ),
+    },
+    {
+      title: "Mô tả chi tiết",
+      key: "description",
+      render: (_: any, log: AuditLog) => (
+        <Space direction="vertical" size={0}>
+          <Text strong>{renderDescription(log)}</Text>
+          {log.reason && <Text type="secondary">Lý do: {log.reason}</Text>}
+        </Space>
+      ),
+    },
+    {
+      title: "Người thực hiện",
+      dataIndex: "actor_user_id",
+      key: "actor",
+      width: 150,
+      render: (id: number) => {
+        const foundUser = users.find(u => u.user_id === id);
+        return (
+          <Space>
+             <Text>{foundUser ? foundUser.name : `ID: ${id || "N/A"}`}</Text>
+          </Space>
+        )
+      }
+    },
+    {
+      title: "Thời gian",
+      dataIndex: "created_at",
+      key: "created_at",
+      width: 180,
+      render: (date: string) => dayjs(date).format("DD/MM/YYYY HH:mm:ss"),
+    },
+    {
+      title: "Thao tác",
+      key: "action_btn",
+      width: 150,
+      render: (_: any, log: AuditLog) => {
+        if (log.action === "ROLLBACK" || log.rolled_back || !log.transaction?.id) {
+            if (log.rolled_back) return <Tag>ĐÃ ROLLBACK</Tag>;
+            return null;
+        }
+
+        return (
+          <Popconfirm
+            title="Xác nhận rollback?"
+            description="Bạn có chắc chắn muốn hoàn tác thay đổi này?"
+            onConfirm={() => handleConfirmRollback(log.transaction!.id)}
+            okText="Đồng ý"
+            cancelText="Hủy"
+          >
+            <Button 
+                danger 
+                size="small" 
+                icon={<RollbackOutlined />} 
+                loading={rollingTxId === log.transaction.id}
+            >
+              Rollback
+            </Button>
+          </Popconfirm>
+        );
+      },
+    },
+  ];
+
   return (
-    <Box p={3}>
-      <Typography variant="h5" fontWeight="bold" gutterBottom>
-        Toàn bộ lịch sử thay đổi
-      </Typography>
-
-      {loading && (
-        <Box display="flex" justifyContent="center" py={5}>
-          <CircularProgress />
-        </Box>
-      )}
-      {!loading && logs.length === 0 && (
-        <Typography>Không có thay đổi nào</Typography>
-      )}
-
-      <Grid container spacing={2}>
-        {logs.map((log: AuditLog) => (
-          <Grid item xs={12} key={log.id}>
-            <Card>
-              <CardContent>
-                <Box
-                  display="flex"
-                  justifyContent="space-between"
-                  alignItems="center"
-                >
-                  <Box>
-                    <Chip
-                      label={log.action}
-                      sx={{
-                        backgroundColor: ACTION_COLOR[log.action],
-                        color: "#fff",
-                        fontWeight: "bold",
-                        mr: 2,
-                      }}
-                    />
-                    <Typography variant="body2" display="inline">
-                      Người dùng: {log.actor_user_id || "N/A"} –{" "}
-                      {dayjs(log.created_at).format("DD/MM/YYYY HH:mm:ss")}
-                    </Typography>
-                    {log.reason && (
-                      <Typography variant="body2" color="text.secondary">
-                        Lý do: {log.reason}
-                      </Typography>
-                    )}
-                  </Box>
-
-                  {log.action !== "ROLLBACK" &&
-                    !log.rolled_back &&
-                    log.transaction?.id && (
-                      <Button
-                        variant="outlined"
-                        color="error"
-                        size="small"
-                        disabled={rollingTxId === log.transaction.id}
-                        onClick={() => {
-                          setConfirmOpen(true);
-                          setSelectedTxId(log.transaction!.id);
-                        }}
-                      >
-                        {rollingTxId === log.transaction.id
-                          ? "Đang rollback..."
-                          : "Rollback TX"}
-                      </Button>
-                    )}
-                  {log.rolled_back && (
-                    <Chip
-                      label="ĐÃ ROLLBACK"
-                      sx={{ backgroundColor: "#9e9e9e", color: "#fff" }}
-                    />
-                  )}
-                </Box>
-
-                <Box mt={2}>
-                  <Typography variant="body2">
-                    {renderDescription(log)}
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-
-      <Toast
-        content={toast.current.content}
-        variant={toast.current.type}
-        open={openToast}
-        onClose={() => setOpenToast(false)}
-      />
-
-      <ConfirmModal
-        open={confirmOpen}
-        title="Xác nhận rollback"
-        content="Bạn có chắc chắn muốn rollback thay đổi này?"
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={handleConfirmRollback}
-      />
-    </Box>
+    <div style={{ padding: 24 }}>
+      <Card
+        title={
+            <Space>
+                <HistoryOutlined />
+                <span>Lịch sử thay đổi hệ thống</span>
+            </Space>
+        }
+        extra={
+            <Button icon={<ReloadOutlined />} onClick={fetchAll} loading={loading}>
+                Làm mới
+            </Button>
+        }
+        bordered={false}
+        style={{ borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}
+      >
+        <Table
+          dataSource={logs}
+          columns={columns}
+          rowKey="id"
+          loading={loading}
+          pagination={{ pageSize: 10, showSizeChanger: true }}
+          bordered
+        />
+      </Card>
+    </div>
   );
 };
 

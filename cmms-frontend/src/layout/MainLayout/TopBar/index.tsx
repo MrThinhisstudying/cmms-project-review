@@ -65,16 +65,6 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
       }
   ];
 
-  const notificationItems: MenuProps['items'] = notifications.length > 0 ? 
-      notifications.map((n, idx) => ({
-          key: n.id || idx,
-          label: (
-              <div style={{ maxWidth: 300, whiteSpace: 'normal' }}>
-                  <div style={{ fontWeight: 500 }}>{n.message}</div>
-                  <div style={{ fontSize: 11, color: '#888' }}>{new Date(n.created_at).toLocaleString()}</div>
-              </div>
-          )
-      })) : [{ key: 'empty', label: 'Không có thông báo' }];
 
 
   return (
