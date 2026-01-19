@@ -24,6 +24,7 @@ import {InventoryTransactionModule} from './inventory_transaction/inventory-tran
 import {StockOutModule} from './stock-out/stock-out.module';
 import {RepairsModule} from './repairs/repairs.module';
 import {DeviceGroupsModule} from './device-groups/device-groups.module';
+import {ReportModule} from './report/report.module';
 
 @Module({
     imports: [
@@ -64,8 +65,10 @@ import {DeviceGroupsModule} from './device-groups/device-groups.module';
         StockOutModule,
         RepairsModule,
         DeviceGroupsModule,
+        ReportModule,
     ],
     controllers: [AppController],
     providers: [AppService],
 })
 export class AppModule {}
+
