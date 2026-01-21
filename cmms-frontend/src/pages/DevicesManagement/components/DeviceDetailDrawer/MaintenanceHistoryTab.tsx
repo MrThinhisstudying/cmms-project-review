@@ -1,17 +1,8 @@
 import React from "react";
-import {
-  Box,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  Chip,
-  CircularProgress,
-  Typography,
-} from "@mui/material";
+import { Table, Tag } from "antd";
+import type { ColumnsType } from "antd/es/table";
 import { IMaintenance } from "../../../../types/maintenance.types";
-import { fmt } from "../../../../utils/maintenanceDue";
+import dayjs from "dayjs";
 
 interface Props {
   loading: boolean;
@@ -22,61 +13,94 @@ export default function MaintenanceHistoryTab({
   loading,
   maintenances,
 }: Props) {
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" py={4}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+  
+  const columns: ColumnsType<IMaintenance> = [
+    {
+      title: "#",
+      key: "index",
+      width: 60,
+      render: (_, __, index) => index + 1,
+    },
+    {
+      title: "Ngày dự kiến",
+      dataIndex: "scheduled_date",
+      key: "scheduled_date",
+      render: (val) => (val ? dayjs(val).format("DD/MM/YYYY") : "—"),
+    },
+    {
+      title: "Trạng thái",
+      dataIndex: "status",
+      key: "status",
+      render: (status) => {
+        const s = (status || "").toUpperCase();
+        let color = "default";
+        let text = s;
+
+        if (s === "ACTIVE") {
+            color = "processing";
+            text = "Đang hiệu lực";
+        }
+        else if (s === "COMPLETED") {
+            color = "success";
+            text = "Đã hoàn thành";
+        }
+        else if (s === "OVERDUE") {
+            color = "error";
+            text = "Quá hạn";
+        }
+        else if (s === "CANCELED") {
+             color = "default";
+             text = "Đã hủy";
+        }
+        
+        return <Tag color={color}>{text}</Tag>;
+      },
+    },
+    {
+      title: "Chu kỳ",
+      dataIndex: "level",
+      key: "level",
+      render: (val: string) => {
+          const map: Record<string, string> = {
+            '1_week': '1 Tuần',
+            '1_month': '1 Tháng',
+            '2_month': '2 Tháng',
+            '3_month': '3 Tháng',
+            '6_month': '6 Tháng',
+            '9_month': '9 Tháng',
+            '12_month': '12 Tháng',
+            '24_month': '24 Tháng',
+            '1M': '1 Tháng', 
+            '3M': '3 Tháng',
+            '6M': '6 Tháng',
+            '1Y': '1 Năm',
+          };
+          return map[val] || val || "—";
+      },
+    },
+    {
+      title: "Người/Phòng ban",
+      key: "assignee",
+      render: (_, record) => record.user?.name || record.department?.name || "—",
+    },
+  ];
 
   return (
-    <Box p={2}>
+    <div>
       {maintenances.length > 0 && (
-        <Typography variant="body2" color="text.secondary" mb={2}>
+        <div style={{ marginBottom: 16, color: 'rgba(0, 0, 0, 0.45)' }}>
           Tổng số: <strong>{maintenances.length}</strong> lịch bảo trì
-        </Typography>
+        </div>
       )}
-      <Table size="small" stickyHeader>
-        <TableHead>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 600 }}>#</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Ngày dự kiến</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Trạng thái</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Chu kỳ</TableCell>
-            <TableCell sx={{ fontWeight: 600 }}>Người/Phòng ban</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {maintenances.length > 0 ? (
-            maintenances.map((m, i) => (
-              <TableRow key={m.maintenance_id || i} hover>
-                <TableCell>{i + 1}</TableCell>
-                <TableCell>
-                  <Typography variant="body2" fontWeight={500}>
-                    {fmt(m.scheduled_date as any)}
-                  </Typography>
-                </TableCell>
-                <TableCell>
-                  <Chip size="small" label={m.status} color="primary" />
-                </TableCell>
-                <TableCell>{m.level || "—"}</TableCell>
-                <TableCell>
-                  {m.user?.name || m.department?.name || "—"}
-                </TableCell>
-              </TableRow>
-            ))
-          ) : (
-            <TableRow>
-              <TableCell colSpan={5} align="center" sx={{ py: 4 }}>
-                <Typography color="text.secondary">
-                  Không có lịch sử bảo trì
-                </Typography>
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </Box>
+      <Table
+        loading={loading}
+        columns={columns}
+        dataSource={maintenances}
+        rowKey="maintenance_id"
+        size="small"
+        pagination={{ pageSize: 10, showSizeChanger: false }}
+        locale={{ emptyText: "Không có lịch sử bảo trì" }}
+      />
+    </div>
   );
 }

@@ -39,9 +39,14 @@ export const getAllRepairs = async (
 
 export const getRepairsByDevice = async (
   deviceId: number,
-  token: string | null
-): Promise<IRepair[]> => {
-  const res = await fetch(`${BASE_URL}/device/${deviceId}`, {
+  token: string | null,
+  params?: { page?: number; limit?: number }
+): Promise<{ repairs: IRepair[]; total: number }> => {
+  const url = new URL(`${BASE_URL}/device/${deviceId}`);
+  if (params?.page) url.searchParams.append("page", params.page.toString());
+  if (params?.limit) url.searchParams.append("limit", params.limit.toString());
+
+  const res = await fetch(url.toString(), {
     headers: {
       Authorization: token ? `Bearer ${token}` : "",
       "Content-Type": "application/json",
@@ -52,7 +57,7 @@ export const getRepairsByDevice = async (
     throw new Error(
       data.message || "Lấy danh sách sửa chữa của thiết bị thất bại"
     );
-  return data.data;
+  return { repairs: data.data, total: data.total || 0 };
 };
 
 export const createRepair = async (

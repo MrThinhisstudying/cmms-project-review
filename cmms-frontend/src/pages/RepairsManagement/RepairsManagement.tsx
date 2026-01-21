@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
+import { io } from "socket.io-client";
 import {
   Button,
   Select,
@@ -64,6 +65,12 @@ const RepairsManagement: React.FC = () => {
   const [filterDevice, setFilterDevice] = useState<number | undefined>(undefined);
   const [filterStatusRequest, setFilterStatusRequest] = useState<string | undefined>(undefined);
 
+  // Use refs to access latest filters in socket callback without triggering re-connection
+  const filterRefs = useRef({ filterDevice, filterStatusRequest });
+  useEffect(() => {
+    filterRefs.current = { filterDevice, filterStatusRequest };
+  }, [filterDevice, filterStatusRequest]);
+
   useEffect(() => {
     reload({
       device_id: filterDevice,
@@ -72,16 +79,32 @@ const RepairsManagement: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterDevice, filterStatusRequest]);
 
-  // Polling for Real-time updates (every 10s)
+  // Real-time updates via WebSocket
   useEffect(() => {
-    const interval = setInterval(() => {
+    const baseUrl = process.env.REACT_APP_BASE_URL || "http://localhost:3000/api";
+    const socketUrl = baseUrl.replace('/api', ''); // Remove /api suffix for socket connection
+
+    const socket = io(socketUrl, {
+        transports: ['websocket'], // Force WebSocket to avoid polling fallback issues
+    });
+
+    socket.on("connect", () => {
+      // console.log("Connected to WebSocket");
+    });
+
+    socket.on("repair_updated", () => {
+      // console.log("Received repair_updated event");
+      const { filterDevice: fd, filterStatusRequest: fsr } = filterRefs.current;
       reload({
-        device_id: filterDevice,
-        status_request: filterStatusRequest,
+        device_id: fd,
+        status_request: fsr,
       });
-    }, 10000); 
-    return () => clearInterval(interval);
-  }, [filterDevice, filterStatusRequest, reload]);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [reload]);
 
   // Strict Role Check: Only Admin, Technician, Operator can create (Unit Head/Director only approve)
   const canCreate = role === "ADMIN" || role === "TECHNICIAN" || role === "OPERATOR";
@@ -217,17 +240,19 @@ const RepairsManagement: React.FC = () => {
   const hasNext = selectedRepair ? repairs.findIndex(r => r.repair_id === selectedRepair.repair_id) < repairs.length - 1 : false;
 
   /* New state for export loading */
-  // const [exportLoading, setExportLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
 
   const handleExport = async (id: number, type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05") => {
+    const key = "export_loading"; 
     try {
-      // setExportLoading(true);
+      setExportLoading(true);
+      message.loading({ content: "Đang tạo file...", key });
       await exportRepairItem(id, type);
-      message.success("Tải xuống thành công");
+      message.success({ content: "Tải xuống thành công", key, duration: 2 });
     } catch {
-      message.error("Xuất file thất bại");
+      message.error({ content: "Xuất file thất bại", key, duration: 2 });
     } finally {
-      // setExportLoading(false);
+      setExportLoading(false);
     }
   };
 

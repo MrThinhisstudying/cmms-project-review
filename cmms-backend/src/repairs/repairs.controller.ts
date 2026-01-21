@@ -111,9 +111,22 @@ export class RepairsController {
     }
 
     @Get('device/:deviceId')
-    async findByDevice(@Param('deviceId') deviceId: string) {
-        const data = await this.repairService.findByDevice(+deviceId);
-        return {message: 'Lấy lịch sử sửa chữa thiết bị thành công', data};
+    async findByDevice(
+        @Param('deviceId') deviceId: string,
+        @Query('page') page?: string,
+        @Query('limit') limit?: string,
+    ) {
+        const result = await this.repairService.findByDevice(+deviceId, { 
+            page: page ? +page : 1, 
+            limit: limit ? +limit : 10 
+        });
+        return { 
+            message: 'Lấy lịch sử sửa chữa thiết bị thành công', 
+            data: result.data,
+            total: result.total,
+            page: page ? +page : 1,
+            limit: limit ? +limit : 10
+        };
     }
 
     @Get(':id')

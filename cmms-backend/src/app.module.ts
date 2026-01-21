@@ -1,8 +1,10 @@
-import {Module} from '@nestjs/common';
+import {Module, CacheModule} from '@nestjs/common';
+import {APP_GUARD} from '@nestjs/core';
 import {ConfigModule} from '@nestjs/config';
 import {ScheduleModule} from '@nestjs/schedule';
 import {MailerModule} from '@nestjs-modules/mailer';
 import {ClsModule} from 'nestjs-cls';
+import {ThrottlerModule, ThrottlerGuard} from '@nestjs/throttler';
 import {AuditInterceptor} from './audit-log/interceptors/audit.interceptor';
 
 // Controllers & Services
@@ -31,6 +33,15 @@ import {ReportModule} from './report/report.module';
     imports: [
         ConfigModule.forRoot({
             isGlobal: true,
+        }),
+        CacheModule.register({
+            isGlobal: true,
+            ttl: 600, // 10 minutes
+            max: 1000,
+        }),
+        ThrottlerModule.forRoot({
+            ttl: 60,
+            limit: 100,
         }),
         MailerModule.forRoot({
             transport: {
@@ -74,6 +85,10 @@ import {ReportModule} from './report/report.module';
         {
             provide: 'APP_INTERCEPTOR',
             useClass: AuditInterceptor,
+        },
+        {
+            provide: APP_GUARD,
+            useClass: ThrottlerGuard,
         },
     ],
 })

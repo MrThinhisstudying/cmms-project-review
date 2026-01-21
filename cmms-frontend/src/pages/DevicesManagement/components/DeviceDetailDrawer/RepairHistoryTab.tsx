@@ -1,327 +1,125 @@
 import React from "react";
-import {
-  Box,
-  Table,
-  TableHead,
-  TableRow,
-  TableCell,
-  TableBody,
-  Chip,
-  CircularProgress,
-  Typography,
-  Tooltip,
-  Stack,
-} from "@mui/material";
-import CheckCircleIcon from "@mui/icons-material/CheckCircle";
-import PendingIcon from "@mui/icons-material/Pending";
-import CancelIcon from "@mui/icons-material/Cancel";
+import { Table, Tag, Tooltip, Space, Typography } from "antd";
 import { IRepair } from "../../../../types/repairs.types";
-import { fmt } from "../../../../utils/maintenanceDue";
+import dayjs from "dayjs";
 
 interface Props {
   loading: boolean;
   repairs: IRepair[];
+  pagination: {
+    current: number;
+    pageSize: number;
+    total: number;
+    onChange: (page: number, pageSize: number) => void;
+  };
 }
 
-const STATUS_MAP: Record<
-  string,
-  {
-    label: string;
-    color: "default" | "warning" | "info" | "success" | "error";
-  }
-> = {
-  WAITING_TECH: { label: "Yêu cầu – Chờ kỹ thuật", color: "warning" },
-  WAITING_TEAM_LEAD: { label: "Yêu cầu – Chờ Đội duyệt", color: "info" },
-  WAITING_DIRECTOR: { label: "Yêu cầu – Chờ GĐ duyệt", color: "info" },
-  COMPLETED: { label: "Yêu cầu – Đã duyệt", color: "success" },
-  REJECTED: { label: "Yêu cầu – Bị từ chối", color: "error" },
+const STATUS_MAP: Record<string, { label: string; color: string }> = {
+  WAITING_TECH: { label: "YC - Chờ kỹ thuật", color: "warning" },
+  WAITING_TEAM_LEAD: { label: "YC - Chờ Đội duyệt", color: "processing" },
+  WAITING_MANAGER: { label: "YC - Chờ QL duyệt", color: "orange" },
+  WAITING_DIRECTOR: { label: "YC - Chờ GĐ duyệt", color: "purple" },
+  COMPLETED: { label: "YC - Đã duyệt", color: "success" },
+  REJECTED: { label: "YC - Bị từ chối", color: "error" },
+  REJECTED_B03: { label: "YC - Bị từ chối", color: "error" },
 
-  inspection_pending: {
-    label: "Kiểm nghiệm – Đang thực hiện",
-    color: "warning",
-  },
-  inspection_manager_approved: {
-    label: "Kiểm nghiệm – Trưởng phòng duyệt",
-    color: "info",
-  },
-  inspection_admin_approved: {
-    label: "Kiểm nghiệm – Ban Giám đốc duyệt",
-    color: "success",
-  },
-  inspection_rejected: { label: "Kiểm nghiệm – Bị từ chối", color: "error" },
+  inspection_pending: { label: "KN - Đang thực hiện", color: "warning" },
+  inspection_lead_approved: { label: "KN - Tổ trưởng duyệt", color: "processing" },
+  inspection_manager_approved: { label: "KN - QL duyệt", color: "cyan" },
+  inspection_admin_approved: { label: "KN - GĐ duyệt", color: "success" },
+  inspection_rejected: { label: "KN - Bị từ chối", color: "error" },
+  REJECTED_B04: { label: "KN - Bị từ chối", color: "error" },
 
-  acceptance_pending: {
-    label: "Nghiệm thu – Đang thực hiện",
-    color: "warning",
-  },
-  acceptance_manager_approved: {
-    label: "Nghiệm thu – Trưởng phòng duyệt",
-    color: "info",
-  },
-  acceptance_admin_approved: {
-    label: "Nghiệm thu – Ban Giám đốc duyệt",
-    color: "success",
-  },
-  acceptance_rejected: { label: "Nghiệm thu – Bị từ chối", color: "error" },
+  acceptance_pending: { label: "NT - Đang thực hiện", color: "warning" },
+  acceptance_lead_approved: { label: "NT - Tổ trưởng duyệt", color: "processing" },
+  acceptance_manager_approved: { label: "NT - QL duyệt", color: "cyan" },
+  acceptance_admin_approved: { label: "NT - GĐ duyệt", color: "success" },
+  acceptance_rejected: { label: "NT - Bị từ chối", color: "error" },
+  REJECTED_B05: { label: "NT - Bị từ chối", color: "error" },
 };
 
-const getOverallStatus = (r: IRepair) => {
-  if (r.status_acceptance && r.status_acceptance !== "acceptance_pending")
-    return r.status_acceptance;
-  if (r.status_inspection && r.status_inspection !== "inspection_pending")
-    return r.status_inspection;
-  return r.status_request;
-};
+const RepairHistoryTab: React.FC<Props> = ({ loading, repairs, pagination }) => {
 
-const getPhaseIcon = (status: string) => {
-  if (status?.includes("approved") || status === "COMPLETED")
-    return <CheckCircleIcon fontSize="small" color="success" />;
-  if (status?.includes("rejected") || status === "REJECTED")
-    return <CancelIcon fontSize="small" color="error" />;
-  return <PendingIcon fontSize="small" color="warning" />;
-};
-
-export default function RepairHistoryTab({ loading, repairs }: Props) {
-  const renderRepairRow = (r: IRepair, index: number) => {
-    const currentStatus = getOverallStatus(r);
-    const status = STATUS_MAP[currentStatus] || {
-      label: currentStatus,
-      color: "default" as const,
-    };
-
-    const isRejected = 
-      r.status_request === "REJECTED_B03" ||
-      r.status_inspection === "REJECTED_B04" ||
-      r.status_acceptance === "REJECTED_B05";
-
-    return (
-      <TableRow key={r.repair_id || index} hover>
-        <TableCell>{index + 1}</TableCell>
-        <TableCell>
-          <Typography variant="body2" fontWeight={500}>
-            {fmt(r.created_at)}
-          </Typography>
-        </TableCell>
-        <TableCell>
-          <Typography variant="body2">{r.created_by?.name || "—"}</Typography>
-          <Typography variant="caption" color="text.secondary">
-            {r.created_department?.name || ""}
-          </Typography>
-        </TableCell>
-
-        <TableCell>
-          <Chip
-            size="small"
-            label={status.label}
-            color={status.color}
-            sx={{ fontWeight: "bold" }}
-          />
-          {isRejected && (
-            <Typography
-              variant="caption"
-              sx={{ display: "block", mt: 0.5, color: "error.main" }}
-            >
-              Đã bị từ chối
-            </Typography>
-          )}
-        </TableCell>
-
-        <TableCell>
-          <Stack direction="row" spacing={0.5} alignItems="center" mb={0.5}>
-            {getPhaseIcon(r.status_request)}
-            <Typography variant="caption" fontWeight={500}>
-              {STATUS_MAP[r.status_request]?.label || r.status_request}
-            </Typography>
-          </Stack>
-          <Box sx={{ pl: 2.5 }}>
-            {r.approved_by_manager_request && (
-              <Typography variant="caption" color="text.secondary">
-                Mgr: {r.approved_by_manager_request.name}
-              </Typography>
-            )}
-            {r.approved_by_admin_request && (
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                display="block"
-              >
-                Admin: {r.approved_by_admin_request.name}
-              </Typography>
-            )}
-          </Box>
-        </TableCell>
-
-        <TableCell>
-          <Stack direction="row" spacing={0.5} alignItems="center" mb={0.5}>
-            {getPhaseIcon(r.status_inspection)}
-            <Typography variant="caption" fontWeight={500}>
-              {STATUS_MAP[r.status_inspection]?.label || r.status_inspection}
-            </Typography>
-          </Stack>
-          <Box sx={{ pl: 2.5 }}>
-            {r.approved_by_manager_inspection && (
-              <Typography variant="caption" color="text.secondary">
-                Mgr: {r.approved_by_manager_inspection.name}
-              </Typography>
-            )}
-            {r.approved_by_admin_inspection && (
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                display="block"
-              >
-                Admin: {r.approved_by_admin_inspection.name}
-              </Typography>
-            )}
-            {r.inspection_committee && r.inspection_committee.length > 0 && (
-              <Tooltip
-                title={r.inspection_committee.map((u) => u.name).join(", ")}
-              >
-                <Chip
-                  label={`Ban KN: ${r.inspection_committee.length} người`}
-                  size="small"
-                  variant="outlined"
-                  sx={{ fontSize: "0.65rem", mt: 0.5 }}
-                />
-              </Tooltip>
-            )}
-            {r.inspection_duration_minutes !== undefined &&
-              r.inspection_duration_minutes !== null && (
-                <Typography
-                  variant="caption"
-                  color="primary"
-                  display="block"
-                  sx={{ mt: 0.5, fontWeight: 600 }}
-                >
-                  Thời gian: {Math.floor(r.inspection_duration_minutes / 60)}h{" "}
-                  {r.inspection_duration_minutes % 60}m
-                </Typography>
-              )}
-          </Box>
-        </TableCell>
-
-        <TableCell>
-          <Stack direction="row" spacing={0.5} alignItems="center" mb={0.5}>
-            {getPhaseIcon(r.status_acceptance)}
-            <Typography variant="caption" fontWeight={500}>
-              {STATUS_MAP[r.status_acceptance]?.label || r.status_acceptance}
-            </Typography>
-          </Stack>
-          <Box sx={{ pl: 2.5 }}>
-            {r.approved_by_manager_acceptance && (
-              <Typography variant="caption" color="text.secondary">
-                Mgr: {r.approved_by_manager_acceptance.name}
-              </Typography>
-            )}
-            {r.approved_by_admin_acceptance && (
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                display="block"
-              >
-                Admin: {r.approved_by_admin_acceptance.name}
-              </Typography>
-            )}
-            {r.acceptance_committee && r.acceptance_committee.length > 0 && (
-              <Tooltip
-                title={r.acceptance_committee.map((u) => u.name).join(", ")}
-              >
-                <Chip
-                  label={`Ban NT: ${r.acceptance_committee.length} người`}
-                  size="small"
-                  variant="outlined"
-                  sx={{ fontSize: "0.65rem", mt: 0.5 }}
-                />
-              </Tooltip>
-            )}
-            {r.acceptance_duration_minutes !== undefined &&
-              r.acceptance_duration_minutes !== null && (
-                <Typography
-                  variant="caption"
-                  color="success.main"
-                  display="block"
-                  sx={{ mt: 0.5, fontWeight: 600 }}
-                >
-                  Thời gian: {Math.floor(r.acceptance_duration_minutes / 60)}h{" "}
-                  {r.acceptance_duration_minutes % 60}m
-                </Typography>
-              )}
-          </Box>
-        </TableCell>
-
-        <TableCell>
-          {r.inspection_materials && r.inspection_materials.length > 0 && (
-            <Chip
-              label={`${r.inspection_materials.length} vật tư`}
-              size="small"
-              color="info"
-              sx={{ fontSize: "0.7rem", mb: 0.5 }}
-            />
-          )}
-          <Typography variant="caption" color="text.secondary" display="block">
-            {fmt(r.updated_at)}
-          </Typography>
-        </TableCell>
-      </TableRow>
-    );
+  const getStatusInfo = (status: string) => {
+      return STATUS_MAP[status] || { label: status, color: 'default' };
   };
 
-  if (loading) {
-    return (
-      <Box display="flex" justifyContent="center" py={4}>
-        <CircularProgress />
-      </Box>
-    );
-  }
+  const columns = [
+    {
+      title: "#",
+      key: "index",
+      render: (_: any, __: any, index: number) => (pagination.current - 1) * pagination.pageSize + index + 1,
+      width: 50,
+      align: 'center' as const,
+    },
+    {
+      title: "Ngày lập",
+      key: "created_at",
+      render: (_: any, r: IRepair) => (
+        <div>
+          <div style={{fontWeight: 500}}>{dayjs(r.created_at).format("DD/MM/YYYY")}</div>
+          <div style={{ fontSize: 11, color: "#888" }}>{dayjs(r.created_at).format("HH:mm")}</div>
+        </div>
+      ),
+      width: 110,
+    },
+    {
+      title: "Người lập",
+      key: "creator",
+      render: (_: any, r: IRepair) => (
+          <div>
+              <div>{r.created_by?.name}</div>
+              <div style={{fontSize: 11, color: '#888'}}>{r.created_department?.name}</div>
+          </div>
+      ),
+      width: 150,
+    },
+    {
+      title: "Yêu cầu",
+      key: "status",
+      render: (_: any, r: IRepair) => {
+        const info = getStatusInfo(r.status_request);
+        return <Tag color={info.color}>{info.label}</Tag>;
+      },
+    },
+    {
+      title: "Kiểm nghiệm",
+      key: "inspection",
+      render: (_: any, r: IRepair) => {
+          if (!r.status_inspection) return '-';
+          const info = getStatusInfo(r.status_inspection);
+          return <Tag color={info.color}>{info.label}</Tag>;
+      },
+    },
+    {
+        title: "Nghiệm thu",
+        key: "acceptance",
+        render: (_: any, r: IRepair) => {
+            if (!r.status_acceptance) return '-';
+            const info = getStatusInfo(r.status_acceptance);
+            return <Tag color={info.color}>{info.label}</Tag>;
+        },
+    }
+  ];
 
   return (
-    <Box p={2} sx={{ overflowX: "auto" }}>
-      {repairs.length > 0 && (
-        <Typography variant="body2" color="text.secondary" mb={2}>
-          Tổng số: <strong>{repairs.length}</strong> phiếu sửa chữa
-        </Typography>
-      )}
-      <Table size="small" stickyHeader>
-        <TableHead>
-          <TableRow>
-            <TableCell sx={{ fontWeight: 600 }}>#</TableCell>
-            <TableCell sx={{ fontWeight: 600, minWidth: 100 }}>
-              Ngày lập
-            </TableCell>
-            <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>
-              Người lập
-            </TableCell>
-            <TableCell sx={{ fontWeight: 600, minWidth: 140 }}>
-              Trạng thái
-            </TableCell>
-            <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>
-              Yêu cầu
-            </TableCell>
-            <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>
-              Kiểm nghiệm
-            </TableCell>
-            <TableCell sx={{ fontWeight: 600, minWidth: 180 }}>
-              Nghiệm thu
-            </TableCell>
-            <TableCell sx={{ fontWeight: 600, minWidth: 120 }}>
-              Vật tư & Cập nhật
-            </TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {repairs.length > 0 ? (
-            repairs.map(renderRepairRow)
-          ) : (
-            <TableRow>
-              <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-                <Typography color="text.secondary">
-                  Không có lịch sử sửa chữa
-                </Typography>
-              </TableCell>
-            </TableRow>
-          )}
-        </TableBody>
-      </Table>
-    </Box>
+    <Table
+      columns={columns}
+      dataSource={repairs}
+      rowKey="repair_id"
+      loading={loading}
+      pagination={{
+        current: pagination.current,
+        pageSize: pagination.pageSize,
+        total: pagination.total,
+        onChange: pagination.onChange,
+        showSizeChanger: true,
+        showTotal: (total) => `Tổng ${total} phiếu`,
+      }}
+      size="small"
+      scroll={{ x: 800 }}
+    />
   );
-}
+};
+
+export default RepairHistoryTab;

@@ -9,6 +9,7 @@ import {
     UpdateDateColumn,
     OneToMany,
     DeleteDateColumn,
+    Index,
 } from 'typeorm';
 import {Device} from 'src/devices/entities/device.entity';
 import {User} from 'src/user/user.entity';
@@ -23,6 +24,7 @@ export class Maintenance {
     maintenance_id: number;
 
     @ApiProperty({type: () => Device})
+    @Index()
     @ManyToOne(() => Device, {eager: true, onDelete: 'CASCADE'})
     @JoinColumn({name: 'device_id'})
     device: Device;
@@ -38,6 +40,7 @@ export class Maintenance {
     department?: Department;
 
     @ApiProperty()
+    @Index()
     @Column({type: 'timestamp', nullable: true})
     scheduled_date: Date;
 
@@ -47,6 +50,7 @@ export class Maintenance {
 
     // Đã đổi sang varchar để linh hoạt status (active, overdue...)
     @ApiProperty({enum: MaintenanceStatus, default: MaintenanceStatus.ACTIVE})
+    @Index()
     @Column({type: 'varchar', default: MaintenanceStatus.ACTIVE})
     status: string;
 

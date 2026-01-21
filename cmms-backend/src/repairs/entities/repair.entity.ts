@@ -1,4 +1,4 @@
-import {Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, ManyToMany, JoinTable, CreateDateColumn, UpdateDateColumn, JoinColumn} from 'typeorm';
+import {Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany, ManyToMany, JoinTable, CreateDateColumn, UpdateDateColumn, JoinColumn, Index} from 'typeorm';
 import {Device} from 'src/devices/entities/device.entity';
 import {User} from 'src/user/user.entity';
 import {Department} from 'src/departments/department.entity';
@@ -9,6 +9,7 @@ export class Repair {
     @PrimaryGeneratedColumn()
     repair_id: number;
 
+    @Index()
     @ManyToOne(() => Device, {eager: true, onDelete: 'CASCADE'})
     @JoinColumn({name: 'device_id'})
     device: Device;
@@ -17,6 +18,7 @@ export class Repair {
     @JoinColumn({name: 'created_by'})
     created_by: User;
 
+    @Index()
     @ManyToOne(() => Department, {eager: true})
     @JoinColumn({name: 'created_department_id'})
     created_department: Department;
@@ -30,6 +32,7 @@ export class Repair {
     @Column({nullable: true})
     note?: string;
 
+    @Index()
     @Column({default: 'WAITING_TECH'})
     status_request: 'WAITING_TECH' | 'WAITING_MANAGER' | 'WAITING_DIRECTOR' | 'REJECTED_B03' | 'COMPLETED';
     
@@ -88,6 +91,7 @@ export class Repair {
     })
     inspection_committee?: User[];
 
+    @Index()
     @Column({default: 'inspection_pending'})
     status_inspection: 'inspection_pending' | 'inspection_lead_approved' | 'inspection_manager_approved' | 'inspection_admin_approved' | 'REJECTED_B04';
 
@@ -148,6 +152,7 @@ export class Repair {
     })
     acceptance_committee?: User[];
 
+    @Index()
     @Column({default: 'acceptance_pending'})
     status_acceptance: 'acceptance_pending' | 'acceptance_lead_approved' | 'acceptance_manager_approved' | 'acceptance_admin_approved' | 'REJECTED_B05';
 
@@ -188,6 +193,7 @@ export class Repair {
     @Column({type: 'timestamp', nullable: true})
     canceled_at?: Date;
 
+    @Index()
     @CreateDateColumn()
     created_at: Date;
 

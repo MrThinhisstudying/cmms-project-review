@@ -27,6 +27,11 @@ export default function DeviceDetailDrawer({
   const [loadingMaint, setLoadingMaint] = useState(false);
   const [loadingRepair, setLoadingRepair] = useState(false);
 
+  // Pagination for repairs
+  const [repairPage, setRepairPage] = useState(1);
+  const [repairPageSize, setRepairPageSize] = useState(10);
+  const [repairTotal, setRepairTotal] = useState(0);
+
   useEffect(() => {
     if (!open || !device?.device_id) return;
     const token = getToken();
@@ -40,17 +45,26 @@ export default function DeviceDetailDrawer({
         setLoadingMaint(false);
       }
     })();
+  }, [open, device?.device_id]);
+
+  useEffect(() => {
+    if (!open || !device?.device_id) return;
+    const token = getToken();
 
     (async () => {
       setLoadingRepair(true);
       try {
-        const res = await getRepairsByDevice(device.device_id!, token ?? "");
-        setRepairs(res || []);
+        const res = await getRepairsByDevice(device.device_id!, token ?? "", {
+            page: repairPage,
+            limit: repairPageSize
+        });
+        setRepairs(res.repairs || []);
+        setRepairTotal(res.total || 0);
       } finally {
         setLoadingRepair(false);
       }
     })();
-  }, [open, device?.device_id]);
+  }, [open, device?.device_id, repairPage, repairPageSize]);
 
   if (!device) return null;
 
@@ -64,38 +78,42 @@ export default function DeviceDetailDrawer({
       HUY_BO: "Huỷ bỏ",
   };
 
+  // Helper for displaying values
+  const display = (val: any) => (val === 0 ? 0 : val || "NIL");
+
   // --- Tab 1: Lý lịch (Profile) ---
   const renderProfile = () => (
     <Row gutter={24}>
         <Col span={18}>
             <Card title="I. Thông tin chung" size="small" style={{ marginBottom: 16 }}>
                 <Descriptions bordered column={2} size="small">
-                    <Descriptions.Item label="Tên thiết bị">{device.name}</Descriptions.Item>
-                    <Descriptions.Item label="Mã thiết bị">{device.device_code}</Descriptions.Item>
-                    <Descriptions.Item label="Biển số">{device.reg_number}</Descriptions.Item>
-                    <Descriptions.Item label="Nhãn hiệu">{device.brand}</Descriptions.Item>
-                    <Descriptions.Item label="Số máy">{device.serial_number}</Descriptions.Item>
-                    <Descriptions.Item label="Nước sản xuất">{device.country_of_origin}</Descriptions.Item>
-                    <Descriptions.Item label="Năm sản xuất">{device.manufacture_year}</Descriptions.Item>
-                    <Descriptions.Item label="Năm đưa vào SD">{device.usage_start_year}</Descriptions.Item>
-                    <Descriptions.Item label="Mục đích SD" span={2}>{device.usage_purpose}</Descriptions.Item>
-                    <Descriptions.Item label="Phạm vi hoạt động" span={2}>{device.operating_scope}</Descriptions.Item>
+                    <Descriptions.Item label="Tên thiết bị">{display(device.name)}</Descriptions.Item>
+                    <Descriptions.Item label="Mã thiết bị">{display(device.device_code)}</Descriptions.Item>
+                    <Descriptions.Item label="Biển số">{display(device.reg_number)}</Descriptions.Item>
+                    <Descriptions.Item label="Nhãn hiệu">{display(device.brand)}</Descriptions.Item>
+                    <Descriptions.Item label="Số máy">{display(device.serial_number)}</Descriptions.Item>
+                    <Descriptions.Item label="Nước sản xuất">{display(device.country_of_origin)}</Descriptions.Item>
+                    <Descriptions.Item label="Năm sản xuất">{display(device.manufacture_year)}</Descriptions.Item>
+                    <Descriptions.Item label="Năm đưa vào SD">{display(device.usage_start_year)}</Descriptions.Item>
+                    <Descriptions.Item label="Mục đích SD" span={2}>{display(device.usage_purpose)}</Descriptions.Item>
+                    <Descriptions.Item label="Phạm vi hoạt động" span={2}>{display(device.operating_scope)}</Descriptions.Item>
+                    <Descriptions.Item label="Địa điểm/ Toạ độ đặt TTB" span={2}>{display(device.location_coordinates)}</Descriptions.Item>
                     <Descriptions.Item label="Trạng thái">
                         <Tag color="cyan">{STATUS_LABELS[device.status] || device.status}</Tag>
                     </Descriptions.Item>
-                    <Descriptions.Item label="Đơn vị sử dụng">{device.using_department || "Chưa gán"}</Descriptions.Item>
+                    <Descriptions.Item label="Đơn vị sử dụng">{display(device.using_department)}</Descriptions.Item>
                 </Descriptions>
             </Card>
 
             <Card title="II. Thông số kỹ thuật" size="small">
                 <Descriptions bordered column={2} size="small">
                     <Descriptions.Item label="Kích thước (D x R x C)">
-                        {device.length || '-'} x {device.width || '-'} x {device.height || '-'} (mm)
+                        {device.length || 'NIL'} x {device.width || 'NIL'} x {device.height || 'NIL'} (mm)
                     </Descriptions.Item>
-                    <Descriptions.Item label="Khối lượng bản thân">{device.weight} (kg)</Descriptions.Item>
-                    <Descriptions.Item label="Nguồn điện">{device.power_source}</Descriptions.Item>
-                    <Descriptions.Item label="Công suất tiêu thụ">{device.power_consumption}</Descriptions.Item>
-                    <Descriptions.Item label="Đặc điểm khác" span={2}>{device.other_specifications}</Descriptions.Item>
+                    <Descriptions.Item label="Khối lượng bản thân">{device.weight ? `${device.weight} (kg)` : "NIL"}</Descriptions.Item>
+                    <Descriptions.Item label="Nguồn điện">{display(device.power_source)}</Descriptions.Item>
+                    <Descriptions.Item label="Công suất tiêu thụ">{display(device.power_consumption)}</Descriptions.Item>
+                    <Descriptions.Item label="Đặc điểm khác" span={2}>{display(device.other_specifications)}</Descriptions.Item>
                 </Descriptions>
             </Card>
         </Col>
@@ -178,19 +196,34 @@ export default function DeviceDetailDrawer({
     );
   };
 
-  // --- Tab 4: History ---
-  const renderHistory = () => (
-      <Space direction="vertical" style={{ width: '100%' }} size="large">
-          <RepairHistoryTab loading={loadingRepair} repairs={repairs} />
-          <MaintenanceHistoryTab loading={loadingMaint} maintenances={maintenances} />
-      </Space>
+  // --- Tab 4: Sửa chữa ---
+  const renderRepairHistory = () => (
+      <RepairHistoryTab 
+        loading={loadingRepair} 
+        repairs={repairs} 
+        pagination={{
+            current: repairPage,
+            pageSize: repairPageSize,
+            total: repairTotal,
+            onChange: (p: number, s: number) => {
+                setRepairPage(p);
+                setRepairPageSize(s);
+            }
+        }}
+      />
+  );
+
+  // --- Tab 5: Bảo dưỡng ---
+  const renderMaintenanceHistory = () => (
+       <MaintenanceHistoryTab loading={loadingMaint} maintenances={maintenances} />
   );
 
   const items = [
     { key: '1', label: '1. Lý lịch thiết bị', children: renderProfile() },
     { key: '2', label: '2. Ban quản lý', children: renderManagement() },
     { key: '3', label: '3. Pháp lý & Kiểm định', children: renderInspection() },
-    { key: '4', label: '4. Sửa chữa & Bảo trì', children: renderHistory() },
+    { key: '4', label: '4. Sửa chữa', children: renderRepairHistory() },
+    { key: '5', label: '5. Bảo dưỡng', children: renderMaintenanceHistory() },
   ];
 
   return (

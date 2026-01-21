@@ -1,6 +1,7 @@
-import {Injectable, NotFoundException, BadRequestException} from '@nestjs/common';
+import {Injectable, NotFoundException, BadRequestException, Inject, CACHE_MANAGER} from '@nestjs/common';
 import {InjectRepository} from '@nestjs/typeorm';
 import {Repository} from 'typeorm';
+import {Cache} from 'cache-manager';
 import {CreateDepartmentDto} from './dto/create-department.dto';
 import {Department} from './department.entity';
 import {UpdateDepartmentDto} from './dto/update-department.dto';
@@ -10,15 +11,22 @@ export class DepartmentService {
     constructor(
         @InjectRepository(Department)
         private readonly departmentRepository: Repository<Department>,
+        @Inject(CACHE_MANAGER) private cacheManager: Cache,
     ) {}
 
     async findAll(): Promise<Department[]> {
-        return await this.departmentRepository.find({
+        const cacheKey = 'departments_all';
+        const cached = await this.cacheManager.get<Department[]>(cacheKey);
+        if (cached) return cached;
+
+        const data = await this.departmentRepository.find({
             relations: ['users', 'manager'],
             order: {
                 updated_at: 'DESC',
             },
         });
+        await this.cacheManager.set(cacheKey, data);
+        return data;
     }
 
     async findOne(id: number): Promise<Department> {
@@ -34,13 +42,17 @@ export class DepartmentService {
         const existing = await this.departmentRepository.findOne({where: {name: data.name}});
         if (existing) throw new BadRequestException('Tên phòng ban đã tồn tại');
         const dept = this.departmentRepository.create(data);
-        return await this.departmentRepository.save(dept);
+        const result = await this.departmentRepository.save(dept);
+        await this.cacheManager.del('departments_all');
+        return result;
     }
 
     async update(id: number, data: UpdateDepartmentDto): Promise<Department> {
         const dept = await this.findOne(id);
         Object.assign(dept, data);
-        return await this.departmentRepository.save(dept);
+        const result = await this.departmentRepository.save(dept);
+        await this.cacheManager.del('departments_all');
+        return result;
     }
 
     async delete(id: number): Promise<void> {
@@ -48,6 +60,7 @@ export class DepartmentService {
         if (result.affected === 0) {
             throw new NotFoundException('Xoá phòng ban thất bại');
         }
+        await this.cacheManager.del('departments_all');
     }
 }
 

@@ -10,11 +10,12 @@ import {Notification} from 'src/notification/notification.entity';
 import {StockOut} from 'src/stock-out/entities/stock-out.entity';
 import {Item} from 'src/inventory_item/entities/item.entity';
 import { ExportDocxService } from './export-docx.service';
+import { RepairsGateway } from './repairs.gateway';
 
 @Module({
     imports: [TypeOrmModule.forFeature([Repair, Device, User, StockOut, Item, Notification])],
     controllers: [RepairsController],
-    providers: [RepairsService, NotificationService, ExportDocxService],
+    providers: [RepairsService, NotificationService, ExportDocxService, RepairsGateway],
     exports: [ExportDocxService],
 })
 export class RepairsModule {}

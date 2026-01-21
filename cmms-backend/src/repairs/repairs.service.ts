@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Brackets } from 'typeorm';
+import { Repository, Brackets, In } from 'typeorm';
 import { Repair } from './entities/repair.entity';
 import { Device } from 'src/devices/entities/device.entity';
 import { User } from 'src/user/user.entity';
@@ -20,6 +20,8 @@ import { UserRole } from 'src/user/user-role.enum';
 import { buildRepairPdfTemplate } from './utils/repair-pdf-template.util';
 import * as puppeteer from 'puppeteer';
 
+import { RepairsGateway } from './repairs.gateway';
+
 @Injectable()
 export class RepairsService {
     constructor(
@@ -29,6 +31,7 @@ export class RepairsService {
         @InjectRepository(StockOut) private readonly stockOutRepo: Repository<StockOut>,
         @InjectRepository(Item) private readonly itemRepo: Repository<Item>,
         private readonly notificationService: NotificationService,
+        private readonly repairsGateway: RepairsGateway,
     ) { }
 
     async create(dto: CreateRepairDto, userId: number) {
@@ -104,7 +107,9 @@ export class RepairsService {
             repair.canceled_at = null;
         }
 
-        return this.repairRepo.save(repair);
+        const saved = await this.repairRepo.save(repair);
+        this.repairsGateway.notifyRepairUpdate();
+        return saved;
     }
 
     async updateInspection(id: number, dto: UpdateInspectionDto, userId: number) {
@@ -525,7 +530,9 @@ export class RepairsService {
              }
         }
 
-        return this.repairRepo.save(repair);
+        const saved = await this.repairRepo.save(repair);
+        this.repairsGateway.notifyRepairUpdate();
+        return saved;
     }
 
     async requestLimitedUse(id: number, userId: number, reason: string) {
@@ -701,36 +708,45 @@ export class RepairsService {
         });
         repair.stock_outs = stockOuts;
 
-        // Populate inspection_materials with full item details
+        // 🚀 Optimized: Batch fetch items for inspection_materials
         if (repair.inspection_materials && Array.isArray(repair.inspection_materials)) {
-            const enrichedMaterials = await Promise.all(
-                repair.inspection_materials.map(async (m) => {
-                    if (m.item_id && !m.is_new) {
-                        const item = await this.itemRepo.findOne({
-                            where: { item_id: m.item_id },
-                            relations: ['category'],
-                        });
-                        if (item) {
-                            return {
-                                ...m,
-                                item_name: item.name,
-                                unit: item.quantity_unit,
-                                category_name: item.category?.name,
-                                item_code: item.code,
-                            };
-                        }
+            const itemIds = new Set<number>();
+            repair.inspection_materials.forEach(m => {
+                if (m.item_id && !m.is_new) itemIds.add(m.item_id);
+            });
+
+            if (itemIds.size > 0) {
+                const items = await this.itemRepo.find({
+                    where: { item_id: In(Array.from(itemIds)) } as any,
+                    relations: ['category'],
+                });
+                const itemsMap = new Map(items.map(i => [i.item_id, i]));
+
+                repair.inspection_materials = repair.inspection_materials.map(m => {
+                    if (m.item_id && !m.is_new && itemsMap.has(m.item_id)) {
+                        const item = itemsMap.get(m.item_id)!;
+                        return {
+                            ...m,
+                            item_name: item.name,
+                            unit: item.quantity_unit,
+                            category_name: item.category?.name,
+                            item_code: item.code,
+                        };
                     }
                     return m;
-                }),
-            );
-            repair.inspection_materials = enrichedMaterials as any;
+                }) as any;
+            }
         }
 
         return repair;
     }
 
-    async findByDevice(deviceId: number) {
-        const repairs = await this.repairRepo.find({
+    async findByDevice(deviceId: number, options?: { page: number; limit: number }) {
+        const page = options?.page || 1;
+        const limit = options?.limit || 10;
+        const skip = (page - 1) * limit;
+
+        const [repairs, total] = await this.repairRepo.findAndCount({
             where: { device: { device_id: deviceId } },
             relations: [
                 'device',
@@ -748,6 +764,31 @@ export class RepairsService {
             order: { created_at: 'DESC' },
         });
 
+        // Collect all Repair IDs to fetch StockOuts in batch if possible, or keep loop if StockOuts are few.
+        // The original code looped StockOuts. We can optimize that too, but let's stick to the N+1 Items fix first as requested.
+        // Actually, let's just fix the Items N+1 inside the loop.
+
+        // 1. Collect ALL Item IDs from ALL repairs
+        const allItemIds = new Set<number>();
+        repairs.forEach(r => {
+            if (r.inspection_materials && Array.isArray(r.inspection_materials)) {
+                r.inspection_materials.forEach(m => {
+                    if (m.item_id && !m.is_new) allItemIds.add(m.item_id);
+                });
+            }
+        });
+
+        // 2. Fetch all unique Items
+        let itemsMap = new Map<number, Item>();
+        if (allItemIds.size > 0) {
+            const items = await this.itemRepo.find({
+                where: { item_id: In(Array.from(allItemIds)) } as any,
+                relations: ['category'],
+            });
+            itemsMap = new Map(items.map(i => [i.item_id, i]));
+        }
+
+        // 3. Loop and enrich (and fetch StockOuts - kept inside loop for now as it's typically few per device history, but could be optimized later)
         for (const r of repairs) {
             const stockOuts = await this.stockOutRepo.find({
                 where: { repair: { repair_id: r.repair_id } as any },
@@ -756,31 +797,23 @@ export class RepairsService {
             r.stock_outs = stockOuts;
 
             if (r.inspection_materials && Array.isArray(r.inspection_materials)) {
-                const enrichedMaterials = await Promise.all(
-                    r.inspection_materials.map(async (m) => {
-                        if (m.item_id && !m.is_new) {
-                            const item = await this.itemRepo.findOne({
-                                where: { item_id: m.item_id },
-                                relations: ['category'],
-                            });
-                            if (item) {
-                                return {
-                                    ...m,
-                                    item_name: item.name,
-                                    unit: item.quantity_unit,
-                                    category_name: item.category?.name,
-                                    item_code: item.code,
-                                };
-                            }
-                        }
-                        return m;
-                    }),
-                );
-                r.inspection_materials = enrichedMaterials as any;
+                r.inspection_materials = r.inspection_materials.map(m => {
+                    if (m.item_id && !m.is_new && itemsMap.has(m.item_id)) {
+                        const item = itemsMap.get(m.item_id)!;
+                        return {
+                            ...m,
+                            item_name: item.name,
+                            unit: item.quantity_unit,
+                            category_name: item.category?.name,
+                            item_code: item.code,
+                        };
+                    }
+                    return m;
+                }) as any;
             }
         }
 
-        return repairs;
+        return { data: repairs, total };
     }
 
     async remove(id: number) {
@@ -818,6 +851,7 @@ export class RepairsService {
         }
 
         const result = await this.repairRepo.delete(id);
+        this.repairsGateway.notifyRepairUpdate();
         if (!result.affected) throw new NotFoundException('Không tìm thấy phiếu');
     }
 
