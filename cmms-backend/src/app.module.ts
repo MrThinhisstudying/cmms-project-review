@@ -3,6 +3,7 @@ import {ConfigModule} from '@nestjs/config';
 import {ScheduleModule} from '@nestjs/schedule';
 import {MailerModule} from '@nestjs-modules/mailer';
 import {ClsModule} from 'nestjs-cls';
+import {AuditInterceptor} from './audit-log/interceptors/audit.interceptor';
 
 // Controllers & Services
 import {AppController} from './app.controller';
@@ -68,7 +69,13 @@ import {ReportModule} from './report/report.module';
         ReportModule,
     ],
     controllers: [AppController],
-    providers: [AppService],
+    providers: [
+        AppService,
+        {
+            provide: 'APP_INTERCEPTOR',
+            useClass: AuditInterceptor,
+        },
+    ],
 })
 export class AppModule {}
 

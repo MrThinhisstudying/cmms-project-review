@@ -13,6 +13,12 @@ export interface AuditLog {
   entity_id: string;
   action: "INSERT" | "UPDATE" | "DELETE" | "ROLLBACK";
   actor_user_id?: number;
+  actor?: {
+    user_id: number;
+    name: string;
+    email: string;
+    avatar?: string;
+  };
   before?: any;
   after?: any;
   diff?: Record<string, { before: any; after: any }>;

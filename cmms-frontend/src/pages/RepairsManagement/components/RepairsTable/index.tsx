@@ -212,23 +212,33 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
     {
       title: "BS / Số máy",
       key: "code",
-      width: 120,
+      width: 150,
       render: (_, record) => (
         <div style={{ fontSize: 13 }}>
-            <div>{record.device?.reg_number || '-'}</div>
-            <div style={{ color: "#888" }}>{record.device?.serial_number}</div>
+            <div>{record.device?.reg_number ? `BS: ${record.device.reg_number}` : '-'}</div>
+            {record.device?.serial_number && <div style={{ color: "#888", fontSize: "12px" }}>SN: {record.device.serial_number}</div>}
         </div>
       ),
     },
     {
       title: "Đơn vị",
-      dataIndex: ["created_department", "name"],
       key: "department",
+      render: (_, record) => {
+        const deptName = record.created_department?.name || record.created_by?.department?.name || '-';
+        return <span>{deptName}</span>;
+      }
     },
     {
       title: "Người lập",
-      dataIndex: ["created_by", "name"],
       key: "creator",
+      render: (_, record) => (
+        <div>
+          <div style={{ fontWeight: 500 }}>{record.created_by?.name}</div>
+          <div style={{ fontSize: '11px', color: '#888' }}>
+            {record.created_at ? new Date(record.created_at).toLocaleDateString('vi-VN') : ''}
+          </div>
+        </div>
+      )
     },
     {
       title: "Trạng thái",

@@ -109,14 +109,16 @@ const AuditHistory: React.FC = () => {
     },
     {
       title: "Người thực hiện",
-      dataIndex: "actor_user_id",
       key: "actor",
       width: 150,
-      render: (id: number) => {
-        const foundUser = users.find(u => u.user_id === id);
+      render: (_: any, log: AuditLog) => {
+        const name = log.actor?.name;
+        // Fallback to finding in context if not in relation (legacy/mixed)
+        const foundUser = !name && log.actor_user_id ? users.find(u => u.user_id === log.actor_user_id) : null;
+        
         return (
           <Space>
-             <Text>{foundUser ? foundUser.name : `ID: ${id || "N/A"}`}</Text>
+             <Text>{name || foundUser?.name || `ID: ${log.actor_user_id || "N/A"}`}</Text>
           </Space>
         )
       }

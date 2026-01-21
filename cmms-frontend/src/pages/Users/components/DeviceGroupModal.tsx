@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Modal, Table, Button, Input, Space, message, Popconfirm, Form, Typography, Card } from "antd";
+import { Modal, Table, Button, Input, Space, message, Popconfirm, Form, Tooltip } from "antd";
 import { EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 import { getDeviceGroups, IDeviceGroup } from "../../../apis/device-groups";
 import { getToken } from "../../../utils/auth";
@@ -274,13 +274,24 @@ const DeviceGroupModal: React.FC<DeviceGroupModalProps> = ({ open, onClose }) =>
                     }))}
                 showSearch
                 listStyle={{
-                    width: '100%',
+                    width: '45%',
                     height: 400,
                 }}
                 targetKeys={targetKeys}
                 onChange={handleTransferChange}
-                render={item => item.title}
                 titles={['Tất cả thiết bị', 'Trong nhóm này']}
+                render={item => (
+                    <Tooltip title={item.title} placement="topLeft" mouseEnterDelay={0.5}>
+                        <div style={{ 
+                            width: '100%', 
+                            overflow: 'hidden', 
+                            textOverflow: 'ellipsis', 
+                            whiteSpace: 'nowrap'
+                        }}>
+                            {item.title}
+                        </div>
+                    </Tooltip>
+                )}
             />
         </Modal>
         </>

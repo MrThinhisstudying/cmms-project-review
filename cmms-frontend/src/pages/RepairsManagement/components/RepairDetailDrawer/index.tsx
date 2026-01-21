@@ -111,8 +111,10 @@ export default function RepairDetailDrawer({
     const colorMap: Record<string, string> = {
       WAITING_TECH: "blue",
       WAITING_TEAM_LEAD: "blue",
+      WAITING_MANAGER: "orange",
       WAITING_DIRECTOR: "purple",
       REJECTED_B03: "red",
+      REJECTED: "red",
       COMPLETED: "green",
 
       inspection_pending: "purple",
@@ -120,12 +122,14 @@ export default function RepairDetailDrawer({
       inspection_manager_approved: "cyan",
       inspection_admin_approved: "teal",
       REJECTED_B04: "red",
+      inspection_rejected: "red",
 
       acceptance_pending: "cyan",
       acceptance_lead_approved: "warning",
       acceptance_manager_approved: "cyan",
       acceptance_admin_approved: "green",
       REJECTED_B05: "red",
+      acceptance_rejected: "red",
     };
 
     const labelMap: Record<string, string> = {
@@ -234,7 +238,7 @@ export default function RepairDetailDrawer({
       <div>
           <Descriptions column={2} bordered size="small">
               <Descriptions.Item label="Thiết bị">{data.device?.name}</Descriptions.Item>
-              <Descriptions.Item label="Biển số">{data.device?.reg_number}</Descriptions.Item>
+              <Descriptions.Item label="Biển số">{data.device?.reg_number || '-'}</Descriptions.Item>
               <Descriptions.Item label="Trạng thái">
                   {renderStatusTag(data.status_request)}
               </Descriptions.Item>

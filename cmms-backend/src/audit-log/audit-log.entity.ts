@@ -1,4 +1,4 @@
-import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, Index} from 'typeorm';
+import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, Index, JoinColumn} from 'typeorm';
 import {AuditTransaction} from './audit-transaction.entity';
 
 export type AuditAction = 'INSERT' | 'UPDATE' | 'DELETE' | 'ROLLBACK';
