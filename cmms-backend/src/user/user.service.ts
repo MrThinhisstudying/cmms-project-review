@@ -17,9 +17,20 @@ export class UserService {
         private readonly userDeviceGroupRepository: Repository<UserDeviceGroup>,
     ) {}
 
-    async findAll(currentUser?: User): Promise<{result: User[]}> {
+    async findAll(currentUser?: User, groupId?: number): Promise<{result: User[]}> {
         try {
             let whereClause: any = {};
+            let allowedUserIds: number[] | null = null; // null means no restriction yet
+
+            // Filter by requested groupId
+            if (groupId) {
+                 const usersInGroup = await this.userDeviceGroupRepository.find({
+                     where: { group_id: groupId },
+                     select: ['user_id']
+                 });
+                 allowedUserIds = usersInGroup.map(u => u.user_id);
+                 if (allowedUserIds.length === 0) return { result: [] };
+            }
 
             // If user is OPERATOR, only show users in the same device groups
             if (currentUser && currentUser.role === UserRole.OPERATOR) {
@@ -28,19 +39,30 @@ export class UserService {
                     select: ['group_id']
                  });
                  
+                 let operatorUserIds: number[] = [];
                  if (myGroups.length > 0) {
                      const groupIds = myGroups.map(g => g.group_id);
                      const usersInGroups = await this.userDeviceGroupRepository.find({
                          where: { group_id: In(groupIds) },
                          select: ['user_id']
                      });
-                     const userIds = usersInGroups.map(u => u.user_id);
-                     whereClause = { user_id: In(userIds) };
+                     operatorUserIds = usersInGroups.map(u => u.user_id);
                  } else {
-                     // If operator has no group, maybe only see themselves? Or none? 
-                     // Let's assume they only see themselves if no group assigned.
-                     whereClause = { user_id: currentUser.user_id };
+                     operatorUserIds = [currentUser.user_id];
                  }
+
+                 // Intersection
+                 if (allowedUserIds !== null) {
+                     allowedUserIds = allowedUserIds.filter(id => operatorUserIds.includes(id));
+                 } else {
+                     allowedUserIds = operatorUserIds;
+                 }
+                 
+                 if (allowedUserIds.length === 0) return { result: [] };
+            }
+
+            if (allowedUserIds !== null) {
+                whereClause.user_id = In(allowedUserIds);
             }
 
             const users = await this.userRepository.find({

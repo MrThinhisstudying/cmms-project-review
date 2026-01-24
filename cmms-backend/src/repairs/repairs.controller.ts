@@ -94,6 +94,7 @@ export class RepairsController {
         return { message: 'Cập nhật yêu cầu sử dụng hạn chế thành công', data: repair };
     }
 
+    @UseGuards(JWTAuthGuard)
     @Get()
     async findAll(
         @Query('status_request') status_request?: string,

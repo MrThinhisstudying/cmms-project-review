@@ -61,9 +61,12 @@ export class UserController {
     @Get()
     @UseGuards(JWTAuthGuard)
     @HttpCode(HttpStatus.OK)
-    async getAll(@AuthUser() currentUser: User) {
+    @Get()
+    @UseGuards(JWTAuthGuard)
+    @HttpCode(HttpStatus.OK)
+    async getAll(@AuthUser() currentUser: User, @Query('groupId') groupId?: number) {
         try {
-            const users = await this.userService.findAll(currentUser);
+            const users = await this.userService.findAll(currentUser, groupId ? Number(groupId) : undefined);
             return {
                 message: 'Lấy danh sách người dùng thành công',
                 data: users,

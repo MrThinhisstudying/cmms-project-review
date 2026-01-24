@@ -21,6 +21,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
 
     useEffect(() => {
         if (open && user) {
+            const groupNames = user.user_device_groups?.map(g => g.device_group?.name).filter(Boolean).join(', ') || 'Chưa vào nhóm';
+            
             infoForm.setFieldsValue({
                 name: user.name,
                 email: user.email,
@@ -37,6 +39,9 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     }
                 })(),
                 department: user.department?.name || 'Chưa thuộc phòng ban',
+                position: user.position,
+                citizen_identification_card: user.citizen_identification_card,
+                device_group: groupNames,
                 signature_url: user.signature_url,
             });
             setSignatureUrl(user.signature_url);
@@ -101,7 +106,18 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                         <Form.Item name="role" label="Vai trò">
                              <Input disabled />
                         </Form.Item>
-                        <Form.Item name="department" label="Phòng ban" className="span-2">
+                        
+                        <Form.Item name="position" label="Chức vụ">
+                             <Input disabled />
+                        </Form.Item>
+                        <Form.Item name="citizen_identification_card" label="CCCD">
+                             <Input disabled />
+                        </Form.Item>
+
+                        <Form.Item name="department" label="Phòng ban">
+                             <Input disabled />
+                        </Form.Item>
+                        <Form.Item name="device_group" label="Nhóm thiết bị">
                              <Input disabled />
                         </Form.Item>
                     </div>

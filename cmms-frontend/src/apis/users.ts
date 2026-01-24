@@ -9,9 +9,12 @@ export interface GetAllUsersResponse {
   };
 }
 
-export const getAllUsers = async (token: string | null) => {
+export const getAllUsers = async (token: string | null, params?: { groupId?: number }) => {
   try {
-    const response = await fetch(`${process.env.REACT_APP_BASE_URL}/user`, {
+    const query = new URLSearchParams();
+    if (params?.groupId) query.append("groupId", params.groupId.toString());
+
+    const response = await fetch(`${process.env.REACT_APP_BASE_URL}/user?${query.toString()}`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",

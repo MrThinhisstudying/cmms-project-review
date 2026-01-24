@@ -240,19 +240,16 @@ const RepairsManagement: React.FC = () => {
   const hasNext = selectedRepair ? repairs.findIndex(r => r.repair_id === selectedRepair.repair_id) < repairs.length - 1 : false;
 
   /* New state for export loading */
-  const [exportLoading, setExportLoading] = useState(false);
+//   const [exportLoading, setExportLoading] = useState(false);
 
   const handleExport = async (id: number, type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05") => {
     const key = "export_loading"; 
     try {
-      setExportLoading(true);
       message.loading({ content: "Đang tạo file...", key });
       await exportRepairItem(id, type);
       message.success({ content: "Tải xuống thành công", key, duration: 2 });
     } catch {
       message.error({ content: "Xuất file thất bại", key, duration: 2 });
-    } finally {
-      setExportLoading(false);
     }
   };
 

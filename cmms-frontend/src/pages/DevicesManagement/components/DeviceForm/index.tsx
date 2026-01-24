@@ -1,7 +1,6 @@
 import React, { useEffect } from "react";
-import { Modal, Form, Input, Select, DatePicker, InputNumber, Row, Col, Divider, notification } from "antd";
+import { Modal, Form, Input, Select, InputNumber, Row, Col, Divider, notification } from "antd";
 import { IDevice } from "../../../../types/devicesManagement.types";
-import dayjs from "dayjs";
 
 type DeviceFormProps = {
   open: boolean;
@@ -28,8 +27,6 @@ const DeviceForm: React.FC<DeviceFormProps> = ({
     if (open && initialData) {
       form.setFieldsValue({
         ...initialData,
-        inspection_expiry: initialData.inspection_expiry ? dayjs(initialData.inspection_expiry) : null,
-        insurance_expiry: initialData.insurance_expiry ? dayjs(initialData.insurance_expiry) : null,
       });
     } else {
       form.resetFields();
@@ -41,8 +38,6 @@ const DeviceForm: React.FC<DeviceFormProps> = ({
       const values = await form.validateFields();
       const payload: Partial<IDevice> = {
           ...values,
-          inspection_expiry: values.inspection_expiry ? values.inspection_expiry.toISOString() : null,
-          insurance_expiry: values.insurance_expiry ? values.insurance_expiry.toISOString() : null,
       };
       await onSubmit(payload);
     } catch (error: any) {
@@ -133,16 +128,6 @@ const DeviceForm: React.FC<DeviceFormProps> = ({
             <Col span={6}>
                  <Form.Item name="usage_start_year" label="Năm bắt đầu sử dụng">
                      <InputNumber style={{ width: '100%' }} />
-                 </Form.Item>
-            </Col>
-            <Col span={6}>
-                 <Form.Item name="inspection_expiry" label="Hạn đăng kiểm">
-                     <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
-                 </Form.Item>
-            </Col>
-             <Col span={6}>
-                 <Form.Item name="insurance_expiry" label="Hạn bảo hiểm">
-                     <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
                  </Form.Item>
             </Col>
         </Row>

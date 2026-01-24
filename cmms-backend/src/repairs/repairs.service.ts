@@ -16,11 +16,10 @@ import { StockOut } from 'src/stock-out/entities/stock-out.entity';
 import { Item } from 'src/inventory_item/entities/item.entity';
 import { StockOutStatus } from 'src/stock-out/enum/stock-out.enum';
 import { UserRole } from 'src/user/user-role.enum';
-
+import { UserDeviceGroup } from 'src/device-groups/entities/user-device-group.entity';
+import { RepairsGateway } from './repairs.gateway';
 import { buildRepairPdfTemplate } from './utils/repair-pdf-template.util';
 import * as puppeteer from 'puppeteer';
-
-import { RepairsGateway } from './repairs.gateway';
 
 @Injectable()
 export class RepairsService {
@@ -30,6 +29,7 @@ export class RepairsService {
         @InjectRepository(User) private readonly userRepo: Repository<User>,
         @InjectRepository(StockOut) private readonly stockOutRepo: Repository<StockOut>,
         @InjectRepository(Item) private readonly itemRepo: Repository<Item>,
+        @InjectRepository(UserDeviceGroup) private readonly userDeviceGroupRepo: Repository<UserDeviceGroup>,
         private readonly notificationService: NotificationService,
         private readonly repairsGateway: RepairsGateway,
     ) { }
@@ -596,22 +596,21 @@ export class RepairsService {
 
         if (user) {
             if (user.role === UserRole.OPERATOR) {
-                // User sees only their provided tickets OR tickets related to their device groups?
-                // The prompt says: "Employees belonging to a specific device group should only be able to create repair requests ... and ONLY SEE repair requests related to devices in their group."
-                // So we need to filter by device groups.
-                
-                // 1. Filter by creator? (Optional, usually they want to see all in their group)
-                // query.andWhere('created_by.user_id = :userId', { userId: user.user_id });
-                // But the requirement says "see repair requests related to devices in their group". This implies broader visibility than just "own tickets".
-                // It implies "Group Visibility".
-
-                 // Filter by User's Device Groups
-                 query.innerJoin(
-                     'user_device_group', 
-                     'udg', 
-                     'udg.group_id = device.group_id AND udg.user_id = :userId', 
-                     { userId: user.user_id }
-                 );
+                 // Explicitly fetch user's groups to ensure strict filtering
+                 const userGroups = await this.userDeviceGroupRepo.find({ 
+                     where: { user_id: user.user_id },
+                     select: ['group_id']
+                 });
+                 
+                 const groupIds = userGroups.map(ug => ug.group_id);
+                 
+                 if (groupIds.length === 0) {
+                     // User has no groups -> See NOTHING
+                     return [];
+                 }
+                 
+                 // Filter by group IDs
+                 query.andWhere('device.group_id IN (:...groupIds)', { groupIds });
 
             } else if (user.role === UserRole.UNIT_HEAD) {
                  // Manager sees tickets from their department

@@ -11,6 +11,7 @@ import {
   ToolOutlined,
   WarningOutlined,
   SearchOutlined,
+
 } from "@ant-design/icons";
 import {
   uploadDevices,
@@ -25,11 +26,14 @@ import DeviceDetailDrawer from "./components/DeviceDetailDrawer";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
 import { getAllDeviceGroups } from "../../apis/deviceGroups";
 
+
 const { Option } = Select;
 
 const DevicesManagement: React.FC = () => {
   const { devices, loading, fetchDevices, report, fetchReport } = useDevicesContext();
   const { user } = useAuthContext();
+  
+
   
   // Local Filter State
   const [searchText, setSearchText] = useState("");
@@ -238,6 +242,7 @@ const DevicesManagement: React.FC = () => {
              </Col>
              <Col>
                  <Space>
+
                     {canEdit && (
                         <>
                              <Button icon={<UploadOutlined />} onClick={() => document.getElementById('upload-excel')?.click()}>
@@ -292,6 +297,8 @@ const DevicesManagement: React.FC = () => {
          onClose={() => setDetailOpen(false)}
          device={detailDevice}
       />
+      
+
     </Layout>
   );
 };

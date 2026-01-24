@@ -262,17 +262,25 @@ const DeviceGroupModal: React.FC<DeviceGroupModalProps> = ({ open, onClose }) =>
             onCancel={() => setDevicesModalOpen(false)}
             footer={null}
             width={800}
+            destroyOnClose
         >
             <Transfer
                 dataSource={allDevices
                     .filter(d => !d.device_group || d.device_group.id === selectedGroupForDevices?.id)
                     .map(d => ({
                         key: d.device_id?.toString() || '',
-                        title: `${d.name} (${d.serial_number || 'No SN'})`,
-                        description: d.note || d.brand,
+                        title: `${d.name || 'Unknown'} (${d.reg_number || 'Chưa có BS'})`,
+                        description: (d.note || d.brand || '') + '',
                         disabled: false
                     }))}
                 showSearch
+                filterOption={(inputValue, item) => {
+                    const normalize = (str: string) => str.toLowerCase().normalize("NFC");
+                    const searchValue = normalize(inputValue);
+                    const titleMatch = normalize(item.title || '').includes(searchValue);
+                    const descMatch = normalize(item.description || '').includes(searchValue);
+                    return titleMatch || descMatch;
+                }}
                 listStyle={{
                     width: '45%',
                     height: 400,

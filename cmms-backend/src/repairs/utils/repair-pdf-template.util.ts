@@ -221,9 +221,9 @@ export const buildRepairPdfTemplate = (repair: Repair, type: 'B03' | 'B04' | 'B0
         content = `
             <div class="title uppercase" style="white-space: nowrap;">${formTitle}</div>
             
-            <div class="section-title">I. PHẦN TỔNG QUÁT:</div>
+            <div class="section-title"><div class="bold">I. PHẦN TỔNG QUÁT:</div></div>
             
-            <div class="subsection-title">1. Lý lịch thiết bị:</div>
+            <div class="subsection-title"><div class="bold">1. Lý lịch thiết bị:</div></div>
             <div class="content-indent">
                 <div class="list-item">- Tên thiết bị: ${cleanText(repair.device?.name)}</div>
                 <div class="list-item">- Số đăng ký: ${cleanText(repair.device?.reg_number)}</div>
@@ -231,7 +231,7 @@ export const buildRepairPdfTemplate = (repair: Repair, type: 'B03' | 'B04' | 'B0
                 <div class="list-item">- Số giờ/km hoạt động: .....................................................................</div>
             </div>
 
-            <div class="subsection-title" style="margin-top: 15px;">2. Thành phần kiểm nghiệm:</div>
+            <div class="subsection-title" style="margin-top: 15px;"><div class="bold">2. Thành phần kiểm nghiệm:</div></div>
             <table class="" style="margin-left: 40px; width: auto;">
                 ${repair.inspection_committee?.map((u, idx) => `
                     <tr>
@@ -241,43 +241,43 @@ export const buildRepairPdfTemplate = (repair: Repair, type: 'B03' | 'B04' | 'B0
                 `).join('') || '<tr><td>(Chưa cập nhật thành phần)</td></tr>'}
             </table>
 
-            <div class="subsection-title" style="margin-top: 15px;">3. Thời gian nghiệm thu: .....................................................................</div>
+            <div class="subsection-title" style="margin-top: 15px;"><div class="bold">3. Thời gian nghiệm thu: .....................................................................</div></div>
 
-            <div class="section-title">II. NỘI DUNG KIỂM NGHIỆM:</div>
+            <div class="section-title"><div class="bold">II. NỘI DUNG KIỂM NGHIỆM:</div></div>
             <table class="bordered-table text-center" style="margin-top: 10px;">
                 <thead>
                     <tr>
-                        <th width="5%">Stt</th>
-                        <th width="35%">Mô tả hư hỏng</th>
-                        <th width="25%">Nguyên nhân hư hỏng</th>
-                        <th width="25%">Biện pháp sửa chữa</th>
-                        <th width="10%">Ghi chú</th>
+                        <th width="5%"><div class="bold">STT</div></th>
+                        <th width="35%"><div class="bold">Mô tả hư hỏng</div></th>
+                        <th width="25%"><div class="bold">Nguyên nhân hư hỏng</div></th>
+                        <th width="25%"><div class="bold">Biện pháp sửa chữa</div></th>
+                        <th width="10%"><div class="bold">Ghi chú</div></th>
                     </tr>
                 </thead>
                 <tbody>${itemsRows}</tbody>
             </table>
 
-            <div class="section-title" style="margin-top: 25px;">III. PHẦN ĐỀ NGHỊ CUNG CẤP VẬT TƯ</div>
+            <div class="section-title" style="margin-top: 25px;"><div class="bold">III. PHẦN ĐỀ NGHỊ CUNG CẤP VẬT TƯ</div></div>
             <table class="bordered-table text-center" style="margin-top: 10px;">
                  <thead>
                     <tr>
-                        <th width="5%">Stt</th>
-                        <th width="40%">Tên vật tư, phụ tùng cần thay thế</th>
-                        <th width="25%">Quy cách, mã số</th>
-                        <th width="15%">Số lượng</th>
-                        <th width="15%">Ghi chú</th>
+                        <th width="5%"><div class="bold">STT</div></th>
+                        <th width="40%"><div class="bold">Tên vật tư, phụ tùng cần thay thế</div></th>
+                        <th width="25%"><div class="bold">Quy cách, mã số</div></th>
+                        <th width="15%"><div class="bold">Số lượng</div></th>
+                        <th width="15%"><div class="bold">Ghi chú</div></th>
                     </tr>
                 </thead>
                 <tbody>${materialRows}</tbody>
             </table>
 
-            <div class="section-title" style="margin-top: 25px;">IV. CÁC Ý KIẾN KHÁC (nếu có):</div>
+            <div class="section-title" style="margin-top: 25px;"><div class="bold">IV. CÁC Ý KIẾN KHÁC (nếu có):</div></div>
             <div class="content-indent" style="margin-top: 5px; min-height: 40px;">
                 ${cleanText(repair.inspection_other_opinions)}
             </div>
 
             <div class="text-right italic" style="margin-top: 40px; margin-right: 20px;">
-                Côn Đảo, ngày .... tháng .... năm 2026
+                Côn Đảo, ngày .... tháng .... năm ....
             </div>
 
             <table class="sign-table">
@@ -374,7 +374,7 @@ export const buildRepairPdfTemplate = (repair: Repair, type: 'B03' | 'B04' | 'B0
             <div class="indent-level-1">
                 <div style="margin-bottom: 5px;">- Tên thiết bị: ${cleanText(repair.device?.name)}</div>
                 <div style="margin-bottom: 5px;">- Biển số đăng ký: ${cleanText(repair.device?.reg_number)}</div>
-                <div style="margin-bottom: 5px;">- Nơi đặt: ................................................................</div>
+                <div style="margin-bottom: 5px;">- Nơi đặt: ${cleanText(repair.device?.location_coordinates || "................................................................")}</div>
                 <div style="margin-bottom: 5px;">- Đơn vị quản lý: ${cleanText(repair.created_department?.name || 'Đội kỹ thuật')}</div>
             </div>
 
@@ -408,10 +408,10 @@ export const buildRepairPdfTemplate = (repair: Repair, type: 'B03' | 'B04' | 'B0
             <table class="bordered-table text-center" style="margin-top: 10px;">
                 <thead>
                      <tr>
-                        <th rowspan="2" width="5%">Stt</th>
-                        <th colspan="3" width="35%">Vật tư thay thế</th>
-                        <th colspan="2" width="30%">Vật tư thu hồi<br><i>Recovered Material</i></th>
-                        <th colspan="2" width="30%">Vật tư xin hủy<br><i>Material for Disposal</i></th>
+                        <th rowspan="2" width="5%"><div class="bold">Stt</div></th>
+                        <th colspan="3" width="35%"><div class="bold">Vật tư thay thế</div></th>
+                        <th colspan="2" width="30%"><div class="bold">Vật tư thu hồi<br><i>Recovered Material</i></div></th>
+                        <th colspan="2" width="30%"><div class="bold">Vật tư xin hủy<br><i>Material for Disposal</i></div></th>
                     </tr>
                      <tr>
                         <th width="20%">Tên</th>

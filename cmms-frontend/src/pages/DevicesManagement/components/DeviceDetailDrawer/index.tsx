@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { Drawer, Tabs, Descriptions, Spin, Tag, Row, Col, Space, Table, Empty, Card } from "antd";
-import { QRCodeSVG } from "qrcode.react";
+import { Drawer, Tabs, Descriptions, Tag, Row, Col, Space, Table, Empty, Card, Tooltip, Button, notification } from "antd";
+import { StarFilled } from "@ant-design/icons";
+
 import { getToken } from "../../../../utils/auth";
 import { getMaintenancesByDevice } from "../../../../apis/maintenance";
 import { getRepairsByDevice } from "../../../../apis/repairs";
@@ -8,6 +9,10 @@ import { IMaintenance } from "../../../../types/maintenance.types";
 import { IRepair } from "../../../../types/repairs.types";
 import MaintenanceHistoryTab from "./MaintenanceHistoryTab";
 import RepairHistoryTab from "./RepairHistoryTab";
+import { getAllUsers } from "../../../../apis/users";
+import { IUser } from "../../../../types/user.types";
+import LicenseModal from "./LicenseModal";
+import { updateDevice } from "../../../../apis/devices";
 import { IDevice } from "../../../../types/devicesManagement.types";
 import dayjs from "dayjs";
 
@@ -27,10 +32,33 @@ export default function DeviceDetailDrawer({
   const [loadingMaint, setLoadingMaint] = useState(false);
   const [loadingRepair, setLoadingRepair] = useState(false);
 
+  const [users, setUsers] = useState<IUser[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [showLicenseModal, setShowLicenseModal] = useState(false);
+
   // Pagination for repairs
   const [repairPage, setRepairPage] = useState(1);
   const [repairPageSize, setRepairPageSize] = useState(10);
   const [repairTotal, setRepairTotal] = useState(0);
+
+  useEffect(() => {
+    if (!open || !device?.device_group?.id) {
+        setUsers([]);
+        return;
+    }
+    const token = getToken();
+    (async () => {
+        setLoadingUsers(true);
+        try {
+            const res = await getAllUsers(token, { groupId: device.device_group?.id });
+            setUsers(res);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoadingUsers(false);
+        }
+    })();
+  }, [open, device?.device_group?.id]);
 
   useEffect(() => {
     if (!open || !device?.device_id) return;
@@ -66,6 +94,35 @@ export default function DeviceDetailDrawer({
     })();
   }, [open, device?.device_id, repairPage, repairPageSize]);
 
+  const handleAddLicense = async (data: any) => {
+      if (!device) return;
+      try {
+          const currentLicenses = Array.isArray(device.license_info) ? device.license_info : [];
+          
+          let typeStr = data.type;
+          if (Array.isArray(data.type)) {
+              typeStr = data.type.join(', ');
+          }
+
+          const newLicense = {
+              type: typeStr,
+              number: data.number,
+              issuer: data.issuer,
+              expiry: data.expiry,
+              note: data.note,
+          };
+          const updatedLicenses = [...currentLicenses, newLicense];
+          
+          await updateDevice(device.device_id, getToken(), { license_info: updatedLicenses });
+          
+          notification.success({ message: "Thêm giấy phép thành công", title: "Thành công" });
+          setShowLicenseModal(false);
+          onClose(); 
+      } catch (error) {
+          notification.error({ message: "Thêm giấy phép thất bại", title: "Thất bại" });
+      }
+  };
+
   if (!device) return null;
 
   // Helper for status translation
@@ -84,7 +141,7 @@ export default function DeviceDetailDrawer({
   // --- Tab 1: Lý lịch (Profile) ---
   const renderProfile = () => (
     <Row gutter={24}>
-        <Col span={18}>
+        <Col span={24}>
             <Card title="I. Thông tin chung" size="small" style={{ marginBottom: 16 }}>
                 <Descriptions bordered column={2} size="small">
                     <Descriptions.Item label="Tên thiết bị">{display(device.name)}</Descriptions.Item>
@@ -116,13 +173,8 @@ export default function DeviceDetailDrawer({
                     <Descriptions.Item label="Đặc điểm khác" span={2}>{display(device.other_specifications)}</Descriptions.Item>
                 </Descriptions>
             </Card>
-        </Col>
-        <Col span={6}>
-            <div style={{ textAlign: 'center', marginTop: 16, border: '1px solid #f0f0f0', padding: 16, borderRadius: 8 }}>
-                <QRCodeSVG value={JSON.stringify({id: device.device_id, code: device.device_code})} size={150} />
-                <div style={{ marginTop: 12, fontWeight: 'bold' }}>{device.device_code}</div>
-                <div style={{ fontSize: 12, color: '#888' }}>Quét mã để xem hồ sơ</div>
-            </div>
+
+
             {/* Inventory List if exists */}
             {device.components_inventory && (
                 <Card title="Phụ tùng kèm theo" size="small" style={{ marginTop: 16 }}>
@@ -137,29 +189,45 @@ export default function DeviceDetailDrawer({
     </Row>
   );
 
-  // --- Tab 2: Ban quản lý (Personnel/Relocation) ---
+  // --- Tab 2: Nhân viên QL ---
   const renderManagement = () => {
-      // Mock columns for relocation/personnel history.
-      // If we don't have real data yet, show current logic or placeholder.
-      // Use relocation_history if available
-      const historyData = Array.isArray(device.relocation_history) ? device.relocation_history : [];
-      
       const columns = [
-          { title: 'Thời gian', dataIndex: 'date', key: 'date' },
-          { title: 'Đơn vị/Cán bộ', dataIndex: 'unit', key: 'unit' },
-          { title: 'Chức vụ', dataIndex: 'role', key: 'role' },
-          { title: 'Nội dung', dataIndex: 'note', key: 'note' },
+          { 
+              title: 'Họ và tên', 
+              dataIndex: 'name', 
+              key: 'name',
+              render: (text: string, record: IUser) => {
+                  const currentGroupId = device.device_group?.id;
+                  const isLeader = record.user_device_groups?.some(
+                      g => g.group_id === currentGroupId && g.is_group_lead
+                  );
+                  return (
+                      <Space>
+                          {text}
+                          {isLeader && (
+                              <Tooltip title="Nhóm trưởng">
+                                  <StarFilled style={{ color: '#faad14', fontSize: '16px' }} />
+                              </Tooltip>
+                          )}
+                      </Space>
+                  );
+              }
+          },
+          { title: 'Chức vụ', dataIndex: 'position', key: 'position' },
+          { title: 'Email', dataIndex: 'email', key: 'email' },
+          { title: 'Phòng ban', dataIndex: ['department', 'name'], key: 'dept', render: (val: any) => val || '-' },
       ];
 
       return (
-          <Card title="III. Quá trình quản lý & Di dời" size="small">
+          <Card title={`II. Nhân viên Quản lý (Nhóm: ${device.device_group?.name || 'Chưa gán'})`} size="small">
              <Table 
                 columns={columns} 
-                dataSource={historyData} 
-                rowKey="date" 
+                dataSource={users} 
+                rowKey="user_id" 
                 size="small" 
                 pagination={false} 
-                locale={{ emptyText: <Empty description="Chưa có dữ liệu lịch sử" /> }}
+                loading={loadingUsers}
+                locale={{ emptyText: <Empty description="Chưa có nhân viên nào trong nhóm này" /> }}
             />
           </Card>
       );
@@ -172,30 +240,69 @@ export default function DeviceDetailDrawer({
     
     // Add current expiry dates as rows if license_info is empty
     const data = licenseData.length > 0 ? licenseData : [
-        { type: 'Đăng kiểm', expiry: device.inspection_expiry, issuer: '-' },
-        { type: 'Bảo hiểm', expiry: device.insurance_expiry, issuer: '-' },
+        { type: 'Đăng kiểm', expiry: device.inspection_expiry, issuer: '-', number: '' },
+        { type: 'Bảo hiểm', expiry: device.insurance_expiry, issuer: '-', number: '' },
     ].filter(i => i.expiry);
 
-    const columns = [
-        { title: 'Loại giấy phép', dataIndex: 'type', key: 'type' },
-        { title: 'Số phiếu/GCN', dataIndex: 'number', key: 'number', render: (t:any) => t || '-' },
-        { title: 'Đơn vị cấp', dataIndex: 'issuer', key: 'issuer' },
-        { title: 'Ngày hết hạn', dataIndex: 'expiry', key: 'expiry', render: (d: string) => d ? dayjs(d).format('DD/MM/YYYY') : '-' },
+    const columns: any[] = [
+        { 
+            title: 'STT', 
+            key: 'index', 
+            width: 60, 
+            align: 'center',
+            render: (_: any, __: any, index: number) => index + 1 
+        },
+        { 
+            title: 'Số Giấy phép hoặc tem kiểm định', 
+            dataIndex: 'number', 
+            key: 'number', 
+            render: (text: string, record: any) => (
+                <div>
+                    <div style={{ fontWeight: 500 }}>{text || '---'}</div>
+                    <div style={{ fontSize: 12, color: '#888' }}>({record.type || 'Chưa xác định'})</div>
+                </div>
+            ) 
+        },
+        { 
+            title: 'Đơn vị cấp', 
+            dataIndex: 'issuer', 
+            key: 'issuer',
+            align: 'center', 
+            render: (t: any) => t || '-' 
+        },
+        { 
+            title: 'Thời hạn', 
+            dataIndex: 'expiry', 
+            key: 'expiry', 
+            align: 'center',
+            render: (d: string) => d ? dayjs(d).format('DD/MM/YYYY') : '-' 
+        },
+        {
+            title: 'Ghi chú',
+            dataIndex: 'note',
+            key: 'note',
+            render: (t: any) => t || ''
+        }
     ];
 
     return (
-        <Card title="IV. Theo dõi hồ sơ pháp lý" size="small">
+        <Card 
+            title="III. Theo dõi hồ sơ pháp lý" 
+            size="small"
+            extra={<Button type="primary" size="small" onClick={() => setShowLicenseModal(true)}>Thêm +</Button>}
+        >
             <Table
                 columns={columns}
                 dataSource={data}
-                rowKey="type"
+                rowKey={(record) => record.type ? record.type + record.expiry : Math.random()} 
                 size="small"
                 pagination={false}
+                bordered
             />
         </Card>
     );
   };
-
+ 
   // --- Tab 4: Sửa chữa ---
   const renderRepairHistory = () => (
       <RepairHistoryTab 
@@ -220,8 +327,8 @@ export default function DeviceDetailDrawer({
 
   const items = [
     { key: '1', label: '1. Lý lịch thiết bị', children: renderProfile() },
-    { key: '2', label: '2. Ban quản lý', children: renderManagement() },
-    { key: '3', label: '3. Pháp lý & Kiểm định', children: renderInspection() },
+    { key: '2', label: '2. Nhân viên QL', children: renderManagement() },
+    { key: '3', label: '3. Giấy phép và đăng kiểm', children: renderInspection() },
     { key: '4', label: '4. Sửa chữa', children: renderRepairHistory() },
     { key: '5', label: '5. Bảo dưỡng', children: renderMaintenanceHistory() },
   ];
@@ -235,6 +342,11 @@ export default function DeviceDetailDrawer({
       styles={{ body: { paddingBottom: 80 } }}
     >
       <Tabs defaultActiveKey="1" items={items} type="card" />
+      <LicenseModal 
+        open={showLicenseModal} 
+        onClose={() => setShowLicenseModal(false)}
+        onSubmit={handleAddLicense}
+      />
     </Drawer>
   );
 }
