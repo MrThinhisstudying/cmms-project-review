@@ -29,7 +29,7 @@ export default function StockOutsPage() {
         <Title level={3} style={{ marginBottom: 0 }}>Quản lý yêu cầu xuất kho</Title>
       </div>
 
-      <Card bordered={false} bodyStyle={{ padding: 0 }}>
+      <Card bordered={false} bodyStyle={{ padding: 0 }} style={{ borderRadius: 8, overflow: 'hidden', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
         <StockOutsTable
           data={stockOuts}
           loading={loading}

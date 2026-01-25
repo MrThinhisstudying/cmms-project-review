@@ -268,34 +268,64 @@ const RepairsManagement: React.FC = () => {
         
         {/* Stats Bar */}
         <Row gutter={[16, 16]}>
-            <Col span={5}>
-                <Card bordered={false}>
-                    <Statistic title="Tổng phiếu" value={stats.total} prefix={<FileTextOutlined />} />
+            <Col xl={5} md={8} xs={12}>
+                <Card bordered={false} bodyStyle={{ padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{ padding: 12, borderRadius: '50%', background: '#fafafa' }}>
+                         <FileTextOutlined style={{ fontSize: 24, color: '#595959' }} />
+                    </div>
+                    <div>
+                        <div style={{ color: '#8c8c8c', fontSize: 13 }}>Tổng phiếu</div>
+                        <div style={{ fontSize: 24, fontWeight: 600 }}>{stats.total}</div>
+                    </div>
                 </Card>
             </Col>
-            <Col span={5}>
-                <Card bordered={false}>
-                    <Statistic title="Yêu cầu sửa chữa" value={stats.requests} valueStyle={{ color: '#faad14' }} prefix={<ToolOutlined />} />
+            <Col xl={5} md={8} xs={12}>
+                <Card bordered={false} bodyStyle={{ padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{ padding: 12, borderRadius: '50%', background: '#fff7e6' }}>
+                         <ToolOutlined style={{ fontSize: 24, color: '#faad14' }} />
+                    </div>
+                    <div>
+                        <div style={{ color: '#8c8c8c', fontSize: 13 }}>Yêu cầu sửa chữa</div>
+                        <div style={{ fontSize: 24, fontWeight: 600, color: '#faad14' }}>{stats.requests}</div>
+                    </div>
                 </Card>
             </Col>
-            <Col span={5}>
-                <Card bordered={false}>
-                    <Statistic title="Đang kiểm nghiệm" value={stats.inspections} valueStyle={{ color: '#1890ff' }} prefix={<CheckCircleOutlined />} />
+            <Col xl={5} md={8} xs={12}>
+                <Card bordered={false} bodyStyle={{ padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{ padding: 12, borderRadius: '50%', background: '#e6f7ff' }}>
+                         <CheckCircleOutlined style={{ fontSize: 24, color: '#1890ff' }} />
+                    </div>
+                    <div>
+                        <div style={{ color: '#8c8c8c', fontSize: 13 }}>Đang kiểm nghiệm</div>
+                        <div style={{ fontSize: 24, fontWeight: 600, color: '#1890ff' }}>{stats.inspections}</div>
+                    </div>
                 </Card>
             </Col>
-            <Col span={5}>
-                <Card bordered={false}>
-                    <Statistic title="Đang nghiệm thu" value={stats.acceptances} valueStyle={{ color: '#52c41a' }} prefix={<CheckCircleOutlined />} />
+            <Col xl={5} md={8} xs={12}>
+                 <Card bordered={false} bodyStyle={{ padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{ padding: 12, borderRadius: '50%', background: '#f6ffed' }}>
+                         <CheckCircleOutlined style={{ fontSize: 24, color: '#52c41a' }} />
+                    </div>
+                    <div>
+                        <div style={{ color: '#8c8c8c', fontSize: 13 }}>Đang nghiệm thu</div>
+                        <div style={{ fontSize: 24, fontWeight: 600, color: '#52c41a' }}>{stats.acceptances}</div>
+                    </div>
                 </Card>
             </Col>
-            <Col span={4}>
-                <Card bordered={false}>
-                    <Statistic title="Đã hủy / Từ chối" value={stats.cancelled} valueStyle={{ color: '#cf1322' }} prefix={<CloseCircleOutlined />} />
+            <Col xl={4} md={8} xs={12}>
+                <Card bordered={false} bodyStyle={{ padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{ padding: 12, borderRadius: '50%', background: '#fff1f0' }}>
+                         <CloseCircleOutlined style={{ fontSize: 24, color: '#cf1322' }} />
+                    </div>
+                    <div>
+                        <div style={{ color: '#8c8c8c', fontSize: 13 }}>Đã hủy / Từ chối</div>
+                        <div style={{ fontSize: 24, fontWeight: 600, color: '#cf1322' }}>{stats.cancelled}</div>
+                    </div>
                 </Card>
             </Col>
         </Row>
 
-        <Card>
+        <Card bordered={false} bodyStyle={{ padding: '16px 24px' }}>
           <Row justify="space-between" align="middle" gutter={[16, 16]}>
             <Col>
               <Title level={4} style={{ margin: 0 }}>
@@ -309,7 +339,7 @@ const RepairsManagement: React.FC = () => {
                     allowClear
                     showSearch
                     optionFilterProp="children"
-                    style={{ width: 250 }}
+                    style={{ width: 200 }}
                     value={filterDevice}
                     onChange={(val) => setFilterDevice(val)}
                  >
@@ -323,7 +353,7 @@ const RepairsManagement: React.FC = () => {
                  <Select
                     placeholder="Trạng thái"
                     allowClear
-                    style={{ width: 180 }}
+                    style={{ width: 150 }}
                     value={filterStatusRequest}
                     onChange={(val) => setFilterStatusRequest(val)}
                   >
@@ -352,7 +382,7 @@ const RepairsManagement: React.FC = () => {
           </Row>
         </Card>
 
-        <Card bodyStyle={{ padding: 0 }}>
+        <Card bordered={false} bodyStyle={{ padding: 0 }}>
              <Spin spinning={loading}>
                 <RepairsTable
                     rows={repairs}

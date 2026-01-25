@@ -143,7 +143,7 @@ export default function DeviceDetailDrawer({
     <Row gutter={24}>
         <Col span={24}>
             <Card title="I. Thông tin chung" size="small" style={{ marginBottom: 16 }}>
-                <Descriptions bordered column={2} size="small">
+                <Descriptions bordered column={{ xs: 1, sm: 2, md: 2 }} size="small">
                     <Descriptions.Item label="Tên thiết bị">{display(device.name)}</Descriptions.Item>
                     <Descriptions.Item label="Mã thiết bị">{display(device.device_code)}</Descriptions.Item>
                     <Descriptions.Item label="Biển số">{display(device.reg_number)}</Descriptions.Item>
@@ -163,7 +163,7 @@ export default function DeviceDetailDrawer({
             </Card>
 
             <Card title="II. Thông số kỹ thuật" size="small">
-                <Descriptions bordered column={2} size="small">
+                <Descriptions bordered column={{ xs: 1, sm: 2, md: 2 }} size="small">
                     <Descriptions.Item label="Kích thước (D x R x C)">
                         {device.length || 'NIL'} x {device.width || 'NIL'} x {device.height || 'NIL'} (mm)
                     </Descriptions.Item>

@@ -153,6 +153,7 @@ const DevicesTable: React.FC<DevicesTableProps> = ({
       loading={loading}
       rowKey="device_id"
       pagination={{ pageSize: 10 }}
+      scroll={{ x: 'max-content' }}
     />
   );
 };

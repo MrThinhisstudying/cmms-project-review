@@ -5,11 +5,14 @@ import { createUser, deleteUser, updateUser } from "../../apis/users";
 import { getDeviceGroups, IDeviceGroup } from "../../apis/device-groups";
 import UserModal from "./components/UserModal";
 import React, { useState, useEffect, useMemo } from "react";
-import { Table, Button, Space, Tag, Popconfirm, message, Input, Tooltip } from "antd";
+import { Table, Button, Space, Tag, Popconfirm, message, Input, Tooltip, Row, Col, Layout, Typography, Avatar, Card } from "antd";
 import { ICreateUser, IUser } from "../../types/user.types";
 import DepartmentModal from "./components/DepartmentModal";
 import DeviceGroupModal from "./components/DeviceGroupModal";
 import { getToken } from "../../utils/auth";
+
+const { Content } = Layout;
+const { Title, Text } = Typography;
 
 const Users: React.FC = () => {
   const { users, loading, fetchUsers } = useUsersContext();
@@ -96,41 +99,53 @@ const Users: React.FC = () => {
           key: 'name',
           render: (text: string, record: IUser) => (
              <Space>
-                {record.avatar ? <img src={record.avatar} alt="avatar" style={{width: 24, height: 24, borderRadius: '50%'}} /> : <UserOutlined />}
-                {text}
-                {record.user_device_groups?.[0]?.is_group_lead && (
-                    <Tooltip title="Trưởng nhóm">
-                        <SafetyCertificateOutlined style={{ color: 'gold' }} />
-                    </Tooltip>
-                )}
-                {!record.signature_url && (
-                    <Tooltip title="Chưa cập nhật chữ ký số">
-                        <WarningOutlined style={{ color: 'orange' }} />
-                    </Tooltip>
-                )}
+                <Avatar 
+                    src={record.avatar} 
+                    icon={<UserOutlined />} 
+                    style={{ backgroundColor: '#f0f2f5', color: '#8c8c8c' }} 
+                />
+                <Space direction="vertical" size={0}>
+                    <Space size={4}>
+                        <Text strong>{text}</Text>
+                        {record.user_device_groups?.[0]?.is_group_lead && (
+                            <Tooltip title="Trưởng nhóm">
+                                <SafetyCertificateOutlined style={{ color: '#faad14' }} />
+                            </Tooltip>
+                        )}
+                    </Space>
+                    {!record.signature_url && (
+                        <Text type="secondary" style={{ fontSize: 11 }}>
+                            <WarningOutlined style={{ color: '#faad14', marginRight: 4 }} /> 
+                            Thiếu chữ ký
+                        </Text>
+                    )}
+                </Space>
              </Space>
           )
       },
       {
-          title: 'Email',
+          title: 'Liên hệ',
           dataIndex: 'email',
           key: 'email',
+          render: (email: string) => <Text>{email}</Text>
       },
       {
           title: 'Vai trò',
           dataIndex: 'role',
           key: 'role',
+          align: 'center' as const,
           render: (role: string) => {
               let displayRole = role;
+              let color = 'blue';
               switch(role?.toUpperCase()) {
-                  case 'ADMIN': displayRole = 'Quản trị viên'; break;
-                  case 'OPERATOR': displayRole = 'Vận hành'; break;
-                  case 'TECHNICIAN': displayRole = 'Kỹ thuật'; break;
-                  case 'TEAM_LEAD': displayRole = 'Tổ trưởng'; break;
-                  case 'UNIT_HEAD': displayRole = 'Cán bộ đội'; break;
-                  case 'DIRECTOR': displayRole = 'Ban giám đốc'; break;
+                  case 'ADMIN': displayRole = 'Quản trị viên'; color = 'red'; break;
+                  case 'OPERATOR': displayRole = 'Vận hành'; color = 'cyan'; break;
+                  case 'TECHNICIAN': displayRole = 'Kỹ thuật'; color = 'geekblue'; break;
+                  case 'TEAM_LEAD': displayRole = 'Tổ trưởng'; color = 'purple'; break;
+                  case 'UNIT_HEAD': displayRole = 'Cán bộ đội'; color = 'volcano'; break;
+                  case 'DIRECTOR': displayRole = 'Ban giám đốc'; color = 'gold'; break;
               }
-              return <Tag color={role === 'ADMIN' ? 'red' : 'blue'}>{displayRole}</Tag>;
+              return <Tag color={color} style={{ minWidth: 80, textAlign: 'center' }}>{displayRole}</Tag>;
           }
       },
       {
@@ -138,20 +153,22 @@ const Users: React.FC = () => {
           key: 'group',
           render: (_: any, record: IUser) => {
               const group = record.user_device_groups?.[0]?.device_group;
-              return group ? <Tag icon={<TeamOutlined />} color="cyan">{group.name}</Tag> : '-';
+              return group ? <Tag icon={<TeamOutlined />} color="default">{group.name}</Tag> : '-';
           }
       },
       {
           title: 'Phòng ban',
           dataIndex: ['department', 'name'],
           key: 'department',
+          render: (text: string) => text || '-'
       },
       {
           title: 'Trạng thái',
           dataIndex: 'status',
           key: 'status',
+          align: 'center' as const,
           render: (status: string) => (
-              <Tag color={status === 'active' ? 'success' : 'default'}>
+              <Tag color={status === 'active' ? 'success' : 'default'} style={{ borderRadius: 12 }}>
                   {status === 'active' ? 'Hoạt động' : 'Ngừng hoạt động'}
               </Tag>
           )
@@ -159,12 +176,18 @@ const Users: React.FC = () => {
       {
           title: 'Hành động',
           key: 'action',
+          align: 'right' as const,
+          width: 120,
           render: (_: any, record: IUser) => (
-              <Space>
-                  <Button icon={<EyeOutlined />} size="small" onClick={() => handleView(record)} />
-                  <Button icon={<EditOutlined />} size="small" onClick={() => handleEdit(record)} />
-                  <Popconfirm title="Bạn có chắc chắn muốn xóa?" onConfirm={() => handleDelete(record)}>
-                      <Button icon={<DeleteOutlined />} size="small" danger />
+              <Space size="small">
+                  <Tooltip title="Xem chi tiết">
+                    <Button type="text" icon={<EyeOutlined style={{ color: '#1890ff' }} />} size="small" onClick={() => handleView(record)} />
+                  </Tooltip>
+                  <Tooltip title="Chỉnh sửa">
+                    <Button type="text" icon={<EditOutlined style={{ color: '#faad14' }} />} size="small" onClick={() => handleEdit(record)} />
+                  </Tooltip>
+                  <Popconfirm title="Xóa người dùng?" onConfirm={() => handleDelete(record)}>
+                      <Button type="text" icon={<DeleteOutlined />} size="small" danger />
                   </Popconfirm>
               </Space>
           )
@@ -172,30 +195,51 @@ const Users: React.FC = () => {
   ];
 
   return (
-    <div style={{ padding: 24 }}>
-        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-            <Space>
-                 <Input 
-                    placeholder="Tìm kiếm..." 
-                    prefix={<SearchOutlined />} 
-                    onChange={e => setSearchText(e.target.value)} 
-                    style={{ width: 300 }}
-                 />
-            </Space>
-            <Space>
-                <Button onClick={() => setOpenDeptModal(true)}>Quản lý phòng ban</Button>
-                <Button onClick={() => setOpenGroupModal(true)}>Quản lý nhóm thiết bị</Button>
-                <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>Thêm mới</Button>
-            </Space>
-        </div>
+    <Layout style={{ height: '100%', background: '#f0f2f5', padding: 24 }}>
+      <Content style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        
+        {/* Toolbar */}
+        <Card bordered={false} bodyStyle={{ padding: '16px 24px' }} style={{ marginBottom: 24, borderRadius: 8, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+            <Row justify="space-between" align="middle" gutter={[16, 16]}>
+                <Col xs={24} md={10}>
+                    <Space size={16} wrap>
+                        <Title level={4} style={{ margin: 0 }}>Quản lý người dùng</Title>
+                        <Input.Search 
+                            placeholder="Tìm kiếm theo tên, email..." 
+                            allowClear 
+                            onSearch={val => setSearchText(val)}
+                            onChange={e => setSearchText(e.target.value)}
+                            style={{ width: 250 }}
+                        />
+                    </Space>
+                </Col>
+                <Col xs={24} md={14} style={{ textAlign: 'right' }}>
+                    <Space wrap>
+                        <Button onClick={() => setOpenDeptModal(true)}>Phòng ban</Button>
+                        <Button onClick={() => setOpenGroupModal(true)}>Nhóm thiết bị</Button>
+                        <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>Thêm mới</Button>
+                    </Space>
+                </Col>
+            </Row>
+        </Card>
 
-        <Table 
-            columns={columns} 
-            dataSource={filteredUsers} 
-            rowKey="user_id"
-            loading={loading}
-            pagination={{ pageSize: 10 }} 
-        />
+        {/* Table */}
+        <Card bordered={false} bodyStyle={{ padding: 0 }} style={{ borderRadius: 8, overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+            <Table 
+                columns={columns} 
+                dataSource={filteredUsers} 
+                rowKey="user_id"
+                loading={loading}
+                pagination={{ 
+                    pageSize: 10,
+                    showSizeChanger: true,
+                    pageSizeOptions: ['10', '20', '50'],
+                    showTotal: (total) => `Tổng ${total} người dùng`
+                }} 
+                scroll={{ x: 1000 }}
+                size="middle"
+            />
+        </Card>
 
         <UserModal
             open={openUserModal}
@@ -220,7 +264,8 @@ const Users: React.FC = () => {
             open={openGroupModal}
             onClose={() => setOpenGroupModal(false)}
         />
-    </div>
+      </Content>
+    </Layout>
   );
 };
 

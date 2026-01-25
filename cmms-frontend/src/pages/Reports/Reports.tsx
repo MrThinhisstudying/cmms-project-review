@@ -390,7 +390,7 @@ const Reports: React.FC = () => {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", background: "#f0f2f5" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 64px)", background: "#f0f2f5" }}>
       {/* Control Bar */}
       <Card bordered={false} bodyStyle={{ padding: "12px 24px" }} style={{ zIndex: 10, borderRadius: 0 }}>
         <Space size="middle" align="center" style={{ width: "100%", justifyContent: "space-between" }}>

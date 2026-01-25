@@ -203,12 +203,12 @@ const DevicesManagement: React.FC = () => {
       {/* 2. Filters & Actions */}
       <Card bodyStyle={{ padding: "16px 24px" }} style={{ marginBottom: 16 }}>
          <Row justify="space-between" align="middle" gutter={[16, 16]}>
-             <Col flex="auto">
-                 <Space wrap>
+             <Col xs={24} lg={16}>
+                 <Space wrap style={{ width: '100%' }}>
                      <Input 
                         placeholder="Tìm theo tên, mã..." 
                         prefix={<SearchOutlined />} 
-                        style={{ width: 250 }}
+                        style={{ width: '100%', maxWidth: 250 }}
                         value={searchText}
                         onChange={(e) => setSearchText(e.target.value)}
                         onPressEnter={handleSearch}
@@ -216,7 +216,7 @@ const DevicesManagement: React.FC = () => {
                      <Select
                         placeholder="Trạng thái"
                         allowClear
-                        style={{ width: 180 }}
+                        style={{ width: '100%', maxWidth: 180 }}
                         onChange={setFilterStatus}
                      >
                          <Option value="MOI">Mới</Option>
@@ -228,7 +228,7 @@ const DevicesManagement: React.FC = () => {
                      <Select
                         placeholder="Đội/Nhóm"
                         allowClear
-                        style={{ width: 200 }}
+                        style={{ width: '100%', maxWidth: 200 }}
                         onChange={setFilterGroup}
                      >
                          {deviceGroups.map((g) => (
@@ -240,8 +240,8 @@ const DevicesManagement: React.FC = () => {
                      </Button>
                  </Space>
              </Col>
-             <Col>
-                 <Space>
+             <Col xs={24} lg={8} style={{ textAlign: 'right' }}>
+                 <Space wrap>
 
                     {canEdit && (
                         <>

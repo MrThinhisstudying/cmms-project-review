@@ -258,7 +258,6 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
     {
       title: "Thao tác",
       key: "actions",
-      fixed: "right",
       width: 180,
       render: (_, record) => {
         const phase = getPhase(record);
@@ -418,7 +417,6 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
         rowKey="repair_id"
         scroll={{ x: 'max-content' }}
         pagination={{ pageSize: 10 }}
-        sticky
       />
     </>
   );

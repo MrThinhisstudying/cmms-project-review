@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Layout, Dropdown, MenuProps, Avatar, Badge, Space, Breadcrumb, Button } from "antd";
+import { Layout, Dropdown, MenuProps, Avatar, Badge, Space, Breadcrumb, Button, Input, Typography } from "antd";
 import { 
     UserOutlined, 
     LogoutOutlined, 
@@ -15,6 +15,7 @@ import ProfileModal from "../../../pages/Users/components/ProfileModal";
 
 
 const { Header } = Layout;
+const { Text } = Typography;
 
 interface TopBarProps {
   collapsed?: boolean;
@@ -27,21 +28,45 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
   const [openProfile, setOpenProfile] = useState(false);
   const location = useLocation();
 
+  // Path translation map
+  const PATH_MAP: Record<string, string> = {
+      'trang_chu': 'TRANG CHỦ',
+      'users': 'QUẢN LÝ NGƯỜI DÙNG',
+      'devices': 'QUẢN LÝ TTB_PT',
+      'repairs': 'QUẢN LÝ SỬA CHỮA',
+      'maintenance': 'QUẢN LÝ BẢO DƯỠNG',
+      'inventory': 'QUẢN LÝ VẬT TƯ',
+      'procedures': 'THƯ VIỆN QUY TRÌNH',
+      'schedules': 'QUẢN LÝ LỊCH SỬ PHIẾU',
+      'stock-out': 'XUẤT VẬT TƯ',
+      'reports': 'BÁO CÁO THỐNG KÊ',
+      'logs': 'LỊCH SỬ THAY ĐỔI'
+  };
+
   // Generate breadcrumbs from path
   const pathSnippets = location.pathname.split('/').filter(i => i);
   const breadcrumbItems = [
       {
           key: 'home',
-          title: <Link to="/trang_chu"><HomeOutlined /></Link>
+          title: <Link to="/"><HomeOutlined style={{ fontSize: 16, color: '#1890ff' }} /></Link>
       },
       ...pathSnippets.map((_, index) => {
           const url = `/${pathSnippets.slice(0, index + 1).join('/')}`;
-          // Ensure meaningful names map. For now capitalize.
-          // Maps can be added in constants/routes.
-          const title = pathSnippets[index].replace(/_/g, ' ').toUpperCase(); 
+          const snippet = pathSnippets[index];
+          
+          // Use map or fallback to formatting
+          let title = PATH_MAP[snippet] || snippet.replace(/_/g, ' ').toUpperCase(); 
+          if (snippet === 'trang_chu') title = 'TRANG CHỦ';
+          
+          const isLast = index === pathSnippets.length - 1;
+
           return {
               key: url,
-              title: <Link to={url}>{title}</Link>
+              title: isLast ? (
+                  <span style={{ fontWeight: 600, color: '#262626' }}>{title}</span>
+              ) : (
+                  <Link to={url} style={{ color: '#8c8c8c' }}>{title}</Link>
+              )
           };
       })
   ];
@@ -53,9 +78,7 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
           icon: <UserOutlined />,
           onClick: () => setOpenProfile(true)
       },
-      {
-          type: 'divider'
-      },
+      { type: 'divider' },
       {
           key: 'logout',
           label: 'Đăng xuất',
@@ -65,51 +88,74 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
       }
   ];
 
-
-
   return (
     <>
-        <Header style={{ padding: '0 24px', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 1px 4px rgba(0,21,41,.08)', zIndex: 1 }}>
-            <Space>
+        <Header style={{ 
+            padding: '0 24px', 
+            background: '#fff', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between', 
+            borderBottom: '1px solid #f0f0f0',
+            zIndex: 1,
+            height: 64, 
+            lineHeight: '64px',
+            position: 'sticky',
+            top: 0,
+            boxShadow: '0 2px 8px #f0f1f2' 
+        }}>
+            <Space size={16}>
                 {onToggle && (
                     <Button 
                         type="text" 
                         icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} 
                         onClick={onToggle}
-                        style={{ fontSize: '16px', width: 64, height: 64 }}
+                        style={{ fontSize: '18px', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     />
                 )}
-                <Breadcrumb items={breadcrumbItems} />
+                
+                {/* Custom Breadcrumb View */}
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <Breadcrumb items={breadcrumbItems} separator={<span style={{ color: '#bfbfbf' }}>/</span>} style={{ fontSize: 13 }} />
+                </div>
             </Space>
 
             <Space size={24}>
+                {/* Search Input */}
+                <Input.Search 
+                    placeholder="Tìm kiếm..." 
+                    allowClear 
+                    style={{ width: 200 }} 
+                />
+
+                {/* Notification */}
                 <Dropdown 
                     dropdownRender={() => (
                         <div style={{ 
-                            width: 400, 
+                            width: 350, 
                             backgroundColor: '#fff', 
                             boxShadow: '0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 9px 28px 8px rgba(0, 0, 0, 0.05)', 
                             borderRadius: 8,
                             padding: 0
                         }}>
-                            <div style={{ 
+                             <div style={{ 
                                 display: 'flex', 
                                 justifyContent: 'space-between', 
                                 alignItems: 'center', 
                                 padding: '12px 16px',
                                 borderBottom: '1px solid #f0f0f0'
                             }}>
-                                <span style={{ fontWeight: 600, fontSize: 16 }}>Thông báo</span>
+                                <span style={{ fontWeight: 600, fontSize: 14 }}>Thông báo</span>
                                 {notifications.length > 0 && (
                                     <Button type="link" size="small" onClick={(e) => {
                                         e.preventDefault();
                                         readAll();
-                                    }} style={{ padding: 0 }}>
+                                    }} style={{ padding: 0, fontSize: 12 }}>
                                         Đánh dấu tất cả đã đọc
                                     </Button>
                                 )}
                             </div>
-                            <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+                            <div style={{ maxHeight: 350, overflowY: 'auto' }}>
                                 {notifications.length === 0 ? (
                                     <div style={{ padding: '24px 0', textAlign: 'center', color: '#999' }}>
                                         <BellOutlined style={{ fontSize: 24, marginBottom: 8, opacity: 0.5 }} />
@@ -124,29 +170,22 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
                                                 padding: '12px 16px', 
                                                 cursor: 'pointer',
                                                 backgroundColor: n.is_read ? '#fff' : '#e6f7ff',
-                                                borderBottom: '1px solid #f0f0f0',
-                                                transition: 'background 0.3s'
+                                                borderBottom: '1px solid #f0f0f0'
                                             }}
-                                            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = n.is_read ? '#fafafa' : '#d6e4ff'}
-                                            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = n.is_read ? '#fff' : '#e6f7ff'}
                                         >
-                                            <div style={{ display: 'flex', gap: 12 }}>
-                                                <div style={{ marginTop: 4 }}>
-                                                    {n.is_read ? (
-                                                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#d9d9d9' }} />
-                                                    ) : (
-                                                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1890ff' }} />
-                                                    )}
+                                           <div style={{ display: 'flex', gap: 12 }}>
+                                                <div style={{ marginTop: 6 }}>
+                                                    {!n.is_read && <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#1890ff' }} />}
                                                 </div>
                                                 <div style={{ flex: 1 }}>
-                                                    <div style={{ color: n.is_read ? '#666' : '#000', fontWeight: n.is_read ? 400 : 500, marginBottom: 4 }}>
+                                                    <div style={{ color: n.is_read ? '#666' : '#262626', fontWeight: n.is_read ? 400 : 500, fontSize: 13, marginBottom: 4 }}>
                                                         {n.message}
                                                     </div>
-                                                    <div style={{ fontSize: 12, color: '#999' }}>
+                                                    <div style={{ fontSize: 11, color: '#8c8c8c' }}>
                                                         {new Date(n.created_at).toLocaleString('vi-VN')}
                                                     </div>
                                                 </div>
-                                            </div>
+                                           </div>
                                         </div>
                                     ))
                                 )}
@@ -157,28 +196,22 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
                     placement="bottomRight"
                 >
                     <Badge count={unreadCount} size="small" style={{ boxShadow: 'none' }}>
-                        <div style={{ 
-                            width: 40, 
-                            height: 40, 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center', 
-                            borderRadius: '50%', 
-                            cursor: 'pointer',
-                            transition: 'background 0.3s'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'rgba(0,0,0,0.025)'}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                        >
-                            <BellOutlined style={{ fontSize: 20, color: '#000' }} />
-                        </div>
+                        <Button type="text" shape="circle" icon={<BellOutlined style={{ fontSize: 18, color: '#595959' }} />} />
                     </Badge>
                 </Dropdown>
 
-                <Dropdown menu={{ items: userMenu }} trigger={['click']}>
+                {/* Unified Profile: Avatar + Name */}
+                <Dropdown menu={{ items: userMenu }} trigger={['click']} placement="bottomRight">
                     <Space style={{ cursor: 'pointer' }}>
-                        <Avatar src={user?.avatar} icon={<UserOutlined />} />
-                        <span style={{ fontWeight: 500 }}>{user?.name}</span>
+                        <Avatar 
+                            src={user?.avatar} 
+                            icon={<UserOutlined />} 
+                            style={{ backgroundColor: '#1890ff' }} 
+                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
+                             <Text strong style={{ fontSize: 14 }}>{user?.name || 'Administrator'}</Text>
+                             <Text type="secondary" style={{ fontSize: 11 }}>{user?.role}</Text>
+                        </div>
                     </Space>
                 </Dropdown>
             </Space>
@@ -187,14 +220,12 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
         <ProfileModal 
             open={openProfile} 
             onCancel={() => setOpenProfile(false)} 
-            user={user as any} // Cast user types match mostly
+            user={user as any} 
             onUpdateSuccess={(updatedUser) => {
-                // Update global context by merging, preserving relations like department/role if missing in response
                 if (setUser) {
                     setUser((prevUser) => {
                          if (!prevUser) return updatedUser as any;
-                         
-                         // Normalize role similar to AuthContext logic
+                         // ... same logic
                          const normalizedRole = updatedUser.role === "Administrator" 
                             ? "admin" 
                             : updatedUser.role?.toLowerCase();

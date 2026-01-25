@@ -1,23 +1,35 @@
-import React, { useEffect } from "react";
-import { 
-  Row, 
-  Col, 
-  Card, 
-  Typography, 
-  Button, 
-  Space, 
-  Table, 
-  Tag, 
-  Tabs
+import React, { useEffect, useMemo } from "react";
+import {
+  Layout,
+  Row,
+  Col,
+  Card,
+  Typography,
+  Button,
+  Space,
+  Table,
+  Tag,
+  Tabs,
+  Statistic,
+  Progress,
+  Breadcrumb,
+  Timeline,
+  Avatar,
+  Divider,
+  theme
 } from "antd";
-import { 
-  CodeSandboxOutlined, 
-  ArrowRightOutlined,
-  PlusOutlined,
-  CarOutlined,
+import {
   ToolOutlined,
-  FileTextOutlined,
-  CalendarOutlined
+  AlertOutlined,
+  WarningOutlined,
+  CheckCircleOutlined,
+  AppstoreOutlined,
+  SearchOutlined,
+  CalendarOutlined,
+  ExportOutlined,
+  PlusOutlined,
+  UserOutlined,
+  RightOutlined
 } from "@ant-design/icons";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
@@ -26,72 +38,103 @@ import { useDevicesContext } from "../../context/DevicesContext/DevicesContext";
 import { useRepairsContext } from "../../context/RepairsContext/RepairsContext";
 import { useMaintenanceContext } from "../../context/MaintenanceContext/MaintenanceContext";
 import dayjs from "dayjs";
+import { DeviceStatus } from "../../types/devicesManagement.types";
 
-const { Title, Text } = Typography;
+const { Title, Text, Link: TextLink } = Typography;
+const { Header, Content } = Layout;
 
 const Dashboard = () => {
   const { user } = useAuthContext();
   const { items, stockOuts, refreshAll } = useInventoryContext();
   const { devices, fetchDevices } = useDevicesContext();
   const { repairs, reload: reloadRepairs } = useRepairsContext();
-  const { maintenances } = useMaintenanceContext();
+  const { maintenances, fetchMaintenances } = useMaintenanceContext();
   const navigate = useNavigate();
-  
+  const { token } = theme.useToken();
+
   useEffect(() => {
     refreshAll();
     fetchDevices();
     reloadRepairs();
-  }, [refreshAll, fetchDevices, reloadRepairs]);
+    fetchMaintenances();
+  }, [refreshAll, fetchDevices, reloadRepairs, fetchMaintenances]);
 
   // --- Stats Calculation ---
-  const pendingRepairs = repairs.filter((r: any) => r.status === 'PENDING' || r.status === 'IN_PROGRESS').length;
-  const totalDevices = devices.length;
-  const maintenancePlans = maintenances.length;
+  const stats = useMemo(() => {
+    // 1. Critical: Phiếu chờ xử lý
+    const pendingRepairsCount = repairs.filter(
+      (r: any) => 
+        r.status_request === 'PENDING' || 
+        r.status_request === 'WAITING_INSPECTION' || 
+        r.status_request === 'WAITING_ACCEPTANCE' ||
+        r.status_request === 'IN_PROGRESS'
+    ).length;
 
-  const recentRepairs = repairs.slice(0, 5);
-  const recentStockOuts = stockOuts.slice(0, 5);
+    // 2. Performance: Tỷ lệ sẵn sàng
+    // Assumption: 'DANG_SU_DUNG' and 'MOI' mean ready/working.
+    const activeDevices = devices.filter((d) => 
+        d.status === "DANG_SU_DUNG" as DeviceStatus || 
+        d.status === "MOI" as DeviceStatus
+    ).length;
+    const totalDevices = devices.length;
+    const readinessRate = totalDevices > 0 ? Math.round((activeDevices / totalDevices) * 100) : 0;
 
-  const stats = [
-    {
-      title: "Phiếu sửa chữa đang xử lý",
-      value: pendingRepairs,
-      icon: <ToolOutlined style={{ fontSize: 24, color: '#fa8c16' }} />,
-      color: "#fff7e6",
-      link: "/quan_ly_sua_chua"
-    },
-    {
-      title: "Tổng số phương tiện/thiết bị",
-      value: totalDevices,
-      icon: <CarOutlined style={{ fontSize: 24, color: '#1890ff' }} />,
-      color: "#e6f7ff",
-      link: "/quan_ly_ttb_pt"
-    },
-    {
-      title: "Kế hoạch bảo dưỡng",
-      value: maintenancePlans,
-      icon: <CalendarOutlined style={{ fontSize: 24, color: '#52c41a' }} />,
-      color: "#f6ffed",
-      link: "/quan_ly_bao_duong"
-    },
-  ];
+    // 3. Danger: Bảo dưỡng quá hạn
+    // Count maintenances where next_maintenance_date < today
+    const now = dayjs();
+    const overdueCount = maintenances.filter((m) => {
+      if (!m.next_maintenance_date) return false;
+      return dayjs(m.next_maintenance_date).isBefore(now, 'day');
+    }).length;
 
+    // 4. Inventory: Vật tư sắp hết
+    // Arbitrary threshold < 10
+    const lowStockCount = items.filter((item) => item.quantity < 10).length;
+
+    return {
+      pendingRepairsCount,
+      readinessRate,
+      overdueCount,
+      lowStockCount
+    };
+  }, [repairs, devices, maintenances, items]);
+
+  // --- Recent Repairs Data ---
+  const recentRepairs = useMemo(() => {
+    // Sort by created_at desc
+    return [...repairs]
+      .sort((a, b) => dayjs(b.created_at).valueOf() - dayjs(a.created_at).valueOf())
+      .slice(0, 5);
+  }, [repairs]);
+
+  // --- Today's Schedule ---
+  const todaySchedule = useMemo(() => {
+    const today = dayjs().format('YYYY-MM-DD');
+    return maintenances
+      .filter(m => m.next_maintenance_date && dayjs(m.next_maintenance_date).isSame(today, 'day'))
+      .slice(0, 4); // Show max 4
+  }, [maintenances]);
+
+
+  // --- Columns ---
   const repairColumns = [
     {
       title: 'Thiết bị',
       dataIndex: ['device', 'name'],
       key: 'device_name',
+      render: (text: string) => <Text strong>{text}</Text>
     },
     {
       title: 'Biển số',
       dataIndex: ['device', 'reg_number'],
       key: 'reg_number',
-      render: (text: string) => text || '---'
+      render: (text: string) => text || <Text type="secondary">N/A</Text>
     },
     {
       title: 'Ngày tạo',
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (date: string) => date ? dayjs(date).format('DD/MM/YYYY') : '---'
+      render: (date: string) => <Text type="secondary">{date ? dayjs(date).format('DD/MM/YYYY') : '---'}</Text>
     },
     {
       title: 'Trạng thái',
@@ -106,7 +149,7 @@ const Dashboard = () => {
             color = 'success';
           } else if (status.includes('WAITING') || status === 'PENDING') {
             label = 'Đang xử lý';
-            color = 'processing';
+            color = 'processing'; // AntD Blue
           } else if (status.includes('REJECTED')) {
              label = 'Đã từ chối';
              color = 'error';
@@ -117,119 +160,225 @@ const Dashboard = () => {
     }
   ];
 
-  const stockOutColumns = [
-    {
-      title: 'Vật tư',
-      dataIndex: ['item', 'name'],
-      key: 'item',
-      render: (text: string) => <Text strong>{text}</Text>
-    },
-    {
-      title: 'Số lượng',
-      dataIndex: 'quantity',
-      key: 'quantity',
-      render: (q: number, record: any) => `${q} ${record.item?.quantity_unit || ''}`
-    },
-    {
-      title: 'Người yêu cầu',
-      dataIndex: ['requested_by', 'name'],
-      key: 'requester',
-    },
-    {
-      title: 'Trạng thái',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => {
-        const color = status === 'APPROVED' ? 'success' : status === 'PENDING' ? 'warning' : 'default';
-        const label = status === 'APPROVED' ? 'Đã duyệt' : status === 'PENDING' ? 'Chờ duyệt' : status;
-        return <Tag color={color}>{label}</Tag>;
-      }
-    }
-  ];
-
-  const tabItems = [
-    {
-      key: '1',
-      label: 'Phiếu sửa chữa gần đây',
-      children: <Table dataSource={recentRepairs} columns={repairColumns} pagination={false} rowKey="repair_id" size="small" />
-    },
-    {
-      key: '2',
-      label: 'Xuất kho gần đây',
-      children: <Table dataSource={recentStockOuts} columns={stockOutColumns} pagination={false} rowKey="id" size="small" />
-    }
-  ];
-
   return (
-    <div style={{ padding: 24, minHeight: '100vh', background: '#f0f2f5' }}>
-      <div style={{ marginBottom: 24 }}>
-        <Title level={2} style={{ margin: 0 }}>Xin chào, {user?.name}</Title>
-        <Text type="secondary">Tổng quan hoạt động bảo trì và quản lý thiết bị</Text>
-      </div>
+    <Layout style={{ background: 'transparent', padding: 24 }}>
+      {/* 1. Page Title only - Removed Card Header */}
+      <Title level={4} style={{ marginBottom: 16 }}>Trung tâm điều hành bảo trì</Title>
 
-      <Row gutter={[24, 24]}>
-        {/* Stats Cards */}
-        {stats.map((stat, index) => (
-          <Col xs={24} sm={12} lg={8} key={index}>
-            <Card bordered={false} hoverable style={{ height: '100%' }}>
-              <Space align="start" style={{ width: '100%', justifyContent: 'space-between' }}>
-                <div>
-                  <Text type="secondary">{stat.title}</Text>
-                  <Title level={2} style={{ margin: '8px 0' }}>{stat.value}</Title>
-                  <Link to={stat.link} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    Xem chi tiết <ArrowRightOutlined />
-                  </Link>
-                </div>
-                <div style={{ 
-                  padding: 12, 
-                  borderRadius: 12, 
-                  background: stat.color, 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center' 
-                }}>
-                  {stat.icon}
-                </div>
-              </Space>
-            </Card>
-          </Col>
-        ))}
-
-        {/* Recent Activity Tabs */}
-        <Col xs={24} lg={16}>
-          <Card bordered={false}>
-            <Tabs defaultActiveKey="1" items={tabItems} tabBarExtraContent={<Link to="/quan_ly_sua_chua">Xem tất cả</Link>} />
+      {/* 2. Stats Row */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        {/* Card 1: Critical - Pending Repairs */}
+        <Col span={6}>
+          <Card bordered={false} bodyStyle={{ padding: 20, height: 160, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+               <div>
+                  <Text type="secondary" style={{ fontSize: 14 }}>Phiếu chờ xử lý</Text>
+                  <Title level={2} style={{ margin: '8px 0 0', color: '#faad14' }}>
+                    {stats.pendingRepairsCount}
+                  </Title>
+               </div>
+               <div style={{ 
+                 background: '#fff7e6', 
+                 padding: 10, 
+                 borderRadius: '50%',
+                 color: '#faad14' 
+               }}>
+                  <ToolOutlined style={{ fontSize: 24 }} />
+               </div>
+            </div>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+               Cần xử lý ngay
+            </Text>
           </Card>
         </Col>
 
-        {/* Quick Actions & System Status */}
-        <Col xs={24} lg={8}>
-           <Row gutter={[0, 24]}>
-              <Col span={24}>
-                <Card title="Phím tắt" bordered={false}>
-                  <Space direction="vertical" style={{ width: '100%' }}>
-                    <Button type="primary" block icon={<PlusOutlined />} size="large" onClick={() => navigate('/quan_ly_sua_chua')}>
-                      Tạo phiếu sửa chữa
-                    </Button>
-                    <Button block icon={<CodeSandboxOutlined />} size="large" onClick={() => navigate('/lay_vat_tu')}>
-                      Xuất vật tư nhanh
-                    </Button>
-                     <Button block icon={<FileTextOutlined />} size="large" onClick={() => navigate('/maintenance-procedures')}>
-                      Tra cứu quy trình
-                    </Button>
-                    <Button block icon={<ToolOutlined />} size="large" onClick={() => navigate('/quan_ly_bao_duong')}>
-                      Quản lý bảo dưỡng
-                    </Button>
-                    <Button block icon={<CalendarOutlined />} size="large" onClick={() => navigate('/quan_ly_bao_duong')}>
-                      Lịch bảo dưỡng
-                    </Button>
-                  </Space>
-                </Card>
-              </Col>
-           </Row>
+        {/* Card 2: Performance - Readiness */}
+        <Col span={6}>
+            <Card bordered={false} bodyStyle={{ padding: 20, height: 160 }}>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '100%' }}>
+                <div>
+                   <Text type="secondary" style={{ fontSize: 14 }}>Tỷ lệ sẵn sàng</Text>
+                   <div style={{ marginTop: 8 }}>
+                      <Text type="secondary">Tổng thiết bị: </Text>
+                      <Text strong>{devices.length}</Text>
+                   </div>
+                </div>
+                <Progress 
+                  type="circle" 
+                  percent={stats.readinessRate} 
+                  strokeColor="#52c41a" 
+                  width={80} 
+                  format={percent => <span style={{ color: '#262626', fontSize: 16, fontWeight: 600 }}>{percent}%</span>}
+                />
+             </div>
+          </Card>
+        </Col>
+
+        {/* Card 3: Danger - Overdue Maintenance */}
+        <Col span={6}>
+            <Card bordered={false} bodyStyle={{ padding: 20, height: 160, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+               <div>
+                  <Text type="secondary" style={{ fontSize: 14 }}>Bảo dưỡng quá hạn</Text>
+                  <Title level={2} style={{ margin: '8px 0 0', color: '#ff4d4f' }}>
+                    {stats.overdueCount}
+                  </Title>
+               </div>
+               <div style={{ 
+                 background: '#fff1f0', 
+                 padding: 10, 
+                 borderRadius: '50%',
+                 color: '#ff4d4f' 
+               }}>
+                  <AlertOutlined style={{ fontSize: 24 }} />
+               </div>
+            </div>
+            <Link to="/quan_ly_bao_duong" style={{ fontSize: 12, color: '#ff4d4f' }}>
+               Xem danh sách chênh lệch <RightOutlined style={{ fontSize: 10 }} />
+            </Link>
+          </Card>
+        </Col>
+
+        {/* Card 4: Inventory - Low Stock */}
+        <Col span={6}>
+             <Card bordered={false} bodyStyle={{ padding: 20, height: 160, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+               <div>
+                  <Text type="secondary" style={{ fontSize: 14 }}>Vật tư sắp hết</Text>
+                  <Title level={2} style={{ margin: '8px 0 0' }}>
+                    {stats.lowStockCount}
+                  </Title>
+               </div>
+               <div style={{ 
+                 background: '#e6f7ff', 
+                 padding: 10, 
+                 borderRadius: '50%',
+                 color: '#1890ff' 
+               }}>
+                  <AppstoreOutlined style={{ fontSize: 24 }} />
+               </div>
+            </div>
+            <Text type="secondary" style={{ fontSize: 12 }}>
+               Dưới định mức tối thiểu
+            </Text>
+          </Card>
         </Col>
       </Row>
-    </div>
+
+      {/* 3. Content Area (70/30) */}
+      <Row gutter={24}>
+        {/* Left Column - Recent Activity */}
+        <Col span={17}>
+          <Card bordered={false} style={{ borderRadius: 8, height: '100%' }} bodyStyle={{ padding: 0 }}>
+             <Tabs 
+               defaultActiveKey="1" 
+               type="line"
+               size="large"
+               tabBarStyle={{ padding: '0 24px', margin: 0 }}
+               items={[
+                 {
+                   key: '1',
+                   label: 'Phiếu sửa chữa gần đây',
+                   children: (
+                     <Table 
+                        dataSource={recentRepairs} 
+                        columns={repairColumns} 
+                        pagination={false} 
+                        rowKey="repair_id" 
+                        onRow={(record) => ({
+                          onClick: () => {
+                            // Navigate to details (list view for now)
+                            navigate(`/quan_ly_sua_chua`); 
+                          },
+                          style: { cursor: 'pointer' }
+                        })}
+                     />
+                   )
+                 }
+               ]}
+               tabBarExtraContent={
+                  <Button type="link" onClick={() => navigate('/quan_ly_sua_chua')}>
+                    Xem tất cả <RightOutlined />
+                  </Button>
+               }
+             />
+          </Card>
+        </Col>
+
+        {/* Right Column - Widgets */}
+        <Col span={7}>
+          <Space direction="vertical" style={{ width: '100%' }} size={24}>
+             {/* Widget 1: Quick Actions */}
+             <Card title="Trung tâm điều hành" bordered={false} style={{ borderRadius: 8 }}>
+                <Button 
+                   type="primary" 
+                   block 
+                   icon={<PlusOutlined />} 
+                   size="large" 
+                   style={{ marginBottom: 16, height: 48, fontSize: 16 }}
+                   onClick={() => navigate('/quan_ly_sua_chua')} // Ideally open create modal
+                >
+                  Tạo phiếu sửa chữa
+                </Button>
+                
+                <Row gutter={[12, 12]}>
+                   <Col span={12}>
+                      <Button block style={{ height: 80, flexDirection: 'column' }} onClick={() => navigate('/lay_vat_tu')}>
+                         <ExportOutlined style={{ fontSize: 20, marginBottom: 8, color: '#1890ff' }} />
+                         <span>Xuất kho</span>
+                      </Button>
+                   </Col>
+                   <Col span={12}>
+                       <Button block style={{ height: 80, flexDirection: 'column' }} onClick={() => navigate('/maintenance-procedures')}>
+                         <SearchOutlined style={{ fontSize: 20, marginBottom: 8, color: '#1890ff' }} />
+                         <span>Tra cứu</span>
+                      </Button>
+                   </Col>
+                    <Col span={12}>
+                       <Button block style={{ height: 80, flexDirection: 'column' }} onClick={() => navigate('/quan_ly_bao_duong')}>
+                         <CalendarOutlined style={{ fontSize: 20, marginBottom: 8, color: '#1890ff' }} />
+                         <span>Lịch</span>
+                      </Button>
+                   </Col>
+                    <Col span={12}>
+                       <Button block style={{ height: 80, flexDirection: 'column' }} onClick={() => navigate('/bao_cao_thong_ke')}>
+                         <AppstoreOutlined style={{ fontSize: 20, marginBottom: 8, color: '#1890ff' }} />
+                         <span>Báo cáo</span>
+                      </Button>
+                   </Col>
+                </Row>
+             </Card>
+
+             {/* Widget 2: Today Schedule */}
+             <Card title="Lịch bảo trì hôm nay" bordered={false} style={{ borderRadius: 8 }}>
+                {todaySchedule.length === 0 ? (
+                   <div style={{ textAlign: 'center', padding: '20px 0', color: '#8c8c8c' }}>
+                      Không có lịch bảo trì hôm nay
+                   </div>
+                ) : (
+                  <Timeline 
+                    items={todaySchedule.map(m => ({
+                        color: m.status === 'active' ? 'green' : 'gray',
+                        children: (
+                          <>
+                             <Text strong>{m.device?.name}</Text>
+                             <br/>
+                             <Text type="secondary" style={{ fontSize: 12 }}>
+                                {m.level ? `Cấp ${m.level}` : 'Bảo dưỡng'}
+                             </Text>
+                          </>
+                        )
+                    }))}
+                  />
+                )}
+                 <div style={{ marginTop: 12, textAlign: 'center' }}>
+                     <Link to="/quan_ly_bao_duong" style={{ fontSize: 13 }}>Xem lịch chi tiết</Link>
+                 </div>
+             </Card>
+          </Space>
+        </Col>
+      </Row>
+    </Layout>
   );
 };
 

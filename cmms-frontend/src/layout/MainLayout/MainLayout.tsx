@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Layout } from "antd";
+import React, { useState, useEffect } from "react";
+import { Layout, Grid } from "antd";
 import { Outlet } from "react-router-dom";
 import TopBar from "./TopBar";
 import Sidebar from "./SideBar";
@@ -16,7 +16,15 @@ import { RepairsProvider } from "../../context/RepairsContext/RepairsContext";
 const { Content } = Layout;
 
 const MainLayout = () => {
-  const [collapsed, setCollapsed] = useState(false);
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md; // Consider mobile/tablet if < 768px (md)
+
+  const [collapsed, setCollapsed] = useState(isMobile); // Initialize based on device
+
+  // Sync collapsed state when screen size changes
+  useEffect(() => {
+      setCollapsed(isMobile);
+  }, [isMobile]);
 
   const toggleCollapsed = () => {
     setCollapsed(!collapsed);
@@ -32,11 +40,17 @@ const MainLayout = () => {
                   <InventoryProvider>
                     <AuditProvider>
                       <NotificationProvider>
-                        <Layout style={{ minHeight: '100vh' }}>
-                          <Sidebar collapsed={collapsed} onCollapse={setCollapsed} />
-                          <Layout>
+                        <Layout style={{ minHeight: '100vh', background: '#f0f2f5' }}>
+                          <Sidebar collapsed={collapsed} onCollapse={setCollapsed} isMobile={isMobile} />
+                          <Layout style={{ background: '#f0f2f5' }}>
                             <TopBar collapsed={collapsed} onToggle={toggleCollapsed} />
-                            <Content style={{ margin: '24px 16px', padding: 24, minHeight: 280, background: '#fff', borderRadius: 8 }}>
+                            <Content style={{ 
+                                margin: isMobile ? '16px 8px' : '24px', 
+                                padding: 0, // Let pages handle their own internal padding if needed, or MainLayout provides only margins
+                                minHeight: 280, 
+                                background: 'transparent', // Transparent to show gray bg
+                                borderRadius: 8 
+                            }}>
                                 <Outlet />
                             </Content>
                           </Layout>

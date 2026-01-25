@@ -37,7 +37,7 @@ export function InventoryManagementPage() {
 
   // Pagination
   const [page, setPage] = useState<number>(1);
-  const rowsPerPage = 24;
+  const rowsPerPage = 10;
 
   // Drawer / Modals
   const [openDrawer, setOpenDrawer] = useState(false);
@@ -107,15 +107,17 @@ export function InventoryManagementPage() {
       key: String(tab.id),
       label: tab.label || `Tab ${tab.id}`, 
       children: (
-        <div style={{ paddingTop: 16 }}>
-          <ListItems
-            result={paginatedData}
-            loading={loading}
-            toggleDrawer={toggleDrawer}
-            refreshAll={refreshAll}
-          />
+        <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ flex: 1, overflow: 'auto' }}>
+             <ListItems
+                result={paginatedData}
+                loading={loading}
+                toggleDrawer={toggleDrawer}
+                refreshAll={refreshAll}
+             />
+          </div>
           {totalItems > rowsPerPage && (
-            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '16px 24px', borderTop: '1px solid #f0f0f0' }}>
               <Pagination
                 current={page}
                 pageSize={rowsPerPage}
@@ -131,19 +133,30 @@ export function InventoryManagementPage() {
   });
 
   return (
-    <Layout style={{ height: '100%', background: '#f5f5f5' }}>
-      <Content style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Layout style={{ height: '100%', background: '#f0f2f5', padding: 24 }}>
+      <Content style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-          <Space>
-             <Title level={3} style={{ margin: 0 }}>Quản lý vật tư</Title>
+        {/* Toolbar Card */}
+        <div style={{ 
+            background: '#fff', 
+            padding: '16px 24px', 
+            borderRadius: 8, 
+            marginBottom: 24,
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+        }}>
+          <Space size={16}>
+             <div>
+                <Title level={4} style={{ margin: 0 }}>Quản lý vật tư</Title>
+             </div>
              <Input.Search 
-                placeholder="Tìm kiếm vật tư..." 
+                placeholder="Tìm kiếm theo tên / mã..." 
                 allowClear 
                 onSearch={val => setSearchText(val)}
                 onChange={e => setSearchText(e.target.value)}
-                style={{ width: 300, marginLeft: 16 }}
+                style={{ width: 300 }}
              />
           </Space>
           
@@ -158,52 +171,48 @@ export function InventoryManagementPage() {
                   showUploadList={false}
                   accept=".csv,.xlsx,.xls"
                 >
-                  <Button icon={<UploadOutlined />}>Tải tệp</Button>
+                  <Button icon={<UploadOutlined />}>Nhập Excel</Button>
                 </Upload>
 
                 <Button icon={<DownloadOutlined />} onClick={handleDownload}>
-                  Xuất dữ liệu
+                  Xuất Excel
                 </Button>
                 
                 <Button onClick={() => setOpenCategoryModal(true)}>
-                  Quản lý Danh mục
+                  Danh mục
                 </Button>
                 
                 <Button type="primary" icon={<PlusOutlined />} onClick={() => toggleDrawer(true, null)}>
-                  Thêm mới vật tư
+                  Thêm mới
                 </Button>
               </>
             )}
           </Space>
         </div>
 
-        {/* Content Tabs */}
+        {/* Content Table */}
         <div style={{ 
           background: '#fff', 
-          padding: 24, 
           borderRadius: 8, 
           flex: 1, 
           display: 'flex', 
           flexDirection: 'column',
-          overflow: 'hidden' 
+          overflow: 'hidden',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
         }}>
           <Tabs 
             activeKey={activeKey} 
             onChange={setActiveKey} 
             items={tabItems}
-            style={{ height: '100%' }}
-            // Ensure tab content scrolls if needed
+            tabBarStyle={{ padding: '0 24px', marginBottom: 0 }}
+            style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
           />
         </div>
 
         {/* Modals */}
         <ManageCategoryModal
           open={openCategoryModal}
-          handleClose={() => {
-            setOpenCategoryModal(false);
-            refreshAll();
-            message.success("Cập nhật danh mục thành công");
-          }}
+          handleClose={() => setOpenCategoryModal(false)}
           categories={categories}
         />
 

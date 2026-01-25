@@ -1,13 +1,17 @@
 import React, { useState } from "react";
-import { Table, Button, Tag, Space, Tooltip, Modal, message } from "antd";
+import { Table, Button, Tag, Space, Tooltip, Modal, message, Avatar, Typography, Divider } from "antd";
 import {
   EyeOutlined,
   CheckOutlined,
   CloseOutlined,
   InfoCircleOutlined,
+  UserOutlined
 } from "@ant-design/icons";
+import dayjs from "dayjs";
 import { useInventoryContext } from "../../../../context/InventoryContext/InventoryContext";
 import { IStockOut } from "../../../../types/inventory.types";
+
+const { Text } = Typography;
 
 interface Props {
   data: IStockOut[];
@@ -79,100 +83,100 @@ export default function StockOutsTable({
       title: "#",
       key: "index",
       width: 60,
-      render: (_: any, __: any, index: number) => index + 1,
+      align: "center" as const,
+      render: (_: any, __: any, index: number) => <span style={{ color: '#8c8c8c' }}>{index + 1}</span>,
     },
     {
       title: "Vật tư",
       dataIndex: ["item", "name"],
       key: "item_name",
       render: (text: string, record: IStockOut) => (
-        <Space direction="vertical" size={0}>
-          <span style={{ fontWeight: 500 }}>{text || "-"}</span>
-          {record.repair && <Tag color="blue" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px' }}>Sửa chữa</Tag>}
+        <Space direction="vertical" size={2}>
+          <Text strong style={{ fontSize: 14 }}>{text || "-"}</Text>
+          <Space split={<Divider type="vertical" />}>
+             <Text type="secondary" style={{ fontSize: 12 }}>{record.item?.category?.name || 'Chưa phân loại'}</Text>
+             {record.repair && <Tag color="blue" style={{ fontSize: 10, lineHeight: '16px', padding: '0 4px', border: 0 }}>Sửa chữa</Tag>}
+          </Space>
         </Space>
       ),
-    },
-    {
-      title: "Danh mục",
-      dataIndex: ["item", "category", "name"],
-      key: "category",
-      render: (text: string) => text || "-",
     },
     {
       title: "Người yêu cầu",
       key: "requested_by",
       render: (_: any, record: IStockOut) => {
         const u = record.requested_by;
-        if (!u) return "-";
-        if (typeof u === "object") return u.name || u.email;
-        return "-";
+        let name = "-";
+        if (u && typeof u === "object") name = u.name || u.email;
+        
+        return (
+            <Space>
+               <Avatar icon={<UserOutlined />} src={typeof u === 'object' ? u?.avatar : undefined} size="small" style={{ backgroundColor: '#f0f2f5', color: '#8c8c8c' }} />
+               <Text>{name}</Text>
+            </Space>
+        )
       },
     },
     {
-      title: "Người duyệt",
-      key: "approved_by",
-      render: (_: any, record: IStockOut) => {
-        const u = record.approved_by;
-        if (!u) return "-";
-        if (typeof u === "object") return u.name || u.email;
-        return "-";
-      },
+      title: "Số lượng",
+      key: "qty",
+      align: "right" as const,
+      render: (_: any, record: IStockOut) => (
+        <span>
+          <strong style={{ fontSize: 15 }}>{record.quantity}</strong> 
+          <span style={{ fontSize: 12, color: '#8c8c8c', marginLeft: 4 }}>{record.item?.quantity_unit || ""}</span>
+        </span>
+      ),
     },
     {
       title: "Trạng thái",
       dataIndex: "status",
       key: "status",
+      align: "center" as const,
       width: 140,
       render: (status: string) => renderStatus(status),
-    },
-    {
-      title: "Số lượng",
-      key: "qty",
-      render: (_: any, record: IStockOut) => (
-        <span>
-          <strong>{record.quantity}</strong> {record.item?.quantity_unit || ""}
-        </span>
-      ),
     },
     {
       title: "Ngày tạo",
       dataIndex: "created_at",
       key: "created_at",
+      align: "right" as const,
       render: (date: any) =>
-        date ? new Date(date).toLocaleString("vi-VN") : "-",
+        date ? <Text type="secondary" style={{ fontSize: 13 }}>{dayjs(date).format("HH:mm DD/MM/YYYY")}</Text> : "-",
     },
     {
-      title: "Hành động",
+      title: "Thao tác",
       key: "action",
-      width: 120,
+      width: 100,
       fixed: "right" as const,
+      align: "center" as const,
       render: (_: any, record: IStockOut) => {
         const isPending = record.status === "PENDING";
-        const isRepair = !!record.repair; // Automations are handled by system primarily
+        const isRepair = !!record.repair; 
 
         return (
           <Space>
             <Tooltip title="Xem chi tiết">
               <Button
+                type="text"
                 size="small"
-                icon={<EyeOutlined />}
+                icon={<EyeOutlined style={{ color: '#1890ff' }} />}
                 onClick={() => onDetail(record)}
               />
             </Tooltip>
             {isPending && !isRepair && (
               <>
-                <Tooltip title="Duyệt">
+                <Tooltip title="Duyệt nhanh">
                   <Button
+                    type="text"
                     size="small"
-                    type="primary"
-                    ghost
-                    icon={<CheckOutlined />}
+                    icon={<CheckOutlined style={{ color: '#52c41a' }} />}
                     onClick={() => handleConfirmAction(record.id, "approve")}
                     disabled={busy}
                   />
                 </Tooltip>
                 <Tooltip title="Huỷ">
                   <Button
+                    type="text"
                     size="small"
                     danger
                     icon={<CloseOutlined />}
@@ -181,11 +185,6 @@ export default function StockOutsTable({
                   />
                 </Tooltip>
               </>
-            )}
-            {isPending && isRepair && (
-                 <Tooltip title="Tự động duyệt theo quy trình sửa chữa">
-                    <InfoCircleOutlined style={{ color: '#1890ff' }} />
-                 </Tooltip>
             )}
           </Space>
         );
