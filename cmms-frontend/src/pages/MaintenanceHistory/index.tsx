@@ -276,7 +276,7 @@ const MaintenanceHistoryPage: React.FC = () => {
         </div>
 
         {/* THANH BỘ LỌC */}
-        <Card bodyStyle={{ padding: 16 }} style={{ borderRadius: 8 }}>
+        <Card styles={{ body: { padding: 16 } }} style={{ borderRadius: 8 }}>
           <Row gutter={[12, 12]}>
             <Col xs={24} md={6}>
               <Input
@@ -328,7 +328,7 @@ const MaintenanceHistoryPage: React.FC = () => {
 
       <Card
         style={{ borderRadius: 8, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}
-        bodyStyle={{ padding: 0 }}
+        styles={{ body: { padding: 0 } }}
       >
         <Table
           dataSource={filteredData}

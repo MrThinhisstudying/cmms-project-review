@@ -13,7 +13,7 @@ const StatsBar: React.FC<StatsBarProps> = ({ data }) => {
   return (
     <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
       <Col xs={24} sm={12} md={4}>
-        <Card bordered={false}>
+        <Card variant="borderless">
           <Statistic
             title="Tổng số xe"
             value={data.total}
@@ -23,7 +23,7 @@ const StatsBar: React.FC<StatsBarProps> = ({ data }) => {
         </Card>
       </Col>
       <Col xs={24} sm={12} md={5}>
-        <Card bordered={false}>
+        <Card variant="borderless">
           <Statistic
             title="Đang sử dụng"
             value={Number(data.DANG_SU_DUNG || 0) + Number(data.MOI || 0)}
@@ -33,7 +33,7 @@ const StatsBar: React.FC<StatsBarProps> = ({ data }) => {
         </Card>
       </Col>
        <Col xs={24} sm={12} md={5}>
-        <Card bordered={false}>
+        <Card variant="borderless">
           <Statistic
             title="Sử dụng hạn chế"
             value={data.SU_DUNG_HAN_CHE || 0}
@@ -43,7 +43,7 @@ const StatsBar: React.FC<StatsBarProps> = ({ data }) => {
         </Card>
       </Col>
       <Col xs={24} sm={12} md={5}>
-        <Card bordered={false}>
+        <Card variant="borderless">
           <Statistic
             title="Đang sửa chữa"
             value={data.DANG_SUA_CHUA || 0}
@@ -53,7 +53,7 @@ const StatsBar: React.FC<StatsBarProps> = ({ data }) => {
         </Card>
       </Col>
       <Col xs={24} sm={12} md={5}>
-        <Card bordered={false}>
+        <Card variant="borderless">
           <Statistic
             title="Thanh lý"
             value={data.THANH_LY || 0}

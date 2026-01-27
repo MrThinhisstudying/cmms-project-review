@@ -10,7 +10,6 @@ import {
   message,
   Card,
   Spin,
-  Statistic,
   notification
 } from "antd";
 import { PlusOutlined, FileTextOutlined, ToolOutlined, CheckCircleOutlined, CloseCircleOutlined } from "@ant-design/icons";
@@ -33,6 +32,8 @@ const { Title } = Typography;
 const { Option } = Select;
 
 const RepairsManagement: React.FC = () => {
+
+
   const {
     repairs,
     loading,
@@ -85,15 +86,20 @@ const RepairsManagement: React.FC = () => {
     const socketUrl = baseUrl.replace('/api', ''); // Remove /api suffix for socket connection
 
     const socket = io(socketUrl, {
-        transports: ['websocket'], // Force WebSocket to avoid polling fallback issues
+        transports: ['websocket'],
+        autoConnect: false,
     });
+    
+    const timer = setTimeout(() => {
+      socket.connect();
+    }, 500);
 
     socket.on("connect", () => {
       // console.log("Connected to WebSocket");
     });
 
     socket.on("repair_updated", () => {
-      // console.log("Received repair_updated event");
+      // console.log("WebSocket [repair_updated] triggered reload at", new Date().toLocaleTimeString());
       const { filterDevice: fd, filterStatusRequest: fsr } = filterRefs.current;
       reload({
         device_id: fd,
@@ -102,6 +108,9 @@ const RepairsManagement: React.FC = () => {
     });
 
     return () => {
+      clearTimeout(timer);
+      socket.off("connect");
+      socket.off("repair_updated");
       socket.disconnect();
     };
   }, [reload]);
@@ -119,10 +128,10 @@ const RepairsManagement: React.FC = () => {
   // Stats Calculation
   const stats = useMemo(() => {
     const total = repairs.length;
-    const requests = repairs.filter(r => r.status_request !== 'COMPLETED' && r.status_request !== 'REJECTED' && !r.canceled).length;
-    const inspections = repairs.filter(r => r.status_request === 'COMPLETED' && r.status_inspection !== 'inspection_admin_approved' && !r.canceled).length;
-    const acceptances = repairs.filter(r => r.status_inspection === 'inspection_admin_approved' && r.status_acceptance !== 'acceptance_admin_approved' && !r.canceled).length;
-    const cancelled = repairs.filter(r => r.canceled).length;
+    const requests = repairs.filter((r: IRepair) => r.status_request !== 'COMPLETED' && r.status_request !== 'REJECTED' && !r.canceled).length;
+    const inspections = repairs.filter((r: IRepair) => r.status_request === 'COMPLETED' && r.status_inspection !== 'inspection_admin_approved' && !r.canceled).length;
+    const acceptances = repairs.filter((r: IRepair) => r.status_inspection === 'inspection_admin_approved' && r.status_acceptance !== 'acceptance_admin_approved' && !r.canceled).length;
+    const cancelled = repairs.filter((r: IRepair) => r.canceled).length;
     return { total, requests, inspections, acceptances, cancelled };
   }, [repairs]);
 
@@ -188,8 +197,6 @@ const RepairsManagement: React.FC = () => {
               quantity: m.quantity,
               purpose: "Sửa chữa",
               repair_id: selectedRepair.repair_id,
-              // Using helper which mimics context logic? 
-              // RepairsContext likely wraps api calls.
             });
           }
         }
@@ -222,7 +229,7 @@ const RepairsManagement: React.FC = () => {
 
   const handlePrev = () => {
     if (!selectedRepair) return;
-    const currentIndex = repairs.findIndex(r => r.repair_id === selectedRepair.repair_id);
+    const currentIndex = repairs.findIndex((r: IRepair) => r.repair_id === selectedRepair.repair_id);
     if (currentIndex > 0) {
         setSelectedRepair(repairs[currentIndex - 1]);
     }
@@ -230,17 +237,14 @@ const RepairsManagement: React.FC = () => {
 
   const handleNext = () => {
     if (!selectedRepair) return;
-    const currentIndex = repairs.findIndex(r => r.repair_id === selectedRepair.repair_id);
+    const currentIndex = repairs.findIndex((r: IRepair) => r.repair_id === selectedRepair.repair_id);
     if (currentIndex !== -1 && currentIndex < repairs.length - 1) {
         setSelectedRepair(repairs[currentIndex + 1]);
     }
   };
 
-  const hasPrev = selectedRepair ? repairs.findIndex(r => r.repair_id === selectedRepair.repair_id) > 0 : false;
-  const hasNext = selectedRepair ? repairs.findIndex(r => r.repair_id === selectedRepair.repair_id) < repairs.length - 1 : false;
-
-  /* New state for export loading */
-//   const [exportLoading, setExportLoading] = useState(false);
+  const hasPrev = selectedRepair ? repairs.findIndex((r: IRepair) => r.repair_id === selectedRepair.repair_id) > 0 : false;
+  const hasNext = selectedRepair ? repairs.findIndex((r: IRepair) => r.repair_id === selectedRepair.repair_id) < repairs.length - 1 : false;
 
   const handleExport = async (id: number, type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05") => {
     const key = "export_loading"; 
@@ -269,7 +273,7 @@ const RepairsManagement: React.FC = () => {
         {/* Stats Bar */}
         <Row gutter={[16, 16]}>
             <Col xl={5} md={8} xs={12}>
-                <Card bordered={false} bodyStyle={{ padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                <Card variant="borderless" styles={{ body: { padding: 20, display: 'flex', alignItems: 'center', gap: 16 } }}>
                     <div style={{ padding: 12, borderRadius: '50%', background: '#fafafa' }}>
                          <FileTextOutlined style={{ fontSize: 24, color: '#595959' }} />
                     </div>
@@ -280,7 +284,7 @@ const RepairsManagement: React.FC = () => {
                 </Card>
             </Col>
             <Col xl={5} md={8} xs={12}>
-                <Card bordered={false} bodyStyle={{ padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                <Card variant="borderless" styles={{ body: { padding: 20, display: 'flex', alignItems: 'center', gap: 16 } }}>
                     <div style={{ padding: 12, borderRadius: '50%', background: '#fff7e6' }}>
                          <ToolOutlined style={{ fontSize: 24, color: '#faad14' }} />
                     </div>
@@ -291,7 +295,7 @@ const RepairsManagement: React.FC = () => {
                 </Card>
             </Col>
             <Col xl={5} md={8} xs={12}>
-                <Card bordered={false} bodyStyle={{ padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                <Card variant="borderless" styles={{ body: { padding: 20, display: 'flex', alignItems: 'center', gap: 16 } }}>
                     <div style={{ padding: 12, borderRadius: '50%', background: '#e6f7ff' }}>
                          <CheckCircleOutlined style={{ fontSize: 24, color: '#1890ff' }} />
                     </div>
@@ -302,7 +306,7 @@ const RepairsManagement: React.FC = () => {
                 </Card>
             </Col>
             <Col xl={5} md={8} xs={12}>
-                 <Card bordered={false} bodyStyle={{ padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                 <Card variant="borderless" styles={{ body: { padding: 20, display: 'flex', alignItems: 'center', gap: 16 } }}>
                     <div style={{ padding: 12, borderRadius: '50%', background: '#f6ffed' }}>
                          <CheckCircleOutlined style={{ fontSize: 24, color: '#52c41a' }} />
                     </div>
@@ -313,7 +317,7 @@ const RepairsManagement: React.FC = () => {
                 </Card>
             </Col>
             <Col xl={4} md={8} xs={12}>
-                <Card bordered={false} bodyStyle={{ padding: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
+                <Card variant="borderless" styles={{ body: { padding: 20, display: 'flex', alignItems: 'center', gap: 16 } }}>
                     <div style={{ padding: 12, borderRadius: '50%', background: '#fff1f0' }}>
                          <CloseCircleOutlined style={{ fontSize: 24, color: '#cf1322' }} />
                     </div>
@@ -325,7 +329,7 @@ const RepairsManagement: React.FC = () => {
             </Col>
         </Row>
 
-        <Card bordered={false} bodyStyle={{ padding: '16px 24px' }}>
+        <Card variant="borderless" styles={{ body: { padding: '16px 24px' } }}>
           <Row justify="space-between" align="middle" gutter={[16, 16]}>
             <Col>
               <Title level={4} style={{ margin: 0 }}>
@@ -382,7 +386,7 @@ const RepairsManagement: React.FC = () => {
           </Row>
         </Card>
 
-        <Card bordered={false} bodyStyle={{ padding: 0 }}>
+        <Card variant="borderless" styles={{ body: { padding: 0 } }}>
              <Spin spinning={loading}>
                 <RepairsTable
                     rows={repairs}
@@ -478,4 +482,3 @@ const RepairsManagement: React.FC = () => {
 };
 
 export default RepairsManagement;
-

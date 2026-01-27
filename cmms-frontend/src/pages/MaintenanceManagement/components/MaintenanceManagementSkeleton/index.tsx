@@ -23,7 +23,7 @@ const MaintenanceManagementSkeleton: React.FC = () => {
       </div>
 
       {/* Table Skeleton */}
-      <Card bordered={false} style={{ borderRadius: 8 }}>
+      <Card variant="borderless" style={{ borderRadius: 8 }}>
         <Skeleton active paragraph={{ rows: 10 }} />
       </Card>
     </div>

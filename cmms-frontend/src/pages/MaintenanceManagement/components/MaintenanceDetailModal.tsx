@@ -59,7 +59,7 @@ const MaintenanceDetailModal: React.FC<Props> = ({
         <Button onClick={onClose}>Đóng</Button>
       }
       width={900}
-      bodyStyle={{ padding: 24 }}
+      styles={{ body: { padding: 24 } }}
     >
       <div style={{ marginBottom: 24 }}>
           <Title level={4}><ToolOutlined /> Kết hoạch bảo dưỡng chi tiết</Title>

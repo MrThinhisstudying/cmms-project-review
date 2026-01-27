@@ -143,7 +143,7 @@ const DevicesManagement: React.FC = () => {
       {/* 1. Stats Bar */}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={12} sm={6} md={4}>
-          <Card bordered={false} bodyStyle={{ padding: 16 }}>
+          <Card variant="borderless" styles={{ body: { padding: 16 } }}>
             <Statistic
               title="Tổng thiết bị"
               value={report?.total || 0}
@@ -152,7 +152,7 @@ const DevicesManagement: React.FC = () => {
           </Card>
         </Col>
         <Col xs={12} sm={6} md={4}>
-          <Card bordered={false} bodyStyle={{ padding: 16 }}>
+          <Card variant="borderless" styles={{ body: { padding: 16 } }}>
             <Statistic
               title="Sẵn sàng (Mới)"
               value={report?.MOI || 0}
@@ -161,7 +161,7 @@ const DevicesManagement: React.FC = () => {
           </Card>
         </Col>
         <Col xs={12} sm={6} md={4}>
-          <Card bordered={false} bodyStyle={{ padding: 16 }}>
+          <Card variant="borderless" styles={{ body: { padding: 16 } }}>
             <Statistic
               title="Đang sử dụng"
               value={report?.DANG_SU_DUNG || 0}
@@ -170,7 +170,7 @@ const DevicesManagement: React.FC = () => {
           </Card>
         </Col>
          <Col xs={12} sm={6} md={4}>
-          <Card bordered={false} bodyStyle={{ padding: 16 }}>
+          <Card variant="borderless" styles={{ body: { padding: 16 } }}>
             <Statistic
               title="Đang sửa chữa"
               value={report?.DANG_SUA_CHUA || 0}
@@ -180,7 +180,7 @@ const DevicesManagement: React.FC = () => {
           </Card>
         </Col>
         <Col xs={12} sm={6} md={4}>
-          <Card bordered={false} bodyStyle={{ padding: 16 }}>
+          <Card variant="borderless" styles={{ body: { padding: 16 } }}>
             <Statistic
               title="Sử dụng hạn chế"
               value={report?.SU_DUNG_HAN_CHE || 0}
@@ -190,7 +190,7 @@ const DevicesManagement: React.FC = () => {
           </Card>
         </Col>
         <Col xs={12} sm={6} md={4}>
-             <Card bordered={false} bodyStyle={{ padding: 16 }}>
+             <Card variant="borderless" styles={{ body: { padding: 16 } }}>
                 <Statistic
                     title="Thanh lý/Hủy"
                     value={(report?.THANH_LY || 0) + (report?.HUY_BO || 0)}
@@ -201,7 +201,7 @@ const DevicesManagement: React.FC = () => {
       </Row>
 
       {/* 2. Filters & Actions */}
-      <Card bodyStyle={{ padding: "16px 24px" }} style={{ marginBottom: 16 }}>
+      <Card styles={{ body: { padding: "16px 24px" } }} style={{ marginBottom: 16 }}>
          <Row justify="space-between" align="middle" gutter={[16, 16]}>
              <Col xs={24} lg={16}>
                  <Space wrap style={{ width: '100%' }}>
@@ -271,7 +271,7 @@ const DevicesManagement: React.FC = () => {
       </Card>
 
       {/* 3. Table */}
-      <Card bodyStyle={{ padding: 0 }} style={{ flex: 1, overflow: 'hidden' }}>
+      <Card styles={{ body: { padding: 0 } }} style={{ flex: 1, overflow: 'hidden' }}>
           <DevicesTable
              dataSource={devices}
              loading={loading}

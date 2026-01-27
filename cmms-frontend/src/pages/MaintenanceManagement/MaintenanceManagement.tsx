@@ -164,7 +164,7 @@ const MaintenanceManagement: React.FC = () => {
 
       {/* Filter Bar */}
       <Card
-        bodyStyle={{ padding: "16px" }}
+        styles={{ body: { padding: "16px" } }}
         style={{ marginBottom: 16, borderRadius: 8 }}
       >
         <Row gutter={[16, 16]}>

@@ -83,7 +83,7 @@ export default function AddItemDrawer({ openDrawer, toggleDrawer, data, categori
         width={720}
         onClose={() => toggleDrawer(false, null)}
         open={openDrawer}
-        bodyStyle={{ paddingBottom: 80 }}
+        styles={{ body: { paddingBottom: 80 } }}
         extra={
             <Space>
                 <Button onClick={() => toggleDrawer(false, null)}>Hủy</Button>

@@ -32,15 +32,30 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
   const PATH_MAP: Record<string, string> = {
       'trang_chu': 'TRANG CHỦ',
       'users': 'QUẢN LÝ NGƯỜI DÙNG',
-      'devices': 'QUẢN LÝ TTB_PT',
+      'devices': 'QUẢN LÝ THIẾT BỊ',
+      'device-groups': 'NHÓM THIẾT BỊ',
+      'device-types': 'LOẠI THIẾT BỊ',
       'repairs': 'QUẢN LÝ SỬA CHỮA',
       'maintenance': 'QUẢN LÝ BẢO DƯỠNG',
       'inventory': 'QUẢN LÝ VẬT TƯ',
       'procedures': 'THƯ VIỆN QUY TRÌNH',
-      'schedules': 'QUẢN LÝ LỊCH SỬ PHIẾU',
-      'stock-out': 'XUẤT VẬT TƯ',
+      'schedules': 'LỊCH BẢO DƯỠNG',
+      'stock-out': 'XUẤT KHO VẬT TƯ',
+      'stock-outs': 'XUẤT KHO VẬT TƯ',
       'reports': 'BÁO CÁO THỐNG KÊ',
-      'logs': 'LỊCH SỬ THAY ĐỔI'
+      'logs': 'LỊCH SỬ THAY ĐỔI',
+      'audit-log': 'LỊCH SỬ THAY ĐỔI',
+      'maintenance-procedures': 'THƯ VIỆN QUY TRÌNH',
+      'maintenance-history': 'LỊCH SỬ PHIẾU BẢO DƯỠNG',
+      'bao_cao_thong_ke': 'BÁO CÁO THỐNG KÊ',
+      'quan_ly_nguoi_dung': 'QUẢN LÝ NGƯỜI DÙNG',
+      'quan_ly_ttb_pt': 'QUẢN LÝ THIẾT BỊ',
+      'quan_ly_sua_chua': 'QUẢN LÝ SỬA CHỮA',
+      'quan_ly_bao_duong': 'QUẢN LÝ BẢO DƯỠNG',
+      'quan_ly_vat_tu': 'QUẢN LÝ VẬT TƯ',
+      'lich_su': 'LỊCH SỬ HỆ THỐNG',
+      'login': 'ĐĂNG NHẬP',
+      'profile': 'HỒ SƠ CÁ NHÂN'
   };
 
   // Generate breadcrumbs from path

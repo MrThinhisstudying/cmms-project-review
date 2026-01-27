@@ -75,7 +75,7 @@ export default function ItemCard({ item, toggleDrawer, refreshAll }: any) {
             )}
         </div>
       }
-      bodyStyle={{ padding: 16 }}
+      styles={{ body: { padding: 16 } }}
     >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', minHeight: 60 }}>
             <div style={{ flex: 1, paddingRight: 8 }}>

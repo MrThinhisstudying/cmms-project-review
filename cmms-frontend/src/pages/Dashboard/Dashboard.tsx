@@ -10,25 +10,18 @@ import {
   Table,
   Tag,
   Tabs,
-  Statistic,
   Progress,
-  Breadcrumb,
   Timeline,
-  Avatar,
-  Divider,
   theme
 } from "antd";
 import {
   ToolOutlined,
   AlertOutlined,
-  WarningOutlined,
-  CheckCircleOutlined,
   AppstoreOutlined,
   SearchOutlined,
   CalendarOutlined,
   ExportOutlined,
   PlusOutlined,
-  UserOutlined,
   RightOutlined
 } from "@ant-design/icons";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
@@ -40,17 +33,16 @@ import { useMaintenanceContext } from "../../context/MaintenanceContext/Maintena
 import dayjs from "dayjs";
 import { DeviceStatus } from "../../types/devicesManagement.types";
 
-const { Title, Text, Link: TextLink } = Typography;
-const { Header, Content } = Layout;
+const { Title, Text } = Typography;
 
 const Dashboard = () => {
   const { user } = useAuthContext();
-  const { items, stockOuts, refreshAll } = useInventoryContext();
+  const { items, refreshAll } = useInventoryContext();
   const { devices, fetchDevices } = useDevicesContext();
   const { repairs, reload: reloadRepairs } = useRepairsContext();
   const { maintenances, fetchMaintenances } = useMaintenanceContext();
   const navigate = useNavigate();
-  const { token } = theme.useToken();
+  // const { token } = theme.useToken();
 
   useEffect(() => {
     refreshAll();
@@ -169,7 +161,7 @@ const Dashboard = () => {
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         {/* Card 1: Critical - Pending Repairs */}
         <Col span={6}>
-          <Card bordered={false} bodyStyle={{ padding: 20, height: 160, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <Card variant="borderless" styles={{ body: { padding: 20, height: 160, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' } }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                <div>
                   <Text type="secondary" style={{ fontSize: 14 }}>Phiếu chờ xử lý</Text>
@@ -194,7 +186,7 @@ const Dashboard = () => {
 
         {/* Card 2: Performance - Readiness */}
         <Col span={6}>
-            <Card bordered={false} bodyStyle={{ padding: 20, height: 160 }}>
+            <Card variant="borderless" styles={{ body: { padding: 20, height: 160 } }}>
              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', height: '100%' }}>
                 <div>
                    <Text type="secondary" style={{ fontSize: 14 }}>Tỷ lệ sẵn sàng</Text>
@@ -216,7 +208,7 @@ const Dashboard = () => {
 
         {/* Card 3: Danger - Overdue Maintenance */}
         <Col span={6}>
-            <Card bordered={false} bodyStyle={{ padding: 20, height: 160, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+            <Card variant="borderless" styles={{ body: { padding: 20, height: 160, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' } }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                <div>
                   <Text type="secondary" style={{ fontSize: 14 }}>Bảo dưỡng quá hạn</Text>
@@ -241,7 +233,7 @@ const Dashboard = () => {
 
         {/* Card 4: Inventory - Low Stock */}
         <Col span={6}>
-             <Card bordered={false} bodyStyle={{ padding: 20, height: 160, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+             <Card variant="borderless" styles={{ body: { padding: 20, height: 160, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' } }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                <div>
                   <Text type="secondary" style={{ fontSize: 14 }}>Vật tư sắp hết</Text>
@@ -269,7 +261,7 @@ const Dashboard = () => {
       <Row gutter={24}>
         {/* Left Column - Recent Activity */}
         <Col span={17}>
-          <Card bordered={false} style={{ borderRadius: 8, height: '100%' }} bodyStyle={{ padding: 0 }}>
+          <Card variant="borderless" style={{ borderRadius: 8, height: '100%' }} styles={{ body: { padding: 0 } }}>
              <Tabs 
                defaultActiveKey="1" 
                type="line"
@@ -309,7 +301,7 @@ const Dashboard = () => {
         <Col span={7}>
           <Space direction="vertical" style={{ width: '100%' }} size={24}>
              {/* Widget 1: Quick Actions */}
-             <Card title="Trung tâm điều hành" bordered={false} style={{ borderRadius: 8 }}>
+             <Card title="Trung tâm điều hành" variant="borderless" style={{ borderRadius: 8 }}>
                 <Button 
                    type="primary" 
                    block 
@@ -350,7 +342,7 @@ const Dashboard = () => {
              </Card>
 
              {/* Widget 2: Today Schedule */}
-             <Card title="Lịch bảo trì hôm nay" bordered={false} style={{ borderRadius: 8 }}>
+             <Card title="Lịch bảo trì hôm nay" variant="borderless" style={{ borderRadius: 8 }}>
                 {todaySchedule.length === 0 ? (
                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#8c8c8c' }}>
                       Không có lịch bảo trì hôm nay

@@ -1,4 +1,4 @@
-import { PlusOutlined, DeleteOutlined, EditOutlined, SearchOutlined, UserOutlined, TeamOutlined, SafetyCertificateOutlined, WarningOutlined, EyeOutlined } from "@ant-design/icons";
+import { PlusOutlined, DeleteOutlined, EditOutlined, UserOutlined, TeamOutlined, SafetyCertificateOutlined, WarningOutlined, EyeOutlined } from "@ant-design/icons";
 import { useUsersContext } from "../../context/UsersContext/UsersContext";
 import { useDepartmentsContext } from "../../context/DepartmentsContext/DepartmentsContext";
 import { createUser, deleteUser, updateUser } from "../../apis/users";
@@ -199,7 +199,7 @@ const Users: React.FC = () => {
       <Content style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         
         {/* Toolbar */}
-        <Card bordered={false} bodyStyle={{ padding: '16px 24px' }} style={{ marginBottom: 24, borderRadius: 8, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+        <Card variant="borderless" styles={{ body: { padding: '16px 24px' } }} style={{ marginBottom: 24, borderRadius: 8, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
             <Row justify="space-between" align="middle" gutter={[16, 16]}>
                 <Col xs={24} md={10}>
                     <Space size={16} wrap>
@@ -224,7 +224,7 @@ const Users: React.FC = () => {
         </Card>
 
         {/* Table */}
-        <Card bordered={false} bodyStyle={{ padding: 0 }} style={{ borderRadius: 8, overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+        <Card variant="borderless" styles={{ body: { padding: 0 } }} style={{ borderRadius: 8, overflow: 'hidden', flex: 1, display: 'flex', flexDirection: 'column', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
             <Table 
                 columns={columns} 
                 dataSource={filteredUsers} 

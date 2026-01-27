@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Layout, Menu, Drawer } from "antd";
 import { Link, useLocation } from "react-router-dom";
-import { LogoutOutlined } from "@ant-design/icons";
+import { LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, RightOutlined, LeftOutlined } from "@ant-design/icons";
 import { useAuthContext } from "../../../context/AuthContext/AuthContext";
 import { SIDEBAR_MENU } from "../../../constants/sidebarMenu";
 import LOGO_ACV from "../../../assets/images/acv-logo.png";
@@ -48,28 +48,44 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, isMobile = fal
 
   const sidebarContent = (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-        {/* Logo Container */}
+        {/* Zenoc Style Logo Header */}
         <div style={{ 
-            height: 80, // Increased height
+            height: 80, 
             display: 'flex', 
             alignItems: 'center', 
-            justifyContent: 'center', 
-            margin: '16px', 
-            background: 'rgba(255, 255, 255, 0.05)', 
-            borderRadius: 8,
-            overflow: 'hidden',
+            padding: collapsed ? '0' : '0 24px', 
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            margin: '0', 
+            background: 'transparent',
             flexShrink: 0,
-            backdropFilter: 'blur(10px)'
+            overflow: 'hidden' 
         }}>
-            {(!isMobile && collapsed) ? (
-                 <img src={LOGO_ACV} alt="Logo" style={{ width: 40, height: 40, objectFit: 'contain' }} />
-            ) : (
-                 <img src={LOGO_ACV} alt="Logo" style={{ maxWidth: '85%', maxHeight: 50, objectFit: 'contain' }} />
-            )}
+             {/* Logo Image */}
+             <div style={{ 
+                 width: 40, 
+                 height: 40, 
+                 borderRadius: '50%', 
+                 overflow: 'hidden', 
+                 display: 'flex', 
+                 alignItems: 'center', 
+                 justifyContent: 'center',
+                 background: '#fff', // White bg for logo contrasting
+                 flexShrink: 0
+             }}>
+                 <img src={LOGO_ACV} alt="Logo" style={{ width: '80%', height: '80%', objectFit: 'contain' }} />
+             </div>
+             
+             {/* Logo Text (Hidden if collapsed) */}
+             {!collapsed && (
+                 <div style={{ marginLeft: 12, overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                     <div style={{ fontWeight: 700, fontSize: 16, color: '#fff' }}>CMMS VCS</div>
+                     <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: -2 }}>CON DAO AIRPORT</div>
+                 </div>
+             )}
         </div>
         
         {/* Menu Scrollable Area */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden' }}>
             <Menu
                 theme="dark"
                 mode="inline"
@@ -77,15 +93,16 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, isMobile = fal
                 items={menuItems}
                 style={{ background: 'transparent', borderRight: 0 }}
                 onClick={isMobile ? () => onCollapse(true) : undefined}
+                inlineCollapsed={collapsed} 
             />
         </div>
 
-        {/* Fixed Logout Button */}
+        {/* Footer Actions: Logout */}
         <div style={{ 
-            padding: '16px', 
+            padding: '12px', 
             borderTop: '1px solid rgba(255, 255, 255, 0.1)',
             marginTop: 'auto',
-            background: 'rgba(0,0,0,0.1)'
+            background: 'rgba(0,0,0,0.2)',
         }}>
             <div 
                 onClick={() => logoutUser()}
@@ -141,16 +158,54 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, isMobile = fal
       collapsed={collapsed}
       width={260}
       style={{
-        background: "#001529", // Deep Navy
+        background: "#001529", 
         minHeight: "100vh",
         position: 'sticky',
         top: 0,
         left: 0,
         height: '100vh',
-        overflow: 'hidden'
+        overflow: 'visible', // Allow button to float outside
+        zIndex: 100
       }}
     >
       {sidebarContent}
+
+      {/* Floating Collapse Button (Zenoc Style) */}
+      {!isMobile && (
+          <div 
+            onClick={() => onCollapse(!collapsed)}
+            style={{
+                position: 'absolute',
+                top: '50%', // Vertically centered
+                marginTop: -12, // Offset by half height to center perfectly
+                right: -12, // Hanging off edge
+                width: 24,
+                height: 24,
+                background: '#fff',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                border: '1px solid #f0f0f0',
+                zIndex: 101,
+                color: '#595959',
+                fontSize: 12,
+                transition: 'all 0.3s' // Smooth transition for hover
+            }}
+             onMouseEnter={(e) => {
+                 e.currentTarget.style.transform = 'scale(1.1)';
+                 e.currentTarget.style.color = '#1890ff';
+             }}
+             onMouseLeave={(e) => {
+                 e.currentTarget.style.transform = 'scale(1)';
+                 e.currentTarget.style.color = '#595959';
+             }}
+          >
+              {collapsed ? <RightOutlined /> : <LeftOutlined />}
+          </div>
+      )}
     </Sider>
   );
 };
