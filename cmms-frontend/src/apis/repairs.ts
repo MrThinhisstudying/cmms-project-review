@@ -159,16 +159,17 @@ export const submitAcceptance = async (
 export const exportRepair = async (
   id: number,
   token: string | null,
-  type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" = "request"
+  type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" | "COMBINED" = "request"
 ) => {
   const typeMap: Record<string, string> = {
     request: "B03",
     inspection: "B04",
     acceptance: "B05",
+    COMBINED: "COMBINED"
   };
   const code = typeMap[type] || type;
   // GET /repairs/:id/export?type=...
-  const url = `${BASE_URL}/${id}/export?type=${code}`;
+  let url = `${BASE_URL}/${id}/export?type=${code}`;
   
   const res = await fetch(url, {
     headers: { Authorization: token ? `Bearer ${token}` : "" },
@@ -177,24 +178,39 @@ export const exportRepair = async (
   if (!res.ok) throw new Error("Xuất file thất bại");
   
   const blob = await res.blob();
-  const downloadUrl = window.URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = downloadUrl;
+  const pdfBlob = new Blob([blob], { type: "application/pdf" });
+  const downloadUrl = window.URL.createObjectURL(pdfBlob);
   
-  const fileNameMap: Record<string, string> = {
-    request: "PHIẾU YÊU CẦU KIỂM TRA BẢO DƯỠNG - SỬA CHỮA",
-    inspection: "BIÊN BẢN KIỂM NGHIỆM KỸ THUẬT",
-    acceptance: "BIÊN BẢN NGHIỆM THU",
-    B03: "PHIẾU YÊU CẦU KIỂM TRA BẢO DƯỠNG - SỬA CHỮA",
-    B04: "BIÊN BẢN KIỂM NGHIỆM KỸ THUẬT",
-    B05: "BIÊN BẢN NGHIỆM THU",
-  };
+  // Open new window
+  const win = window.open('', '_blank');
   
-  a.download = `${fileNameMap[type] || "Export"}.pdf`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  window.URL.revokeObjectURL(downloadUrl);
+  if (win) {
+       const html = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Xem trước phiếu</title>
+            <style>
+              body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; background: #525659; }
+              embed { width: 100%; height: 100%; }
+            </style>
+          </head>
+          <body>
+            <embed src="${downloadUrl}" type="application/pdf" width="100%" height="100%" />
+          </body>
+        </html>
+      `;
+      win.document.write(html);
+      win.document.close();
+      win.focus();
+  } else {
+      console.error("Popup blocked");
+  }
+
+  // Delay revocation to ensure the new tab loads the blob
+  setTimeout(() => {
+      window.URL.revokeObjectURL(downloadUrl);
+  }, 120000); // 2 minutes
 };
 
 export const deleteRepair = async (id: number, token: string | null) => {

@@ -1,6 +1,8 @@
 import React from "react";
-import { Modal, Descriptions, Table, Tag, Divider, Card, Row, Col } from "antd";
+import { Modal, Descriptions, Table, Tag, Divider, Card, Row, Col, Alert, Typography } from "antd";
 import dayjs from "dayjs";
+
+const { Title, Text } = Typography;
 
 interface Props {
   open: boolean;
@@ -34,12 +36,18 @@ const TicketDetailModal: React.FC<Props> = ({ open, onCancel, data }) => {
 
   // --- Helper: Render Kết quả Checklist ---
   const renderChecklistStatus = (record: any) => {
+    const reqNorm = record.req ? String(record.req).toUpperCase() : "";
+    
+    // Logic hiển thị (Đồng bộ với ChecklistExecutor):
+    // Chỉ hiện giá trị (Value) nếu là Input/M thuần (KHÔNG có I)
     if (
-      record.type === "input_number" ||
-      (record.req && record.req.includes("M"))
+      (record.type === "input_number" || reqNorm.includes("M")) && 
+      !reqNorm.includes("I")
     ) {
       return <b>{cleanText(record.value) || "_"}</b>;
     }
+    
+    // Các trường hợp khác (Checkbox, hoặc I, M) -> Hiện trạng thái Đạt/Không
     if (record.status === "pass") return <Tag color="green">Đạt (✓)</Tag>;
     if (record.status === "fail") return <Tag color="red">K.Đạt (X)</Tag>;
     return <Tag>N/A</Tag>;
@@ -136,7 +144,39 @@ const TicketDetailModal: React.FC<Props> = ({ open, onCancel, data }) => {
       width={1000}
       style={{ top: 20 }}
     >
-      {/* 1. THÔNG TIN CHUNG */}
+      <div id="pdf-content">
+        <div style={{ padding: 24 }}>
+          <div style={{ textAlign: "center", marginBottom: 24 }}>
+            <Title level={3} style={{ marginBottom: 0 }}>
+              PHIẾU BẢO DƯỠNG THIẾT BỊ
+            </Title>
+            <Text type="secondary" style={{ fontSize: 16 }}>
+              (MAINTENANCE CHECKLIST)
+            </Text>
+          </div>
+
+          {/* --- CẢNH BÁO HỦY (MỚI THÊM) --- */}
+          {data.status === "canceled" && (
+            <Alert
+              message={<span style={{ fontWeight: "bold" }}>PHIẾU ĐÃ BỊ HỦY</span>}
+              description={
+                <div>
+                  <div>
+                    <b>Lý do hủy:</b> {data.cancel_reason || "Không có lý do"}
+                  </div>
+                  <div>
+                     {/* Cần kiểm tra kỹ data có cancelled_by không, nếu backend trả về relation cancelled_by */}
+                    <b>Người hủy:</b> {data.cancelled_by?.name || "N/A"}
+                  </div>
+                </div>
+              }
+              type="error"
+              showIcon
+              style={{ marginBottom: 24 }}
+            />
+          )}
+
+          {/* 1. THÔNG TIN CHUNG */}
       <Card
         size="small"
         title="1. TRANG THIẾT BỊ BẢO DƯỠNG / EQUIPMENT"
@@ -327,6 +367,8 @@ const TicketDetailModal: React.FC<Props> = ({ open, onCancel, data }) => {
           </Col>
         </Row>
       </Card>
+      </div>
+      </div>
     </Modal>
   );
 };

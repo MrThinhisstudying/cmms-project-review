@@ -103,6 +103,17 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
       }
   ];
 
+  // Role translation map
+  const ROLE_MAP: Record<string, string> = {
+      'UNIT_HEAD': 'Cán bộ đội',
+      'OPERATOR': 'Nhân viên vận hành',
+      'TEAM_LEAD': 'Tổ trưởng',
+      'TECHNICIAN': 'Nhân viên kỹ thuật',
+      'ADMIN': 'Quản trị viên',
+      'DIRECTOR': 'Ban giám đốc',
+      'MANAGER': 'Quản lý'
+  };
+
   return (
     <>
         <Header style={{ 
@@ -225,7 +236,7 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
                         />
                         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
                              <Text strong style={{ fontSize: 14 }}>{user?.name || 'Administrator'}</Text>
-                             <Text type="secondary" style={{ fontSize: 11 }}>{user?.role}</Text>
+                             <Text type="secondary" style={{ fontSize: 11 }}>{ROLE_MAP[user?.role] || user?.role}</Text>
                         </div>
                     </Space>
                 </Dropdown>
@@ -242,8 +253,8 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
                          if (!prevUser) return updatedUser as any;
                          // ... same logic
                          const normalizedRole = updatedUser.role === "Administrator" 
-                            ? "admin" 
-                            : updatedUser.role?.toLowerCase();
+                            ? "ADMIN" 
+                            : updatedUser.role?.toUpperCase();
 
                          return { 
                              ...prevUser, 

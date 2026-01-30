@@ -117,5 +117,13 @@ export class MaintenanceTicket {
 
     //@Column({nullable: true})
     // operator_user_id: number;
+
+    // --- THÔNG TIN HỦY PHIẾU ---
+    @Column({type: 'text', nullable: true})
+    cancel_reason: string;
+
+    @ManyToOne(() => User, {nullable: true, eager: true})
+    @JoinColumn({name: 'cancelled_by_id'})
+    cancelled_by: User;
 }
 

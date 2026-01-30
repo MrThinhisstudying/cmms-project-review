@@ -1,6 +1,6 @@
 import {Injectable, NotFoundException, Inject, forwardRef, ForbiddenException} from '@nestjs/common';
 import {InjectRepository} from '@nestjs/typeorm';
-import {Repository, In, IsNull, LessThan, ILike, Between} from 'typeorm';
+import {Repository, In, IsNull, LessThan, ILike, Between, MoreThan} from 'typeorm';
 import {Device} from 'src/devices/entities/device.entity';
 import {User} from 'src/user/user.entity';
 import {Department} from 'src/departments/department.entity';
@@ -209,6 +209,34 @@ export class MaintenanceService {
         }
     }
 
+    // --- HÀM KHÔI PHỤC Khi Hủy Phiếu ---
+    async revertCompletion(maintenanceId: number) {
+        const current = await this.findOne(maintenanceId);
+        if (!current) return;
+
+        // 1. Khôi phục trạng thái ACTIVE cho kế hoạch này
+        current.status = MaintenanceStatus.ACTIVE;
+        current.last_maintenance_date = null; // Xóa ngày hoàn thành
+        await this.maintenanceRepo.save(current);
+
+        // 2. Tìm kế hoạch ĐÃ ĐƯỢC KÍCH HOẠT TIẾP THEO (nếu có) và DEACTIVATE nó
+        // Logic: Cùng thiết bị, trạng thái ACTIVE, ngày > ngày của current, chưa làm
+        const nextActive = await this.maintenanceRepo.findOne({
+            where: {
+                device: { device_id: current.device.device_id },
+                status: MaintenanceStatus.ACTIVE,
+                last_maintenance_date: IsNull(),
+                next_maintenance_date: MoreThan(current.next_maintenance_date)
+            } as any, // Cast any để tránh lỗi type MoreThan nếu chưa import
+            order: { next_maintenance_date: 'ASC' }
+        });
+
+        if (nextActive) {
+            nextActive.status = MaintenanceStatus.INACTIVE;
+            await this.maintenanceRepo.save(nextActive);
+        }
+    }
+
     // =================================================================
     // 4. CHỨC NĂNG IMPORT (Logic 2 Năm & Smart Archive)
     // =================================================================
@@ -378,8 +406,8 @@ export class MaintenanceService {
         return false;
     }
 
-    // --- IMPORT TEMPLATE (CẬP NHẬT 4 THAM SỐ) ---
-    async importTemplate(fileBuffer: Buffer, name: string, code: string, deviceType: string) {
+    // --- IMPORT TEMPLATE (CẬP NHẬT 6 THAM SỐ) ---
+    async importTemplate(fileBuffer: Buffer, name: string, code: string, deviceType: string, release_no?: string, revision_no?: string) {
         const workbook = XLSX.read(fileBuffer, {type: 'buffer'});
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rawData = XLSX.utils.sheet_to_json(sheet);
@@ -434,6 +462,8 @@ export class MaintenanceService {
             name: name,
             code: code,
             device_type: deviceType,
+            release_no,
+            revision_no,
             checklist_structure: structure,
         });
 
@@ -566,20 +596,60 @@ export class MaintenanceService {
         const dataRows = rawRows.slice(headerRowIdx + 1);
         const results = [];
 
-        for (const rowArray of dataRows) {
-            if (!rowArray || rowArray.length === 0) continue;
-            const deviceName = rowArray[colNameIdx];
-            if (!deviceName) continue;
+        // Debug info: Row counts
+        console.log(`[Import Debug] Header Row: ${headerRowIdx}, Total Data Rows: ${dataRows.length}`);
 
-            const device = await this.deviceRepo.findOne({
+        for (let i = 0; i < dataRows.length; i++) {
+            const rowArray = dataRows[i];
+            const originalRowIndex = headerRowIdx + 1 + i + 1; // Excel row number (1-based)
+
+            // Check if row is truly empty (sometimes array has length but elements are empty strings)
+            const isEmptyRow = !rowArray || rowArray.length === 0 || rowArray.every(cell => !cell || String(cell).trim() === '');
+
+            if (isEmptyRow) {
+                 // Silent skip for completely empty rows
+                 continue;
+            }
+
+            let deviceName = rowArray[colNameIdx];
+            if (!deviceName) {
+                results.push({ name: `Row ${originalRowIndex}`, status: 'Skipped (No Device Name)' });
+                continue;
+            }
+
+            // 1. Normalize: Trim info & replace non-breaking spaces
+            // Handle cases where Excel uses non-breaking space (char 160)
+            const cleanName = String(deviceName).trim().replace(/\u00A0/g, ' ').replace(/\s+/g, ' ');
+
+            // Strategy 1: Direct Search
+            let device = await this.deviceRepo.findOne({
                 where: [
-                    { name: ILike(`%${deviceName}%`) },
-                    { serial_number: ILike(`%${deviceName}%`) }
+                    { name: ILike(`%${cleanName}%`) },
+                    { serial_number: ILike(`%${cleanName}%`) },
+                    { reg_number: ILike(`%${cleanName}%`) }
                 ]
             });
 
+            // Strategy 2: Fallback - Relaxed Search (Handle separators like /, -, .)
+            // Example: "Thiết bị/Mooc" vs "Thiết bị / Mooc"
             if (!device) {
-                results.push({ name: deviceName, status: 'Skipped (Device Not Found)' });
+                // Replace special syntax characters with %
+                const relaxedName = cleanName.replace(/[\/\-\.]/g, '%');
+                device = await this.deviceRepo.findOne({
+                    where: [
+                        { name: ILike(`%${relaxedName}%`) },
+                        { serial_number: ILike(`%${relaxedName}%`) },
+                        { reg_number: ILike(`%${relaxedName}%`) }
+                    ]
+                });
+            }
+
+            if (!device) {
+                console.log(`[Import Fail] Could not find device: "${cleanName}" (Original: "${deviceName}")`);
+                results.push({ 
+                    name: cleanName, 
+                    status: `Skipped (Device Not Found). Checked: Name/Serial/Reg. Input: "${cleanName}"` 
+                });
                 continue;
             }
 

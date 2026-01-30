@@ -121,7 +121,7 @@ const MaintenanceImportModal: React.FC<MaintenanceImportModalProps> = ({
                 ]}
                 pagination={false}
                 size="small"
-                rowKey="name"
+                rowKey={(record: any, index?: number) => index?.toString() || record.name}
               />
             </div>
           )}

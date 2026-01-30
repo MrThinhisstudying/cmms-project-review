@@ -20,29 +20,27 @@ export class DevicesService {
         private readonly userRepository: Repository<User>,
     ) {}
 
-    async importDevicesFromExcel(buffer: Buffer): Promise<Device[]> {
+    async importDevicesFromExcel(buffer: Buffer): Promise<{ imported: number; skipped: number; details: any[] }> {
         const workbook = new ExcelJS.Workbook();
-        await workbook.xlsx.load(buffer as any); // Cast to any to avoid type mismatch
+        await workbook.xlsx.load(buffer as any);
         
         const worksheet = workbook.getWorksheet(1);
         if (!worksheet) {
             throw new HttpException('Worksheet not found in Excel file', HttpStatus.BAD_REQUEST);
         }
-        const createdDevices: Device[] = [];
-        const rows: any[] = [];
 
-        worksheet.eachRow((row, rowNumber) => {
-            if (rowNumber === 1) return; // Skip header
-            const rowValues = row.values as any[];
-            // ExcelJS adds empty item at index 0
-            rows.push(rowValues.slice(1)); 
+        const existingDevices = await this.deviceRepository.find({
+            select: ['name', 'serial_number', 'reg_number']
         });
 
-        // Mapping logic needs to be robust using Headers. 
-        // For simplicity assuming fixed column order matching the template or mapping by index.
-        // Let's stick to the previous logic of mapping by header name if possible, 
-        // but ExcelJS row iteration by default is clearer.
-        // To map by header name:
+        // Create a lookup map for faster checking
+        // Key could be simplified or we check dynamically. 
+        // Let's check dynamically to be safe with normalization.
+
+        const importedDevices: Device[] = [];
+        const skippedDevices: any[] = [];
+
+        // Headers mapping
         const headers: string[] = [];
         worksheet.getRow(1).eachCell((cell) => {
             headers.push(cell.text?.toString().trim());
@@ -53,16 +51,39 @@ export class DevicesService {
             const mapped: Record<string, any> = {};
             
             row.eachCell((cell, colNumber) => {
-                const header = headers[colNumber - 1]; // 0-indexed array vs 1-indexed Excel
+                const header = headers[colNumber - 1];
                 const normalizedHeader = header ? header.replace(/\s+/g, ' ').trim() : '';
                 const key = columnMapping[normalizedHeader];
                 if (key) {
-                   mapped[key] = cell.text; // Use text value
+                   // Handle specialized fields if needed, else text
+                   mapped[key] = cell.text?.toString().trim();
                 }
             });
 
             const name = mapped.name;
-            if (!name) continue;
+            if (!name) continue; // Skip empty rows
+
+            // Duplicate Check Logic
+            // Condition: Same Name AND (Same Serial OR Same Reg Number)
+            const isDuplicate = existingDevices.some(d => {
+                const sameName = d.name.toLowerCase() === name.toLowerCase();
+                const serial = mapped.serial_number || '';
+                const reg = mapped.reg_number || '';
+                
+                const sameSerial = d.serial_number && serial && d.serial_number.toLowerCase() === serial.toLowerCase();
+                const sameReg = d.reg_number && reg && d.reg_number.toLowerCase() === reg.toLowerCase();
+
+                return sameName && (sameSerial || sameReg);
+            });
+
+            if (isDuplicate) {
+                skippedDevices.push({
+                    name,
+                    reason: 'Duplicate Name and Serial/Reg Number',
+                    row: i
+                });
+                continue;
+            }
 
             const deviceDto: Partial<Device> = {
                 name,
@@ -85,7 +106,7 @@ export class DevicesService {
                 using_department: mapped.using_department,
                 weight: mapped.weight,
                 width: mapped.width,
-                length: mapped.length, // Added length
+                length: mapped.length,
                 height: mapped.height,
                 power_source: mapped.power_source,
                 power_consumption: mapped.power_consumption,
@@ -93,16 +114,28 @@ export class DevicesService {
                 status: this.mapImportStatus(mapped.status_import_raw)
             };
 
-            const device = await this.create(deviceDto as CreateDeviceDto);
-            createdDevices.push(device);
+            try {
+                const device = await this.create(deviceDto as CreateDeviceDto);
+                importedDevices.push(device);
+                
+                // Add to existing list to catch duplicates within the file itself
+                existingDevices.push(device); 
+            } catch (e) {
+                console.error(`Error importing row ${i}`, e);
+                // Optionally add to skipped with error reason
+            }
         }
 
-        return createdDevices;
+        return {
+            imported: importedDevices.length,
+            skipped: skippedDevices.length,
+            details: skippedDevices
+        };
     }
 
     async create(createDeviceDto: CreateDeviceDto): Promise<Device> {
         try {
-            const {userIds, groupId, ...deviceData} = createDeviceDto;
+            const {userIds, groupId, deviceTypeId, ...deviceData} = createDeviceDto;
 
             const device = this.deviceRepository.create(deviceData);
             // Validation for enums handled by DTO or database constraints
@@ -116,6 +149,10 @@ export class DevicesService {
                 device.device_group = { id: groupId } as any; 
             }
 
+            if (deviceTypeId) {
+                device.deviceType = { id: deviceTypeId } as any;
+            }
+
             const savedDevice = await this.deviceRepository.save(device);
             return this.sanitizeDeviceUsers(savedDevice);
         } catch (error) {
@@ -126,7 +163,7 @@ export class DevicesService {
     }
 
     async findAll(
-        filter: { status?: DeviceStatus; name?: string; groupId?: number } = {},
+        filter: { status?: DeviceStatus; name?: string; groupId?: number; deviceTypeId?: number } = {},
         user?: User
     ): Promise<{result: Device[]}> {
         try {
@@ -134,6 +171,7 @@ export class DevicesService {
                 .createQueryBuilder('device')
                 .leftJoinAndSelect('device.users', 'users')
                 .leftJoinAndSelect('device.device_group', 'device_group')
+                .leftJoinAndSelect('device.deviceType', 'deviceType')
                 .orderBy('device.updated_at', 'DESC');
 
             if (filter.status) {
@@ -146,6 +184,10 @@ export class DevicesService {
 
             if (filter.groupId) {
                 query.andWhere('device.group_id = :groupId', { groupId: filter.groupId });
+            }
+
+            if (filter.deviceTypeId) {
+                query.andWhere('device.device_type_id = :deviceTypeId', { deviceTypeId: filter.deviceTypeId });
             }
 
             // RBAC: Filter by User's Device Groups if OPERATOR
@@ -179,7 +221,7 @@ export class DevicesService {
         try {
             const device = await this.deviceRepository.findOne({
                 where: {device_id: id},
-                relations: ['users', 'repairs'],
+                relations: ['users', 'repairs', 'deviceType'],
             });
 
             if (!device) {
@@ -204,7 +246,7 @@ export class DevicesService {
                 throw new NotFoundException(`Lấy thông tin trang thiết bị thất bại`);
             }
 
-            const {userIds, groupId, ...deviceData} = updateDeviceDto;
+            const {userIds, groupId, deviceTypeId, ...deviceData} = updateDeviceDto;
 
             Object.assign(device, deviceData);
 
@@ -215,6 +257,10 @@ export class DevicesService {
             
             if (groupId) {
                 device.device_group = { id: groupId } as any;
+            }
+
+            if (deviceTypeId) {
+                device.deviceType = { id: deviceTypeId } as any;
             }
 
             const updatedDevice = await this.deviceRepository.save(device);

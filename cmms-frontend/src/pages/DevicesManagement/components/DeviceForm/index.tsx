@@ -1,6 +1,8 @@
 import React, { useEffect } from "react";
 import { Modal, Form, Input, Select, InputNumber, Row, Col, Divider, notification } from "antd";
 import { IDevice } from "../../../../types/devicesManagement.types";
+import { getAllDeviceTypes, IDeviceType } from "../../../../apis/device-types";
+import { getToken } from "../../../../utils/auth";
 
 type DeviceFormProps = {
   open: boolean;
@@ -22,11 +24,31 @@ const DeviceForm: React.FC<DeviceFormProps> = ({
 }) => {
   const [form] = Form.useForm();
   const isEdit = Boolean(initialData?.device_id);
+  const [deviceTypes, setDeviceTypes] = React.useState<IDeviceType[]>([]);
+  const [loadingTypes, setLoadingTypes] = React.useState(false);
+
+  useEffect(() => {
+      const fetchTypes = async () => {
+          setLoadingTypes(true);
+          try {
+              const res = await getAllDeviceTypes(getToken());
+              setDeviceTypes(res);
+          } catch (error) {
+              console.error(error);
+          } finally {
+              setLoadingTypes(false);
+          }
+      };
+      if (open) {
+          fetchTypes();
+      }
+  }, [open]);
 
   useEffect(() => {
     if (open && initialData) {
       form.setFieldsValue({
         ...initialData,
+        deviceTypeId: initialData.deviceType?.id, // Map object to ID
       });
     } else {
       form.resetFields();
@@ -99,6 +121,17 @@ const DeviceForm: React.FC<DeviceFormProps> = ({
             <Col span={8}>
                 <Form.Item name="brand" label="Nhãn hiệu" rules={[{ required: true }]}>
                     <Input />
+                </Form.Item>
+            </Col>
+            <Col span={8}>
+                 <Form.Item name="deviceTypeId" label="Loại thiết bị" rules={[{ required: true }]}>
+                    <Select placeholder="Chọn loại thiết bị" loading={loadingTypes}>
+                        {deviceTypes.map((type) => (
+                            <Option key={type.id} value={type.id}>
+                                {type.name}
+                            </Option>
+                        ))}
+                    </Select>
                 </Form.Item>
             </Col>
             <Col span={8}>

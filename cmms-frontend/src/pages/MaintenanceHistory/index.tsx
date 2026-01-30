@@ -13,6 +13,7 @@ import {
   Row,
   Col,
   Modal,
+  Dropdown,
 } from "antd";
 import {
   EyeOutlined,
@@ -71,11 +72,11 @@ const MaintenanceHistoryPage: React.FC = () => {
   }, []);
 
   // Hàm xem PDF (Mở tab mới)
-  const handleDownloadPdf = async (ticketId: number) => {
+  const handleDownloadPdf = async (ticketId: number, type: string = 'full') => {
     try {
       message.loading({ content: "Đang tạo PDF...", key: "pdf_loading" });
       const token = getToken();
-      const url = `${process.env.REACT_APP_BASE_URL}/maintenance-tickets/${ticketId}/pdf`;
+      const url = `${process.env.REACT_APP_BASE_URL}/maintenance-tickets/${ticketId}/pdf?type=${type}`;
 
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -211,15 +212,39 @@ const MaintenanceHistoryPage: React.FC = () => {
             />
           </Tooltip>
 
-          <Tooltip title="Tải PDF">
+          <Dropdown
+            menu={{
+                items: [
+                    {
+                        key: 'ticket',
+                        label: 'Tải phiếu công tác (Trang 1)',
+                        icon: <FilePdfOutlined />,
+                        onClick: () => handleDownloadPdf(record.ticket_id, 'ticket'),
+                    },
+                    {
+                        key: 'content',
+                        label: 'Tải nội dung bảo dưỡng (Checklist)',
+                        icon: <FilePdfOutlined />,
+                        onClick: () => handleDownloadPdf(record.ticket_id, 'content'),
+                    },
+                    {
+                        key: 'full',
+                        label: 'Tải trọn bộ (Full)',
+                        icon: <FilePdfOutlined />,
+                        onClick: () => handleDownloadPdf(record.ticket_id, 'full'),
+                    },
+                ]
+            }}
+            placement="bottomRight"
+            arrow
+          >
             <Button
               type="primary"
               ghost
               size="small"
               icon={<FilePdfOutlined />}
-              onClick={() => handleDownloadPdf(record.ticket_id)}
             />
-          </Tooltip>
+          </Dropdown>
 
           {/* Chỉ hiện nút hủy nếu chưa hủy */}
           {record.status !== "canceled" && (

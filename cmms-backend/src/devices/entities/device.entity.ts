@@ -4,6 +4,7 @@ import {Repair} from 'src/repairs/entities/repair.entity';
 import {DeviceStatus} from '../enums/device-status.enum';
 import {Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToMany, OneToMany, ManyToOne, JoinColumn, Index} from 'typeorm';
 import { DeviceGroup } from '../../device-groups/entities/device-group.entity';
+import { DeviceType } from './device-type.entity';
 
 @Entity()
 export class Device {
@@ -160,6 +161,10 @@ export class Device {
 
     @OneToMany(() => Repair, (repair) => repair.device, {cascade: true})
     repairs?: Repair[];
+
+    @ManyToOne(() => DeviceType, { nullable: true })
+    @JoinColumn({ name: 'device_type_id' })
+    deviceType?: DeviceType;
 
     constructor(data: Partial<Device> = {}) {
         Object.assign(this, data);

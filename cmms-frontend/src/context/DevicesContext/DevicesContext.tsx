@@ -30,7 +30,7 @@ const DevicesProvider = ({ children }: { children: ReactNode }) => {
   const [report, setReport] = useState<ReportData | null>(null);
   const { user } = useAuthContext();
 
-  const fetchDevices = useCallback(async (filters?: { status?: string; name?: string; groupId?: number }) => {
+  const fetchDevices = useCallback(async (filters?: { status?: string; name?: string; groupId?: number; deviceTypeId?: number }) => {
     if (!user) return;
 
     try {

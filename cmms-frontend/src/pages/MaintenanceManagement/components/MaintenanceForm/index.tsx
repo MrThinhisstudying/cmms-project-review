@@ -83,6 +83,10 @@ const MaintenanceForm: React.FC<Props> = ({
     Record<string, { status: string | null; note: string }>
   >({});
 
+  // Logic Filtering
+  const [filteredTemplates, setFilteredTemplates] = useState<any[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
+
   // Load Data (Devices, Users, Templates)
   useEffect(() => {
     const fetchData = async () => {
@@ -100,7 +104,72 @@ const MaintenanceForm: React.FC<Props> = ({
       }
     };
     fetchData();
+    fetchData();
   }, [token]);
+
+  // Handle Filtering Templates
+  useEffect(() => {
+    if (!selectedDeviceId) {
+        setFilteredTemplates(templates);
+        return;
+    }
+    
+    const device = devices.find(d => d.device_id === selectedDeviceId);
+    // console.log("Selected Device:", device);
+    if (device && device.deviceType) {
+        console.log("---------------- FILTER DEBUG ----------------");
+        console.log("Selected Device:", device.name);
+        // Cast to any because IDevice interface might have optional code
+        const dType: any = device.deviceType;
+        console.log("Device Type:", dType);
+        
+        // Normalize strings
+        const normalize = (s: string) => s ? s.trim().toLowerCase().normalize("NFC") : "";
+        
+        const typeName = normalize(dType.name);
+        const typeCode = normalize(dType.code || "");
+        
+        console.log("Looking for Template matching:");
+        console.log(" - Code:", typeCode);
+        console.log(" - Name:", typeName);
+
+        const matching = templates.filter((t, index) => {
+            // Check potential property names from Template
+            // Some templates might store 'xe_dau_keo', others 'Xe Đầu Kéo'
+            const rawType = t.device_type || t.deviceType || t.type || "";
+            const tTypeNorm = normalize(rawType);
+            
+            // 1. Priority: Match Code (e.g. 'xe_dau_keo' === 'xe_dau_keo')
+            if (typeCode && tTypeNorm === typeCode) return true;
+            
+            // 2. Secondary: Match Name (e.g. 'xe dau keo' === 'xe dau keo')
+            if (tTypeNorm === typeName) return true;
+            
+            return false;
+        });
+        
+        console.log("Found matching templates:", matching.length);
+        console.log("----------------------------------------------");
+        
+        setFilteredTemplates(matching);
+        
+        // Auto-select if only 1 match
+        if (matching.length === 1) {
+             const tId = matching[0].id;
+             if (form.getFieldValue("template_id") !== tId) {
+                 form.setFieldsValue({ template_id: tId });
+                 handleTemplateChange(tId);
+             }
+        }
+    } else {
+        console.log("Device has no type or no device selected. Device:", device);
+        if (selectedDeviceId) {
+             setFilteredTemplates([]); 
+        } else {
+             setFilteredTemplates(templates);
+        }
+    }
+  }, [selectedDeviceId, devices, templates, form]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // --- 2. LOGIC AUTO-FILL (QUAN TRỌNG NHẤT) ---
   useEffect(() => {
@@ -118,12 +187,18 @@ const MaintenanceForm: React.FC<Props> = ({
 
       // Cập nhật state Level để hiển thị đúng cột trong Checklist
       setCurrentLevel(initialData.maintenance_level || initialData.level);
+      
+      // Update selected device to trigger template filtering
+      if (initialData.device_id) {
+          setSelectedDeviceId(initialData.device_id);
+      }
     } else {
       // Nếu tạo mới hoàn toàn -> Reset
       form.resetFields();
       form.setFieldsValue({ execution_date: dayjs() });
       setCurrentLevel(null);
       setCurrentTemplateJson(null);
+      setSelectedDeviceId(null); // Reset device selection
     }
   }, [initialData, form]);
   // ----------------------------------------------
@@ -310,10 +385,17 @@ const MaintenanceForm: React.FC<Props> = ({
                   showSearch
                   optionFilterProp="children"
                   size="large"
+                  onChange={(val) => {
+                      setSelectedDeviceId(val);
+                      form.setFieldsValue({ device_id: val });
+                      // Reset Template when device changes
+                      form.setFieldsValue({ template_id: undefined });
+                      setCurrentTemplateJson(null);
+                  }}
                 >
                   {devices.map((d) => (
                     <Option key={d.device_id} value={d.device_id}>
-                      {d.name} ({d.serial_number})
+                      {d.name} ({d.reg_number || d.serial_number})
                     </Option>
                   ))}
                 </Select>
@@ -382,12 +464,21 @@ const MaintenanceForm: React.FC<Props> = ({
                 style={{ marginBottom: 0 }}
               >
                 <Select
-                  placeholder="Chọn mẫu phiếu..."
+                  placeholder={
+                      selectedDeviceId && filteredTemplates.length === 0 
+                      ? "Không có quy trình phù hợp (Khác loại thiết bị)" 
+                      : "Chọn mẫu phiếu..."
+                  }
                   onChange={handleTemplateChange}
                   showSearch
                   optionFilterProp="children"
+                  notFoundContent={
+                      selectedDeviceId && filteredTemplates.length === 0 
+                      ? "Thiết bị này chưa có quy trình phù hợp hoặc chưa được gán Loại thiết bị." 
+                      : undefined
+                  }
                 >
-                  {templates.map((t) => (
+                  {filteredTemplates.map((t) => (
                     <Option key={t.id} value={t.id}>
                       {t.code ? <b>[{t.code}] </b> : ""} {t.name}
                     </Option>
@@ -411,28 +502,44 @@ const MaintenanceForm: React.FC<Props> = ({
                   <Row key={key} gutter={16} style={{ marginBottom: 8 }}>
                     <Col span={14}>
                       <Form.Item
-                        {...restField}
-                        name={[name, "name"]}
-                        noStyle
-                        rules={[{ required: true, message: "Chọn nhân viên" }]}
+                        shouldUpdate={(prev, curr) => prev.execution_team !== curr.execution_team}
                       >
-                        <Select
-                          placeholder="Chọn kỹ thuật viên..."
-                          showSearch
-                          optionFilterProp="children"
-                          style={{ width: "100%" }}
-                          filterOption={(input, option) =>
-                            (option?.children as unknown as string)
-                              .toLowerCase()
-                              .includes(input.toLowerCase())
-                          }
-                        >
-                          {technicianList.map((u) => (
-                            <Option key={u.user_id} value={u.name}>
-                              {u.name} {u.position ? `- ${u.position}` : ""}
-                            </Option>
-                          ))}
-                        </Select>
+                        {({ getFieldValue }) => {
+                          const currentTeam = getFieldValue("execution_team") || [];
+                          // Lấy danh sách ID đã chọn (trừ dòng hiện tại)
+                          const selectedIds = currentTeam
+                            .map((t: any, idx: number) => (idx !== name ? t?.name : null)) // Lưu ý: name ở đây là index của row
+                            .filter(Boolean);
+
+                          return (
+                            <Form.Item
+                              {...restField}
+                              name={[name, "name"]}
+                              noStyle
+                              rules={[{ required: true, message: "Chọn nhân viên" }]}
+                            >
+                              <Select
+                                placeholder="Chọn kỹ thuật viên..."
+                                showSearch
+                                optionFilterProp="children"
+                                style={{ width: "100%" }}
+                                filterOption={(input, option) =>
+                                  (option?.children as unknown as string)
+                                    .toLowerCase()
+                                    .includes(input.toLowerCase())
+                                }
+                              >
+                                {technicianList
+                                  .filter((u) => !selectedIds.includes(u.name))
+                                  .map((u) => (
+                                    <Option key={u.user_id} value={u.name}>
+                                      {u.name} {u.position ? `- ${u.position}` : ""}
+                                    </Option>
+                                  ))}
+                              </Select>
+                            </Form.Item>
+                          );
+                        }}
                       </Form.Item>
                     </Col>
                     <Col span={6}>

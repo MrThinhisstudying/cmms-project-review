@@ -139,14 +139,16 @@ export class RepairsController {
     @Get(':id/export')
     async exportRepair(
         @Param('id') id: string,
-        @Query('type') type: 'B03' | 'B04' | 'B05',
+        @Query('type') type: 'B03' | 'B04' | 'B05' | 'COMBINED',
         @Res() res: Response
     ) {
         const buffer = await this.repairService.exportPdf(+id, type);
 
+        const filename = type === 'COMBINED' ? `HoSoSuaChua_${id}.pdf` : `${type}_Repair_${id}.pdf`;
+
         res.set({
             'Content-Type': 'application/pdf',
-            'Content-Disposition': `attachment; filename="${type}_Repair_${id}.pdf"`,
+            'Content-Disposition': `inline; filename="${filename}"`,
             'Content-Length': buffer.length,
         });
 

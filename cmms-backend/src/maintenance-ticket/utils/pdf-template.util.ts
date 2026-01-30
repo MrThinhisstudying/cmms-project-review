@@ -1,7 +1,7 @@
 import {MaintenanceTicket} from '../entities/maintenance-ticket.entity';
 import dayjs from 'dayjs';
 
-export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
+export const buildPdfTemplate = (ticket: MaintenanceTicket, exportType: 'full' | 'ticket' | 'content' = 'full') => {
     const formatDate = (d: any) => (d ? dayjs(d).format('DD/MM/YYYY') : '.../.../......');
     const dateObj = ticket.execution_date ? dayjs(ticket.execution_date) : dayjs();
     const day = dateObj.format('DD');
@@ -64,10 +64,18 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
             grouped[cat].push(item);
         });
 
+        // Check if current level is Weekly
+        const isWeeklyLevel = ['Tuần', 'Weekly', 'Week'].includes(ticket.maintenance_level);
+
         let categoryIndex = 1;
         for (const [categoryName, items] of Object.entries(grouped)) {
+            // FILTER: Ẩn mục "Bảo dưỡng tuần" nếu đang ở cấp độ Tháng/Năm (theo yêu cầu user)
+            if (!isWeeklyLevel && (categoryName.toUpperCase().includes('TUẦN') || categoryName.toUpperCase().includes('WEEKLY'))) {
+                continue;
+            }
+
             checklistHtml += `
-                <tr style="background-color: #f0f0f0;">
+                <tr>
                     <td class="text-center bold" style="padding: 3px;">${categoryIndex}</td>
                     <td colspan="9" class="bold uppercase" style="text-align: left; padding: 3px 5px;">${cleanText(categoryName)}</td>
                 </tr>
@@ -124,63 +132,8 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
     </div>
     `;
 
-    return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <style>
-            /* --- STYLE COMPACT ĐỂ VỪA 1 TRANG --- */
-            @page { margin: 1cm 1.5cm 1cm 2cm; } /* Lề nhỏ hơn */
-            
-            body { 
-                font-family: 'Times New Roman', serif; 
-                font-size: 10.5pt; /* Cỡ chữ nhỏ hơn (10.5pt) */
-                line-height: 1.2;
-                color: #000;
-            }
-            .page-break { page-break-before: always; }
-            
-            /* Bảng biểu */
-            table { width: 100%; border-collapse: collapse; margin-bottom: 5px; table-layout: fixed; }
-            th, td { border: 1px solid black; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }
-            
-            /* Padding nhỏ cho bảng */
-            .compact-td td, .compact-td th { padding: 3px 4px; }
-
-            .bg-header { background-color: #f2f2f2; text-align: center; font-weight: bold; }
-            .no-border, .no-border td { border: none !important; }
-            .text-center { text-align: center; }
-            .bold { font-weight: bold; }
-            .italic { font-style: italic; }
-            .uppercase { text-transform: uppercase; }
-            
-            /* Khoảng cách tiêu đề nhỏ hơn */
-            .section-title { 
-                font-weight: bold; 
-                text-transform: uppercase; 
-                margin-top: 10px; 
-                margin-bottom: 3px; 
-                font-size: 10.5pt;
-            }
-            
-            .sign-table td { border: none; text-align: center; vertical-align: top; }
-            .sign-space { height: 60px; } /* Khoảng ký tên nhỏ hơn */
-
-            // /* 2. CSS CHO FOOTER */
-            // .footer {
-            //     position: fixed;
-            //     bottom: -1cm; /* Đẩy xuống sát mép trang */
-            //     left: 0; 
-            //     right: 0;
-            //     height: 1cm;
-            //     font-size: 9pt;
-            //     color: #000;
-            //     border-top: 1px solid #000; (Bỏ comment nếu muốn có dòng kẻ trên) 
-            // }
-        </style>
-    </head>
-    <body>
+    // --- PART 1: WORK TICKET (Phiếu công tác) ---
+    const workTicketHtml = `
         <div class="text-center" style="margin-bottom: 10px;">
             <div style="font-size: 14pt; font-weight: bold; margin-bottom: 2px;">PHIẾU CÔNG TÁC BẢO DƯỠNG</div>
             <div style="font-size: 12pt; font-weight: bold;">MAINTENANCE CHECKLIST</div>
@@ -189,18 +142,18 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
         <div class="section-title">1. TRANG THIẾT BỊ BẢO DƯỠNG / EQUIPMENT:</div>
         <table class="no-border" style="margin-left: 10px; font-size: 10.5pt;">
             <tr>
-                <td colspan="2">1.1. Chủng loại / Type: <b>${ticket.device?.name || ''}</b></td>
+                <td colspan="2">1.1. Chủng loại / Type: ${ticket.device?.name || ''}</td>
             </tr>
             <tr>
-                <td width="60%">1.2. Số đăng ký / Registration No.: <b>${ticket.device?.serial_number || ''}</b></td>
-                <td width="40%">Số GHĐ / Working hours: <b>${ticket.working_hours ? ticket.working_hours.toLocaleString() : '...'}</b></td>
+                <td width="60%">1.2. Số đăng ký / Registration No.: ${ticket.device?.reg_number || ticket.device?.serial_number || ''}</td>
+                <td width="40%">Số GHĐ / Working hours: ${ticket.working_hours ? ticket.working_hours.toLocaleString() : '............'}</td>
             </tr>
             <tr>
-                <td>1.3. Phiếu công tác số / Checklist No.: <b></b></td>
-                <td>Ngày / Date: <b>${formatDate(ticket.execution_date)}</b></td>
+                <td>1.3. Phiếu công tác số / Checklist No:...............</td>
+                <td>Ngày / Date: ${formatDate(ticket.execution_date)}</td>
             </tr>
             <tr>
-                <td colspan="2">1.4. Cấp bảo dưỡng TTB / Maintenance level: <b>${displayLevel}</b></td>
+                <td colspan="2">1.4. Cấp bảo dưỡng TTB / Maintenance level: ${displayLevel}</td>
             </tr>
         </table>
 
@@ -211,9 +164,9 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
                     ? ticket.execution_team
                           .map(
                               (p: any, index: number) =>
-                                  `<div>2.${index + 1}. <b>${
+                                  `<div>2.${index + 1}. ${
                                       p.name
-                                  }</b> ........................................... Ngày nhận công việc: ${formatDate(p.date)}</div>`,
+                                  } ........................................... Ngày nhận công việc: ${formatDate(p.date)}</div>`,
                           )
                           .join('')
                     : '<div>(Chưa cập nhật)</div>'
@@ -231,7 +184,10 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
                 ${
                     ticket.arising_issues
                         ? `<tr><td class="text-center">1</td><td>${cleanText(ticket.arising_issues)}</td><td></td></tr>`
-                        : `<tr><td class="text-center">1</td><td></td><td></td></tr>`
+                        : `
+                            <tr><td class="text-center" style="height: 20px;"></td><td></td><td></td></tr>
+                            <tr><td class="text-center" style="height: 20px;"></td><td></td><td></td></tr>
+                          `
                 }
             </tbody>
         </table>
@@ -263,11 +219,11 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
         <table style="width: 100%; border-collapse: collapse; border: 1px solid black; font-size: 10.5pt; table-layout: fixed;">
             <thead>
                 <tr style="background-color: #ffffff;">
-                    <th style="width: 6%; border: 1px solid black; text-align: center; font-weight: bold;">STT/<br>No.</th>
-                    <th style="border: 1px solid black; text-align: center; font-weight: bold;">Nội dung/<br>Content</th>
-                    <th style="width: 8%; border: 1px solid black; text-align: center; font-weight: bold;">Đạt/<br>OK</th>
-                    <th style="width: 10%; border: 1px solid black; text-align: center; font-weight: bold;">Không đạt/<br>Not good</th>
-                    <th style="width: 20%; border: 1px solid black; text-align: center; font-weight: bold;">Ghi chú/<br>Note</th>
+                    <th style="width: 6%; border: 1px solid black; text-align: center; font-weight: bold;">STT/ No.</th>
+                    <th style="border: 1px solid black; text-align: center; font-weight: bold;">Nội dung/ Content</th>
+                    <th style="width: 8%; border: 1px solid black; text-align: center; font-weight: bold;">Đạt/ OK</th>
+                    <th style="width: 10%; border: 1px solid black; text-align: center; font-weight: bold;">Không đạt/ Not good</th>
+                    <th style="width: 20%; border: 1px solid black; text-align: center; font-weight: bold;">Ghi chú/ Note</th>
                 </tr>
             </thead>
             <tbody>
@@ -278,16 +234,13 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
                                   const idStr = String(acc.id);
                                   const isSubItem = idStr.includes('.') || !Number.isInteger(Number(idStr));
                                   
-                                  // STT Logic: Main items get "1.", Sub items get empty
                                   const sttDisplay = isSubItem ? '' : `${idStr}.`;
                                   
-                                  // Content Logic: Sub items get indented bullet
                                   const cleanContent = cleanText(acc.item).replace(/^[0-9.-]+\s*/, '');
                                   const contentDisplay = isSubItem 
-                                      ? `<div style="padding-left: 20px;">○ ${cleanContent.replace(/^[-\s]+/, '')}</div>` // Bullet circle
-                                      : `<b>${cleanContent}</b>`;
+                                      ? `<div style="padding-left: 20px;">○ ${cleanContent.replace(/^[-\s]+/, '')}</div>`
+                                      : `${cleanContent}`;
 
-                                  // Checkmark Logic
                                   const okMark = ''; 
                                   const ngMark = '';
 
@@ -305,30 +258,31 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
                               .join('')
                         : '<tr><td colspan="5" style="border: 1px solid black;"></td></tr>'
                 }
+                <tr>
+                    <td colspan="5" style="border: 1px solid black; padding: 8px 10px;">
+                        <div style="display: flex; align-items: flex-start;">
+                            <div style="font-weight: bold; width: 160px;">Kết luận: <br><i>Conclusion:</i></div>
+                            <div style="flex: 1; display: flex; justify-content: space-around;">
+                                <div style="display: flex; align-items: center;">
+                                    <span style="font-weight: bold; margin-right: 5px;">- Đạt YCKT, đưa TTB vào khai thác</span>
+                                    ${unCheckedBox}
+                                </div>
+                                <div style="display: flex; align-items: center;">
+                                    <span style="font-weight: bold; margin-right: 5px;">- Không đạt</span>
+                                    ${unCheckedBox}
+                                </div>
+                            </div>
+                        </div>
+                         <div style="display: flex; align-items: flex-start; margin-left: 160px; margin-top: -15px;">
+                             <div style="flex: 1; display: flex; justify-content: space-around;">
+                                 <div style="font-style: italic; font-size: 10pt; width: 250px;">- Equipment is ready for operation</div>
+                                 <div style="font-style: italic; font-size: 10pt;">- Not good</div>
+                             </div>
+                        </div>
+                    </td>
+                </tr>
             </tbody>
         </table>
-
-        <div style="border: 1px solid black; border-top: none; padding: 8px 10px; font-size: 10.5pt;">
-            <div style="display: flex; align-items: flex-start;">
-                <div style="font-weight: bold; width: 160px;">Kết luận: <br><i>Conclusion:</i></div>
-                <div style="flex: 1; display: flex; justify-content: space-around;">
-                    <div style="display: flex; align-items: center;">
-                        <span style="font-weight: bold; margin-right: 5px;">- Đạt YCKT, đưa TTB vào khai thác</span>
-                        ${ticket.final_conclusion ? checkedBox : unCheckedBox}
-                    </div>
-                    <div style="display: flex; align-items: center;">
-                        <span style="font-weight: bold; margin-right: 5px;">- Không đạt</span>
-                        ${!ticket.final_conclusion ? checkedBox : unCheckedBox}
-                    </div>
-                </div>
-            </div>
-             <div style="display: flex; align-items: flex-start; margin-left: 160px; margin-top: -15px;">
-                 <div style="flex: 1; display: flex; justify-content: space-around;">
-                     <div style="font-style: italic; font-size: 10pt; width: 250px;">- Equipment is ready for operation</div>
-                     <div style="font-style: italic; font-size: 10pt;">- Not good</div>
-                 </div>
-            </div>
-        </div>
 
         <table class="sign-table" style="margin-top: 20px;">
             <tr><td width="50%"></td><td width="50%" class="italic">Côn Đảo, ngày ${day} tháng ${month} năm ${year}</td></tr>
@@ -346,10 +300,10 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
                     <div class="bold">${ticket.operator_user?.name || ''}</div>
                 </td>
             </tr>
-        </table>
+        </table>`;
 
-        <div class="page-break"></div>
-
+    // --- PART 2: MAINTENANCE CONTENT (Nội dung) ---
+    const maintenanceContentHtml = `
             <table style="width: 100%;">
             ${
                 ['Tuần', 'Weekly', 'Week'].includes(ticket.maintenance_level)
@@ -424,7 +378,66 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket) => {
                 `
             }
         </table>
-${notesHtml}
+        ${notesHtml}
+    `;
+
+    // --- BUILD BODY BASED ON EXPORT TYPE ---
+    let bodyContent = '';
+    if (exportType === 'ticket') {
+        bodyContent = workTicketHtml;
+    } else if (exportType === 'content') {
+        bodyContent = maintenanceContentHtml;
+    } else {
+        // Full (Default)
+        bodyContent = workTicketHtml + '<div class="page-break"></div>' + maintenanceContentHtml;
+    }
+
+    return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <style>
+            /* --- STYLE COMPACT ĐỂ VỪA 1 TRANG --- */
+            @page { margin: 1cm 1.5cm 1cm 2cm; } /* Lề nhỏ hơn */
+            
+            body { 
+                font-family: 'Times New Roman', serif; 
+                font-size: 10.5pt; /* Cỡ chữ nhỏ hơn (10.5pt) */
+                line-height: 1.2;
+                color: #000;
+            }
+            .page-break { page-break-before: always; }
+            
+            /* Bảng biểu */
+            table { width: 100%; border-collapse: collapse; margin-bottom: 5px; table-layout: fixed; }
+            th, td { border: 1px solid black; vertical-align: middle; word-wrap: break-word; overflow-wrap: break-word; }
+            
+            /* Padding nhỏ cho bảng */
+            .compact-td td, .compact-td th { padding: 3px 4px; }
+
+            .bg-header { text-align: center; font-weight: bold; }
+            .no-border, .no-border td { border: none !important; }
+            .text-center { text-align: center; }
+            .bold { font-weight: bold; }
+            .italic { font-style: italic; }
+            .uppercase { text-transform: uppercase; }
+            
+            /* Khoảng cách tiêu đề nhỏ hơn */
+            .section-title { 
+                font-weight: bold; 
+                text-transform: uppercase; 
+                margin-top: 10px; 
+                margin-bottom: 3px; 
+                font-size: 10.5pt;
+            }
+            
+            .sign-table td { border: none; text-align: center; vertical-align: top; }
+            .sign-space { height: 60px; } /* Khoảng ký tên nhỏ hơn */
+        </style>
+    </head>
+    <body>
+        ${bodyContent}
     </body>
     </html>
     `;

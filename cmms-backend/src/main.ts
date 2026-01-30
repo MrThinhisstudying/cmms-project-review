@@ -19,7 +19,9 @@ async function bootstrap() {
     app.use(compression());
     
     // Serve static files from uploads directory
-    app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+    const uploadPath = join(process.cwd(), 'uploads');
+    console.log('Serving static files from:', uploadPath);
+    app.useStaticAssets(uploadPath, {
         prefix: '/uploads/',
     });
 

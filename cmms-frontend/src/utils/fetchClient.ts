@@ -38,6 +38,6 @@ export const fetchClient = async (
   const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
 
   // 5. Execute Fetch
-  const response = await fetch(`${BASE_URL}${cleanEndpoint}`, config);
+  const response = await fetch(`${BASE_URL}${cleanEndpoint}`, { ...config, cache: "no-store" });
   return response;
 };

@@ -82,10 +82,12 @@ export class MaintenanceController {
         @Body('name') name: string,
         @Body('code') code: string, // <--- NHẬN THÊM CODE
         @Body('device_type') deviceType: string,
+        @Body('release_no') releaseNo: string,
+        @Body('revision_no') revisionNo: string,
     ) {
         if (!file) throw new HttpException('File is required', HttpStatus.BAD_REQUEST);
         // Truyền đúng thứ tự sang Service
-        return this.maintenanceService.importTemplate(file.buffer, name, code, deviceType);
+        return this.maintenanceService.importTemplate(file.buffer, name, code, deviceType, releaseNo, revisionNo);
     }
 
     // 2. API Lấy danh sách mẫu (cho Dropdown)

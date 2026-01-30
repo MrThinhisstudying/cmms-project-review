@@ -5,13 +5,14 @@ type DevicePayload = Partial<IDevice>;
 
 export const getAllDevices = async (
   token?: string | null,
-  filters?: { status?: string; name?: string; groupId?: number }
+  filters?: { status?: string; name?: string; groupId?: number; deviceTypeId?: number }
 ): Promise<IDevice[]> => {
   try {
     const query = new URLSearchParams();
     if (filters?.status) query.append("status", filters.status);
     if (filters?.name) query.append("name", filters.name);
     if (filters?.groupId) query.append("groupId", filters.groupId.toString());
+    if (filters?.deviceTypeId) query.append("deviceTypeId", filters.deviceTypeId.toString());
 
     const response = await fetchClient(`/devices?${query.toString()}`, {
       method: "GET",

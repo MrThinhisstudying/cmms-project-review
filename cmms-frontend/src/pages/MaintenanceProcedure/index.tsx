@@ -14,6 +14,7 @@ import {
   Row,
   Col,
   Tag,
+  Descriptions,
 } from "antd"; // Import Tag ở đây
 import {
   PlusOutlined,
@@ -29,9 +30,11 @@ import {
 } from "../../apis/maintenance";
 import { getToken } from "../../utils/auth";
 import ImportTemplateModal from "./components/ImportTemplateModal";
+import DeviceTypeManagerModal from "./components/DeviceTypeManagerModal";
+import { getAllDeviceTypes } from "../../apis/device-types";
 import ChecklistExecutor from "../MaintenanceManagement/components/ChecklistExecutor"; // Đảm bảo đường dẫn này đúng
 import { DEVICE_TYPES } from "../../constants/device-types";
-import { EditOutlined } from "@mui/icons-material";
+import { EditOutlined, UnorderedListOutlined } from "@ant-design/icons"; // Sửa icon logic
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -76,8 +79,23 @@ const MaintenanceProcedurePage: React.FC = () => {
     }
   };
 
+  // State Device Types
+  const [deviceTypes, setDeviceTypes] = useState<any[]>([]);
+  const [isTypeManagerOpen, setIsTypeManagerOpen] = useState(false);
+
+  const fetchDeviceTypesList = async () => {
+    try {
+        const token = getToken();
+        const res = await getAllDeviceTypes(token);
+        setDeviceTypes(res);
+    } catch (error) {
+        console.error("Lỗi tải loại thiết bị", error);
+    }
+  };
+
   useEffect(() => {
     fetchTemplates();
+    fetchDeviceTypesList();
   }, []);
 
   // Logic lọc dữ liệu
@@ -111,11 +129,8 @@ const MaintenanceProcedurePage: React.FC = () => {
       const token = getToken();
       const res = await getTemplateById(id, token);
       // Kiểm tra cấu trúc trả về
-      const data =
-        (res as any).checklist_structure ||
-        (res as any).data?.checklist_structure ||
-        res;
-
+      const data = res; // Save full response to get metadata
+      
       if (data) {
         setPreviewData(data);
         setIsPreviewOpen(true);
@@ -238,13 +253,21 @@ const MaintenanceProcedurePage: React.FC = () => {
           }}
         >
           <h3 style={{ margin: 0 }}>📂 Thư Viện Quy Trình</h3>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={() => setIsImportOpen(true)}
-          >
-            Thêm Mới
-          </Button>
+          <Space>
+            <Button
+                icon={<UnorderedListOutlined />}
+                onClick={() => setIsTypeManagerOpen(true)}
+            >
+                Quản lý Loại xe
+            </Button>
+            <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => setIsImportOpen(true)}
+            >
+                Thêm Mới
+            </Button>
+          </Space>
         </div>
 
         <Row gutter={[16, 16]}>
@@ -259,11 +282,12 @@ const MaintenanceProcedurePage: React.FC = () => {
           <Col span={6}>
             <Select
               placeholder="Lọc theo loại..."
+              allowClear
               onChange={(val) => setFilterType(val)}
             >
-              {DEVICE_TYPES.map((t) => (
-                <Option key={t.value} value={t.value}>
-                  {t.label}
+              {deviceTypes.map((t) => (
+                <Option key={t.code} value={t.code}>
+                  {t.name}
                 </Option>
               ))}
             </Select>
@@ -276,7 +300,7 @@ const MaintenanceProcedurePage: React.FC = () => {
             />
           </Col>
           <Col span={4} style={{ textAlign: "right" }}>
-            <Button icon={<ReloadOutlined />} onClick={fetchTemplates}>
+            <Button icon={<ReloadOutlined />} onClick={() => { fetchTemplates(); fetchDeviceTypesList(); }}>
               Làm mới
             </Button>
           </Col>
@@ -296,6 +320,15 @@ const MaintenanceProcedurePage: React.FC = () => {
           }}
         />
       </Card>
+
+      <DeviceTypeManagerModal 
+        open={isTypeManagerOpen} 
+        onChange={fetchDeviceTypesList}
+        onClose={() => {
+            setIsTypeManagerOpen(false);
+            fetchDeviceTypesList();
+        }} 
+      />
 
       <ImportTemplateModal
         open={isImportOpen}
@@ -318,6 +351,13 @@ const MaintenanceProcedurePage: React.FC = () => {
         footer={null}
         width={900}
       >
+          <Descriptions size="small" bordered column={2} style={{ marginBottom: 16 }}>
+             <Descriptions.Item label="Mã Quy Trình">{previewData?.code}</Descriptions.Item>
+             <Descriptions.Item label="Tên Quy Trình">{previewData?.name}</Descriptions.Item>
+             <Descriptions.Item label="Loại thiết bị">{previewData?.device_type}</Descriptions.Item>
+             <Descriptions.Item label="Phiên bản">{previewData?.release_no || "01"} / {previewData?.revision_no || "00"}</Descriptions.Item>
+          </Descriptions>
+
         <div
           style={{
             marginBottom: 16,
@@ -350,7 +390,7 @@ const MaintenanceProcedurePage: React.FC = () => {
             }}
           >
             <ChecklistExecutor
-              templateData={previewData}
+              templateData={previewData?.checklist_structure || previewData}
               currentLevel={previewLevel}
               onChange={() => {}}
             />

@@ -207,15 +207,16 @@ export class MaintenanceTicketService {
     }
 
     // --- XUẤT PDF (ĐÃ CẬP NHẬT FOOTER CHUẨN) ---
-    async exportPdf(ticketId: number) {
+    // --- XUẤT PDF (ĐÃ CẬP NHẬT FOOTER CHUẨN) ---
+    async exportPdf(ticketId: number, exportType: 'full' | 'ticket' | 'content' = 'full') {
         const ticket = await this.ticketRepo.findOne({
             where: {ticket_id: ticketId},
-            relations: ['device', 'leader_user', 'operator_user'],
+            relations: ['device', 'leader_user', 'operator_user', 'template'],
         });
 
         if (!ticket) throw new NotFoundException('Phiếu không tồn tại');
 
-        const htmlContent = buildPdfTemplate(ticket);
+        const htmlContent = buildPdfTemplate(ticket, exportType);
 
         const browser = await puppeteer.launch({
             headless: true,
@@ -247,10 +248,10 @@ export class MaintenanceTicketService {
             
             <div class="footer-wrapper">
                 <div style="width: 30%;">
-                    <span >B06.QT08/VCS-KT-TTB</span>
+                    <span>${ticket.template?.code || '...'}</span>
                 </div>
                 <div style="width: 30%; text-align: center;">
-                    Lần ban hành/ sửa đổi: <span>01/00</span>
+                    Lần ban hành/ sửa đổi: <span>${ticket.template?.release_no || '01'}/${ticket.template?.revision_no || '00'}</span>
                 </div>
                 <div style="width: 40%;" class="right-col">
                     <div><span class="pageNumber"></span>/<span class="totalPages"></span></div>
@@ -282,10 +283,23 @@ export class MaintenanceTicketService {
         return buffer;
     }
 
-    async cancel(id: number, reason: string) {
-        const ticket = await this.findOne(id);
+    async cancel(id: number, reason: string, user?: any) {
+        const ticket = await this.ticketRepo.findOne({
+            where: {ticket_id: id},
+            relations: ['maintenance', 'device'] // Load để xử lý logic revert plan
+        });
+        if (!ticket) throw new NotFoundException('Phiếu không tồn tại');
+
+        // --- KHÔI PHỤC KẾ HOẠCH BẢO DƯỠNG ---
+        if (ticket.maintenance) {
+            await this.maintenanceService.revertCompletion(ticket.maintenance.maintenance_id);
+        }
+
         ticket.status = 'canceled';
-        ticket.arising_issues = (ticket.arising_issues || '') + ` [HỦY: ${reason}]`;
+        ticket.cancel_reason = reason;
+        if (user) {
+             ticket.cancelled_by = user;
+        }
         return await this.ticketRepo.save(ticket);
     }
 }

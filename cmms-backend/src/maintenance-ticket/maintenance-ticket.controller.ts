@@ -113,13 +113,16 @@ export class MaintenanceTicketController {
 
     @Get(':id/pdf')
     @Header('Content-Type', 'application/pdf')
-    @Header('Content-Disposition', 'attachment; filename=maintenance_ticket.pdf')
-    async downloadPdf(@Param('id', ParseIntPipe) id: number, @Res() res: Response) {
-        const buffer = await this.ticketService.exportPdf(id);
+    async downloadPdf(@Param('id', ParseIntPipe) id: number, @Query('type') type: 'full' | 'ticket' | 'content' = 'full', @Res() res: Response) {
+        const buffer = await this.ticketService.exportPdf(id, type);
+
+        let filename = `Phieu_Bao_Duong_${id}.pdf`;
+        if (type === 'ticket') filename = `Phieu_Cong_Tac_${id}.pdf`;
+        if (type === 'content') filename = `Noi_Dung_Bao_Duong_${id}.pdf`;
 
         res.set({
             'Content-Type': 'application/pdf',
-            'Content-Disposition': `attachment; filename="Phieu_Bao_Duong_${id}.pdf"`,
+            'Content-Disposition': `attachment; filename="${filename}"`,
             'Content-Length': buffer.length,
         });
 
@@ -127,8 +130,9 @@ export class MaintenanceTicketController {
     }
 
     @Put(':id/cancel')
-    async cancelTicket(@Param('id', ParseIntPipe) id: number, @Body('reason') reason: string) {
-        return this.ticketService.cancel(id, reason);
+    @UseGuards(JWTAuthGuard)
+    async cancelTicket(@Param('id', ParseIntPipe) id: number, @Body('reason') reason: string, @CurrentUser() user: User) {
+        return this.ticketService.cancel(id, reason, user);
     }
 }
 

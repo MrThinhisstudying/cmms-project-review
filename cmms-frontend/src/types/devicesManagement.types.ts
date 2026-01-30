@@ -39,6 +39,8 @@ export interface IDevice {
   updated_at?: Date;
   users?: IUser[];
   device_group?: { id: number; name: string };
+  deviceType?: { id: number; name: string; code?: string };
+  deviceTypeId?: number;
 }
 
 export type DeviceStatus = 
@@ -53,7 +55,7 @@ export interface DevicesContextValue {
   devices: IDevice[];
   setDevices: (devices: IDevice[]) => void;
   loading: boolean;
-  fetchDevices: (filters?: { status?: string; name?: string; groupId?: number }) => Promise<void>;
+  fetchDevices: (filters?: { status?: string; name?: string; groupId?: number; deviceTypeId?: number }) => Promise<void>;
   report: ReportData | null;
   fetchReport: (startDate?: string, endDate?: string) => Promise<void>;
 }

@@ -11,6 +11,7 @@ import {
   DeleteOutlined,
   PrinterOutlined,
   DownOutlined,
+  FilePdfOutlined,
 } from "@ant-design/icons";
 import { getToken } from "../../../../utils/auth";
 import type { MenuProps } from 'antd';
@@ -33,7 +34,7 @@ interface RepairsTableProps {
   onDelete?: (id: number) => void;
   onExport?: (
     item: IRepair,
-    type: "request" | "inspection" | "acceptance"
+    type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" | "COMBINED"
   ) => void;
   canUpdate?: boolean;
   canReview?: boolean;
@@ -173,32 +174,17 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
     return <Tag color={color}>{label}</Tag>;
   };
 
-  const handleExportPdf = async (id: number, type: 'B03' | 'B04' | 'B05') => {
-      try {
-          message.loading({ content: "Đang tạo PDF...", key: "pdf_export" });
-          const token = getToken();
-          const response = await fetch(`${process.env.REACT_APP_BASE_URL}/repairs/${id}/export?type=${type}`, {
-              headers: { Authorization: `Bearer ${token}` }
-          });
-          
-          if (!response.ok) throw new Error('Failed to export');
-          
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          window.open(url, '_blank');
-          message.success({ content: "Đã mở PDF", key: "pdf_export" });
-      } catch (e) {
-          console.error(e);
-          message.error({ content: "Lỗi tải PDF", key: "pdf_export" });
-      }
-  };
+
 
   const columns: ColumnsType<IRepair> = [
     {
       title: "#",
-      key: "index",
-      width: 60,
-      render: (_, __, index) => index + 1,
+      dataIndex: "repair_id",
+      key: "repair_id",
+      width: 80,
+      render: (id) => <span style={{ fontWeight: 'bold' }}>#{id}</span>,
+      sorter: (a, b) => a.repair_id - b.repair_id,
+      defaultSortOrder: 'descend', // Default newest first
     },
     {
       title: "Thiết bị",
@@ -287,6 +273,7 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
         const canCreateAcc = !locked && isTechnician && isTechnicalDepartment && record.status_inspection === "inspection_admin_approved" && record.status_acceptance === "acceptance_pending";
 
         const showDelete = canDelete && hasPermission("DELETE_REPAIR") && (!record.approved_by_manager_request && !record.approved_by_admin_request);
+        const isCompleted = record.status_acceptance === 'acceptance_admin_approved';
 
         return (
           <Space size="small" wrap>
@@ -367,24 +354,33 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
                 </>
             )}
 
-
+            {isCompleted && (
+                 <Tooltip title="Lưu hồ sơ (PDF)">
+                    <Button 
+                        icon={<FilePdfOutlined />} 
+                        style={{ background: '#52c41a', color: 'white', borderColor: '#52c41a' }} 
+                        size="small" 
+                    onClick={() => onExport?.(record, 'COMBINED')} 
+                    />
+                 </Tooltip>
+            )}
 
              {(() => {
                  const items: MenuProps['items'] = [];
                  
                  // B03: Show only if Request is COMPLETED (fully approved)
                  if (record.status_request === 'COMPLETED') {
-                     items.push({ key: 'B03', label: 'B03: Phiếu Yêu Cầu', onClick: () => handleExportPdf(record.repair_id, 'B03') });
+                     items.push({ key: 'B03', label: 'B03: Phiếu Yêu Cầu', onClick: () => onExport?.(record, 'B03') });
                  }
 
                  // B04: Show only if Inspection is Admin Approved
                  if (record.status_inspection === 'inspection_admin_approved') {
-                     items.push({ key: 'B04', label: 'B04: Phiếu Kiểm Nghiệm', onClick: () => handleExportPdf(record.repair_id, 'B04') });
+                     items.push({ key: 'B04', label: 'B04: Phiếu Kiểm Nghiệm', onClick: () => onExport?.(record, 'B04') });
                  }
 
                  // B05: Show only if Acceptance is Admin Approved
                  if (record.status_acceptance === 'acceptance_admin_approved') {
-                     items.push({ key: 'B05', label: 'B05: Phiếu Nghiệm Thu', onClick: () => handleExportPdf(record.repair_id, 'B05') });
+                     items.push({ key: 'B05', label: 'B05: Phiếu Nghiệm Thu', onClick: () => onExport?.(record, 'B05') });
                  }
 
                  if (items.length === 0) return null;

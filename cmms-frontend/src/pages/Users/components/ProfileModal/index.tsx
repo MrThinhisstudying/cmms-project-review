@@ -4,6 +4,7 @@ import { UploadOutlined, UserOutlined, LockOutlined } from '@ant-design/icons';
 import { IUser } from '../../../../types/user.types';
 import { uploadSignature, updateProfile } from '../../../../apis/users';
 import { getToken } from '../../../../utils/auth';
+import { getBackendImageUrl } from '../../../../utils/imageUrl';
 
 interface ProfileModalProps {
     open: boolean;
@@ -130,7 +131,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
                             {signatureUrl ? (
                                 <img 
-                                    src={`${process.env.REACT_APP_BASE_URL?.replace('/api', '')}${signatureUrl}`} 
+                                    src={getBackendImageUrl(signatureUrl)}
                                     alt="signature" 
                                     style={{ height: 60, border: '1px dashed #d9d9d9', padding: 4, borderRadius: 4 }} 
                                 />

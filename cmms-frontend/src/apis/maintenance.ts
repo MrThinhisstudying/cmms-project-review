@@ -114,13 +114,18 @@ export const importTemplate = async (
   name: string,
   deviceType: string,
   code: string,
-  token: string | null
+  token: string | null,
+  releaseNo: string,
+  revisionNo: string
 ) => {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("name", name);
   formData.append("code", code);
   formData.append("device_type", deviceType);
+  formData.append("release_no", releaseNo);
+  formData.append("revision_no", revisionNo);
+
   const res = await fetch(`${BASE}/maintenance/templates/import`, {
     method: "POST",
     headers: {

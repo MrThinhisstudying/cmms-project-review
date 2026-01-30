@@ -59,10 +59,11 @@ const DevicesTable: React.FC<DevicesTableProps> = ({
       render: (text: string) => text || '-',
     },
     {
-      title: 'Nhãn hiệu',
-      dataIndex: 'brand',
-      key: 'brand',
-      width: 120,
+      title: 'Loại xe',
+      dataIndex: 'deviceType',
+      key: 'deviceType',
+      width: 150,
+      render: (type: any) => type?.name || <span style={{ color: '#ccc' }}>NIL</span>,
     },
     {
       title: 'Trạng thái',

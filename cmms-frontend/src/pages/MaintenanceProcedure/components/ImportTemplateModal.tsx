@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Modal, Form, Input, Upload, Button, message, Select } from "antd";
-import { UploadOutlined } from "@ant-design/icons";
+import { Modal, Form, Input, Upload, Button, message, Select, Divider } from "antd";
+import { UploadOutlined, PlusOutlined } from "@ant-design/icons";
 import { importTemplate, updateTemplate } from "../../../apis/maintenance";
 import { getToken } from "../../../utils/auth";
-import { DEVICE_TYPES } from "../../../constants/device-types";
-
-const { Option } = Select;
+import { getAllDeviceTypes } from "../../../apis/device-types";
+import DeviceTypeManagerModal from "./DeviceTypeManagerModal";
 
 interface Props {
   open: boolean;
@@ -22,15 +21,35 @@ const ImportTemplateModal: React.FC<Props> = ({
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [items, setItems] = useState<{label: string, value: string}[]>([]);
+  const [showManager, setShowManager] = useState(false);
+
+  const fetchDeviceTypes = async () => {
+    try {
+        const res = await getAllDeviceTypes(getToken());
+        // Force new array reference and log
+        console.log("Fetched device types:", res.length);
+        setItems(res.map(r => ({ label: r.name, value: r.code })));
+    } catch (e) {
+        console.error("Error fetching device types", e);
+    }
+  };
+
+  useEffect(() => {
+    // Load types on mount
+    fetchDeviceTypes();
+  }, []);
 
   // 1. Load dữ liệu cũ khi mở Modal (Nếu là sửa)
   useEffect(() => {
     if (open) {
       if (editData) {
         form.setFieldsValue({
-          code: editData.code, // <--- ĐIỀN MÃ CŨ
+          code: editData.code,
           name: editData.name,
           device_type: editData.device_type,
+          release_no: editData.release_no,
+          revision_no: editData.revision_no,
         });
       } else {
         form.resetFields();
@@ -49,7 +68,7 @@ const ImportTemplateModal: React.FC<Props> = ({
         await updateTemplate(
           editData.id,
           {
-            code: values.code, // <--- GỬI MÃ MỚI
+            code: values.code,
             name: values.name,
             device_type: values.device_type,
           },
@@ -64,13 +83,15 @@ const ImportTemplateModal: React.FC<Props> = ({
         }
         const fileOrigin = values.file[0].originFileObj;
 
-        // Gọi API import (Lưu ý thứ tự tham số phải khớp với file apis/maintenance.ts)
+        // Gọi API import
         await importTemplate(
           fileOrigin,
           values.name,
           values.device_type,
-          values.code, // <--- GỬI MÃ
-          token
+          values.code,
+          token,
+          values.release_no,
+          values.revision_no
         );
         message.success("Import thành công!");
       }
@@ -115,14 +136,53 @@ const ImportTemplateModal: React.FC<Props> = ({
           label="Loại thiết bị áp dụng"
           rules={[{ required: true, message: "Vui lòng chọn loại thiết bị!" }]}
         >
-          <Select placeholder="Chọn loại...">
-            {DEVICE_TYPES.map((type) => (
-              <Option key={type.value} value={type.value}>
-                {type.label}
-              </Option>
-            ))}
-          </Select>
+          <Select
+            key={items.length}
+            placeholder="Chọn loại..."
+            dropdownRender={(menu) => (
+              <>
+                {menu}
+                <Divider style={{ margin: "8px 0" }} />
+                <Button 
+                    type="text" 
+                    block 
+                    icon={<PlusOutlined />} 
+                    style={{ textAlign: 'left' }}
+                    onClick={() => setShowManager(true)}
+                >
+                    Quản lý danh sách loại thiết bị...
+                </Button>
+              </>
+            )}
+            options={items.map((item) => ({ label: item.label, value: item.value }))}
+          />
         </Form.Item>
+
+        <Form.Item label="Thông tin phiên bản" style={{ marginBottom: 0 }}>
+            <Form.Item
+                name="release_no"
+                label="Lần ban hành"
+                style={{ display: 'inline-block', width: 'calc(50% - 8px)' }}
+            >
+                <Input placeholder="Vd: 01" />
+            </Form.Item>
+            <Form.Item
+                name="revision_no"
+                label="Lần sửa đổi"
+                style={{ display: 'inline-block', width: 'calc(50% - 8px)', marginLeft: '16px' }}
+            >
+                <Input placeholder="Vd: 00" />
+            </Form.Item>
+        </Form.Item>
+
+        <DeviceTypeManagerModal 
+            open={showManager} 
+            onChange={fetchDeviceTypes}
+            onClose={() => {
+                setShowManager(false);
+                fetchDeviceTypes(); 
+            }} 
+        />
 
         {!editData && (
           <Form.Item

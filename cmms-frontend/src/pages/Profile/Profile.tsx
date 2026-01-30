@@ -4,6 +4,7 @@ import { UploadOutlined, UserOutlined, LockOutlined, InfoCircleOutlined } from "
 import { getProfile, updateProfile } from "../../apis/users";
 import { getToken } from "../../utils/auth";
 import { IUser } from "../../types/user.types";
+import { getBackendImageUrl } from "../../utils/imageUrl";
 
 const { Title } = Typography;
 
@@ -119,7 +120,7 @@ const Profile: React.FC = () => {
                                 <div style={{ marginBottom: 24 }}>
                                     <Typography.Text>Chữ ký hiện tại:</Typography.Text>
                                     <br/>
-                                    <img src={user.signature_url} alt="Signature" style={{ maxWidth: 200, border: '1px dashed #ccc', padding: 8, marginTop: 8 }} />
+                                    <img src={getBackendImageUrl(user.signature_url)} alt="Signature" style={{ maxWidth: 200, border: '1px dashed #ccc', padding: 8, marginTop: 8 }} />
                                 </div>
                             )}
 

@@ -21,13 +21,15 @@ export class DevicesController {
         @Query('status') status?: DeviceStatus,
         @Query('name') name?: string,
         @Query('groupId') groupId?: string,
+        @Query('deviceTypeId') deviceTypeId?: string,
         @Req() request?: Request,
     ) {
         try {
             const filter = {
                 status,
                 name,
-                groupId: groupId ? Number(groupId) : undefined
+                groupId: groupId ? Number(groupId) : undefined,
+                deviceTypeId: deviceTypeId ? Number(deviceTypeId) : undefined
             };
              
             const user = (request as any).user;
@@ -150,8 +152,8 @@ export class DevicesController {
             throw new HttpException('Không nhận được tệp hoặc tệp trống', HttpStatus.BAD_REQUEST);
         }
         try {
-            await this.devicesService.importDevicesFromExcel(file.buffer);
-            return {message: 'Tệp được xử lý thành công', result: true};
+            const result = await this.devicesService.importDevicesFromExcel(file.buffer);
+            return {message: 'Tệp được xử lý thành công', data: result};
         } catch {
             throw new HttpException('Xử lý tệp thất bại', HttpStatus.INTERNAL_SERVER_ERROR);
         }

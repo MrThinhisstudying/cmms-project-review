@@ -82,12 +82,15 @@ const RepairsManagement: React.FC = () => {
 
   // Real-time updates via WebSocket
   useEffect(() => {
+    if (!user) return; // Wait for user to be loaded
+
     const baseUrl = process.env.REACT_APP_BASE_URL || "http://localhost:3000/api";
     const socketUrl = baseUrl.replace('/api', ''); // Remove /api suffix for socket connection
 
     const socket = io(socketUrl, {
         transports: ['websocket'],
         autoConnect: false,
+        query: { userId: user.user_id }, // Pass userId for tracking
     });
     
     const timer = setTimeout(() => {
@@ -107,13 +110,25 @@ const RepairsManagement: React.FC = () => {
       });
     });
 
+    // Listen for specific notifications
+    socket.on("notification", (data: any) => {
+        notification.info({
+            message: "Thông báo mới",
+            title: "Thông báo mới", // Fix TS error (Required in custom types?)
+            description: data.message,
+            duration: 10, // Hide after 10 seconds
+            placement: 'topRight',
+        });
+    });
+
     return () => {
       clearTimeout(timer);
       socket.off("connect");
       socket.off("repair_updated");
+      socket.off("notification");
       socket.disconnect();
     };
-  }, [reload]);
+  }, [reload, user]);
 
   // Strict Role Check: Only Admin, Technician, Operator can create (Unit Head/Director only approve)
   const canCreate = role === "ADMIN" || role === "TECHNICIAN" || role === "OPERATOR";
@@ -124,6 +139,16 @@ const RepairsManagement: React.FC = () => {
   const [openAcceptance, setOpenAcceptance] = useState(false);
   const [selectedRepair, setSelectedRepair] = useState<IRepair | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // Sync selectedRepair with latest data from repairs list
+  useEffect(() => {
+    if (selectedRepair) {
+      const updated = repairs.find(r => r.repair_id === selectedRepair.repair_id);
+      if (updated && updated !== selectedRepair) {
+        setSelectedRepair(updated);
+      }
+    }
+  }, [repairs, selectedRepair]);
 
   // Stats Calculation
   const stats = useMemo(() => {
@@ -246,12 +271,12 @@ const RepairsManagement: React.FC = () => {
   const hasPrev = selectedRepair ? repairs.findIndex((r: IRepair) => r.repair_id === selectedRepair.repair_id) > 0 : false;
   const hasNext = selectedRepair ? repairs.findIndex((r: IRepair) => r.repair_id === selectedRepair.repair_id) < repairs.length - 1 : false;
 
-  const handleExport = async (id: number, type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05") => {
+  const handleExport = async (id: number, type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" | "COMBINED") => {
     const key = "export_loading"; 
     try {
       message.loading({ content: "Đang tạo file...", key });
       await exportRepairItem(id, type);
-      message.success({ content: "Tải xuống thành công", key, duration: 2 });
+      message.success({ content: "Đã mở xem trước", key, duration: 2 });
     } catch {
       message.error({ content: "Xuất file thất bại", key, duration: 2 });
     }

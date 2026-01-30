@@ -20,6 +20,7 @@ import { UserDeviceGroup } from 'src/device-groups/entities/user-device-group.en
 import { RepairsGateway } from './repairs.gateway';
 import { buildRepairPdfTemplate } from './utils/repair-pdf-template.util';
 import * as puppeteer from 'puppeteer';
+import { PDFDocument } from 'pdf-lib';
 
 @Injectable()
 export class RepairsService {
@@ -60,17 +61,27 @@ export class RepairsService {
             (m) => Array.isArray(m.department?.permissions) && m.department.permissions.includes('APPROVE_REPAIR'),
         );
         const admins = await this.userRepo.find({ where: { role: UserRole.ADMIN } });
+        const technicians = await this.userRepo.find({ where: { role: UserRole.TECHNICIAN } });
 
         for (const manager of approverManagers) {
-            await this.notificationService.createForUser(
-                manager,
-                `Phòng ${creator.department?.name || ''} vừa lập phiếu sửa chữa thiết bị "${device.name}".`,
-            );
+            const msg = `Phòng ${creator.department?.name || ''} vừa lập phiếu sửa chữa thiết bị "${device.name}".`;
+            await this.notificationService.createForUser(manager, msg);
+            this.repairsGateway.sendToUser(manager.user_id, msg);
         }
 
         for (const admin of admins) {
-            await this.notificationService.createForUser(admin, `Có phiếu sửa chữa mới #${saved.repair_id} do ${creator.name} lập.`);
+            const msg = `Có phiếu sửa chữa mới #${saved.repair_id} do ${creator.name} lập.`;
+            await this.notificationService.createForUser(admin, msg);
+            this.repairsGateway.sendToUser(admin.user_id, msg);
         }
+
+        for (const tech of technicians) {
+             const msg = `Có phiếu sửa chữa mới #${saved.repair_id} ("${device.name}") cần tiếp nhận.`;
+             await this.notificationService.createForUser(tech, msg);
+             this.repairsGateway.sendToUser(tech.user_id, msg);
+        }
+        
+        this.repairsGateway.notifyRepairUpdate(); // Broadcast update to reload lists
         return saved;
     }
 
@@ -115,7 +126,7 @@ export class RepairsService {
     async updateInspection(id: number, dto: UpdateInspectionDto, userId: number) {
         const repair = await this.repairRepo.findOne({
             where: { repair_id: id },
-            relations: ['inspection_committee'],
+            relations: ['inspection_committee', 'device'],
         });
 
         if (!repair) throw new NotFoundException('Không tìm thấy phiếu');
@@ -133,13 +144,14 @@ export class RepairsService {
 
         if (dto.inspection_materials) {
             dto.inspection_materials = dto.inspection_materials.map((m) => ({
-                item_id: m.is_new ? null : m.item_id,
-                item_name: m.is_new ? m.item_name : undefined,
+                item_id: m.item_id ? Number(m.item_id) : null,
+                item_name: m.item_name,
                 quantity: m.quantity,
                 unit: m.unit || null,
-                is_new: m.is_new,
+                is_new: !!m.is_new,
                 notes: m.notes || null,
                 specifications: m.specifications || null,
+                item_code: m.item_code || null,
             }));
         }
 
@@ -176,6 +188,16 @@ export class RepairsService {
         }
 
         const savedRepair = await this.repairRepo.save(repair);
+        
+        // Notify Team Leads (Tổ VHTTBMĐ & All Team Leads for safety)
+        const teamLeads = await this.userRepo.find({ where: { role: UserRole.TEAM_LEAD }, relations: ['department'] });
+        // const targetLeads = teamLeads.filter(l => l.department?.name === 'Tổ VHTTBMĐ'); // Relaxed for testing
+        
+        for (const lead of teamLeads) {
+             const msg = `Có biên bản kiểm nghiệm mới #${savedRepair.repair_id} ("${repair.device?.name}") cần phê duyệt.`;
+             await this.notificationService.createForUser(lead, msg);
+             this.repairsGateway.sendToUser(lead.user_id, msg);
+        }
 
         if (dto.inspection_materials && Array.isArray(dto.inspection_materials)) {
             const oldStockOuts = await this.stockOutRepo.find({
@@ -205,13 +227,16 @@ export class RepairsService {
             }
         }
 
+        // Broadcast update
+        this.repairsGateway.notifyRepairUpdate();
+
         return savedRepair;
     }
 
     async updateAcceptance(id: number, dto: UpdateAcceptanceDto, userId: number) {
         const repair = await this.repairRepo.findOne({
             where: { repair_id: id },
-            relations: ['acceptance_committee'],
+            relations: ['acceptance_committee', 'device'],
         });
         if (!repair) throw new NotFoundException('Không tìm thấy phiếu');
         if (repair.canceled && repair.status_acceptance !== 'REJECTED_B05' && (repair.status_acceptance as string) !== 'acceptance_rejected') throw new BadRequestException('Phiếu đã bị hủy');
@@ -250,16 +275,25 @@ export class RepairsService {
         }
 
         if (dto.inspection_materials) {
-             repair.inspection_materials = dto.inspection_materials.map((m: any) => ({
-                item_id: m.item_id ? Number(m.item_id) : undefined,
-                item_name: m.item_name,
-                quantity: Number(m.quantity),
-                unit: m.unit,
-                is_new: !!m.is_new,
-                notes: m.notes,
-                item_code: m.item_code,
-                specifications: m.specifications
-            }));
+            // Merge logic: Preserve item_code/specifications/notes if not provided in DTO but exists in repair
+            // B05 might send a subset or modified quantities, but we shouldn't lose B04 data.
+            repair.inspection_materials = dto.inspection_materials.map((m: any) => {
+                const existing = repair.inspection_materials?.find((ex: any) => 
+                    (ex.item_id && String(ex.item_id) === String(m.item_id)) || 
+                    (ex.item_name === m.item_name)
+                );
+
+                return {
+                    item_id: m.item_id ? Number(m.item_id) : undefined,
+                    item_name: m.item_name,
+                    quantity: Number(m.quantity),
+                    unit: m.unit,
+                    is_new: !!m.is_new,
+                    notes: m.notes ?? existing?.notes, // Preserve if undefined
+                    item_code: m.item_code || (existing as any)?.item_code, // Preserve
+                    specifications: m.specifications || (existing as any)?.specifications, // Preserve
+                };
+            });
         }
 
         // If it was rejected, reset to pending
@@ -268,7 +302,22 @@ export class RepairsService {
             repair.canceled = false;
         }
 
-        return this.repairRepo.save(repair);
+        const saved = await this.repairRepo.save(repair);
+        
+        // Notify Team Leads (Tổ VHTTBMĐ & All Team Leads for safety)
+        const teamLeads = await this.userRepo.find({ where: { role: UserRole.TEAM_LEAD }, relations: ['department'] });
+        // const targetLeads = teamLeads.filter(l => l.department?.name === 'Tổ VHTTBMĐ');
+
+        for (const lead of teamLeads) {
+             const msg = `Có phiếu nghiệm thu mới #${saved.repair_id} ("${repair.device?.name}") cần phê duyệt.`;
+             await this.notificationService.createForUser(lead, msg);
+             this.repairsGateway.sendToUser(lead.user_id, msg);
+        }
+
+        // Broadcast update
+        this.repairsGateway.notifyRepairUpdate();
+
+        return saved;
     }
 
     private ensureHasSignature(user: User) {
@@ -323,7 +372,9 @@ export class RepairsService {
                     const managers = await this.userRepo.find({ where: { role: UserRole.UNIT_HEAD }, relations: ['department'] });
                     const deptManagers = managers.filter(m => m.department?.dept_id === repair.created_department?.dept_id);
                     for (const manager of deptManagers) {
-                         await this.notificationService.createForUser(manager, `Phiếu sửa chữa #${repair.repair_id} ("${repair.device?.name}") đã được Tổ kỹ thuật tiếp nhận và đang chờ Quản lý duyệt.`);
+                         const msg = `Phiếu sửa chữa #${repair.repair_id} ("${repair.device?.name}") đã được Tổ kỹ thuật tiếp nhận và đang chờ Quản lý duyệt.`;
+                         await this.notificationService.createForUser(manager, msg);
+                         this.repairsGateway.sendToUser(manager.user_id, msg);
                     }
                 } else if (repair.status_request === 'WAITING_MANAGER') {
                     if (user.role !== UserRole.UNIT_HEAD) throw new ForbiddenException('Chỉ Trưởng bộ phận mới được duyệt bước này');
@@ -333,7 +384,9 @@ export class RepairsService {
                     // Notify Admin/Director
                     const admins = await this.userRepo.find({ where: [ { role: UserRole.ADMIN }, { role: UserRole.DIRECTOR } ] });
                     for (const admin of admins) {
-                        await this.notificationService.createForUser(admin, `Phiếu sửa chữa #${repair.repair_id} ("${repair.device?.name}") đã được Trưởng bộ phận duyệt và đang chờ Ban Giám đốc phê duyệt.`);
+                        const msg = `Phiếu sửa chữa #${repair.repair_id} ("${repair.device?.name}") đã được Trưởng bộ phận duyệt và đang chờ Ban Giám đốc phê duyệt.`;
+                        await this.notificationService.createForUser(admin, msg);
+                        this.repairsGateway.sendToUser(admin.user_id, msg);
                     }
                 } else if (repair.status_request === 'WAITING_DIRECTOR') {
                     if (![UserRole.ADMIN, UserRole.DIRECTOR].includes(user.role)) throw new ForbiddenException('Chỉ Ban Giám đốc mới được duyệt bước này');
@@ -345,6 +398,11 @@ export class RepairsService {
                         await this.deviceRepo.save(repair.device);
                     }
                     // Notification...
+                    if (repair.created_by) {
+                        const msg = `Phiếu yêu cầu sửa chữa #${repair.repair_id} ("${repair.device?.name}") đã được Ban Giám đốc phê duyệt. Chuyển sang giai đoạn Kiểm nghiệm.`;
+                        await this.notificationService.createForUser(repair.created_by, msg);
+                        this.repairsGateway.sendToUser(repair.created_by.user_id, msg);
+                    }
                 } else {
                     throw new BadRequestException('Trạng thái không hợp lệ để duyệt');
                 }
@@ -387,9 +445,9 @@ export class RepairsService {
 
             if (dto.action === 'approve') {
                 if (repair.status_inspection === 'inspection_pending') {
-                    // Strict check: Only Team Lead of "Tổ VHTTBMĐ"
-                    if (user.role !== UserRole.TEAM_LEAD || user.department?.name !== 'Tổ VHTTBMĐ') {
-                        throw new ForbiddenException('Bạn không thuộc phòng ban Tổ VHTTBMĐ để thực hiện ký duyệt mục này.');
+                    // Strict check: Only Team Lead (Removed Dept check to match frontend)
+                    if (user.role !== UserRole.TEAM_LEAD) {
+                        throw new ForbiddenException('Chỉ Tổ trưởng mới thực hiện ký duyệt mục này.');
                     }
                     
                     repair.status_inspection = 'inspection_lead_approved';
@@ -403,9 +461,11 @@ export class RepairsService {
                     // Let's notify all Managers of the Operator Dept (Tổ VHTTBMĐ) if obtainable, or just Creator's as fallback.
                     // Assuming Operator Manager manages the inspection.
                     const opManagers = managers.filter(m => m.department?.name === 'Tổ VHTTBMĐ' || m.department?.dept_id === repair.created_department?.dept_id);
-                    for (const manager of opManagers) {
-                         await this.notificationService.createForUser(manager, `Biên bản kiểm nghiệm #${repair.repair_id} đã được Tổ trưởng duyệt và đang chờ Quản lý duyệt.`);
-                    } 
+                     for (const manager of opManagers) {
+                          const msg = `Biên bản kiểm nghiệm #${repair.repair_id} ("${repair.device?.name}") đã được Tổ trưởng duyệt và đang chờ Quản lý duyệt.`;
+                          await this.notificationService.createForUser(manager, msg);
+                          this.repairsGateway.sendToUser(manager.user_id, msg);
+                     } 
                 } else if (repair.status_inspection === 'inspection_lead_approved') {
                     if (user.role !== UserRole.UNIT_HEAD) throw new ForbiddenException('Chỉ Trưởng bộ phận mới được duyệt bước này');
                     repair.status_inspection = 'inspection_manager_approved';
@@ -414,7 +474,9 @@ export class RepairsService {
                     // Notify Admin/Director
                     const admins = await this.userRepo.find({ where: [ { role: UserRole.ADMIN }, { role: UserRole.DIRECTOR } ] });
                     for (const admin of admins) {
-                        await this.notificationService.createForUser(admin, `Biên bản kiểm nghiệm #${repair.repair_id} đã được Quản lý duyệt và đang chờ Ban Giám đốc phê duyệt.`);
+                        const msg = `Biên bản kiểm nghiệm #${repair.repair_id} ("${repair.device?.name}") đã được Quản lý duyệt và đang chờ Ban Giám đốc phê duyệt.`;
+                        await this.notificationService.createForUser(admin, msg);
+                        this.repairsGateway.sendToUser(admin.user_id, msg);
                     }
                 } else if (repair.status_inspection === 'inspection_manager_approved') {
                      if (![UserRole.ADMIN, UserRole.DIRECTOR].includes(user.role)) throw new ForbiddenException('Chỉ Ban Giám đốc mới được duyệt bước này');
@@ -427,6 +489,7 @@ export class RepairsService {
                         relations: ['item'],
                     });
 
+                    // 1. Validate all first
                     for (const so of pendingStockOuts) {
                         if (so.item) {
                             const currentItem = await this.itemRepo.findOne({ where: { item_id: so.item.item_id } });
@@ -439,6 +502,7 @@ export class RepairsService {
                         }
                     }
 
+                    // 2. Deduct and Approve
                     for (const so of pendingStockOuts) {
                         so.status = StockOutStatus.APPROVED;
                         so.approved_by = user;
@@ -452,6 +516,14 @@ export class RepairsService {
                                 await this.itemRepo.save(currentItem);
                             }
                         }
+                    }
+
+                    // Notify Technicians to proceed to Acceptance (B05)
+                    const technicians = await this.userRepo.find({ where: { role: UserRole.TECHNICIAN } });
+                    for (const tech of technicians) {
+                         const msg = `Kiểm nghiệm #${repair.repair_id} ("${repair.device?.name}") đã hoàn tất. Vui lòng lập phiếu Nghiệm thu (B05).`;
+                         await this.notificationService.createForUser(tech, msg);
+                         this.repairsGateway.sendToUser(tech.user_id, msg);
                     }
                 } else {
                      throw new BadRequestException('Trạng thái không hợp lệ để duyệt');
@@ -479,9 +551,9 @@ export class RepairsService {
 
              if (dto.action === 'approve') {
                 if (repair.status_acceptance === 'acceptance_pending') {
-                    // Strict check: Only Team Lead of "Tổ VHTTBMĐ"
-                    if (user.role !== UserRole.TEAM_LEAD || user.department?.name !== 'Tổ VHTTBMĐ') {
-                        throw new ForbiddenException('Bạn không thuộc phòng ban Tổ VHTTBMĐ để thực hiện ký duyệt mục này.');
+                    // Strict check: Only Team Lead (Removed Dept check to match frontend)
+                    if (user.role !== UserRole.TEAM_LEAD) {
+                        throw new ForbiddenException('Chỉ Tổ trưởng mới thực hiện ký duyệt mục này.');
                     }
                     
                     repair.status_acceptance = 'acceptance_lead_approved';
@@ -491,9 +563,11 @@ export class RepairsService {
                     // Notify Unit Head
                     const managers = await this.userRepo.find({ where: { role: UserRole.UNIT_HEAD }, relations: ['department'] });
                     const opManagers = managers.filter(m => m.department?.name === 'Tổ VHTTBMĐ' || m.department?.dept_id === repair.created_department?.dept_id);
-                    for (const manager of opManagers) {
-                         await this.notificationService.createForUser(manager, `Phiếu nghiệm thu #${repair.repair_id} đã được Tổ trưởng duyệt và đang chờ Quản lý duyệt.`);
-                    }
+                     for (const manager of opManagers) {
+                          const msg = `Phiếu nghiệm thu #${repair.repair_id} ("${repair.device?.name}") đã được Tổ trưởng duyệt và đang chờ Quản lý duyệt.`;
+                          await this.notificationService.createForUser(manager, msg);
+                          this.repairsGateway.sendToUser(manager.user_id, msg);
+                     }
                 } else if (repair.status_acceptance === 'acceptance_lead_approved') {
                     if (user.role !== UserRole.UNIT_HEAD) throw new ForbiddenException('Chỉ Trưởng bộ phận mới được duyệt bước này');
                     repair.status_acceptance = 'acceptance_manager_approved';
@@ -502,7 +576,9 @@ export class RepairsService {
                     // Notify Admin/Director
                     const admins = await this.userRepo.find({ where: [ { role: UserRole.ADMIN }, { role: UserRole.DIRECTOR } ] });
                     for (const admin of admins) {
-                        await this.notificationService.createForUser(admin, `Phiếu nghiệm thu #${repair.repair_id} đã được Quản lý duyệt và đang chờ Ban Giám đốc phê duyệt.`);
+                        const msg = `Phiếu nghiệm thu #${repair.repair_id} ("${repair.device?.name}") đã được Quản lý duyệt và đang chờ Ban Giám đốc phê duyệt.`;
+                        await this.notificationService.createForUser(admin, msg);
+                        this.repairsGateway.sendToUser(admin.user_id, msg);
                     }
                 } else if (repair.status_acceptance === 'acceptance_manager_approved') {
                     if (![UserRole.ADMIN, UserRole.DIRECTOR].includes(user.role)) throw new ForbiddenException('Chỉ Ban Giám đốc mới được duyệt bước này');
@@ -511,7 +587,17 @@ export class RepairsService {
                     
                     // Final Success Notification?
                     if (repair.created_by) {
-                         await this.notificationService.createForUser(repair.created_by, `Phiếu nghiệm thu #${repair.repair_id} đã được Ban Giám đốc duyệt hoàn tất.`);
+                         const msg = `Phiếu nghiệm thu #${repair.repair_id} ("${repair.device?.name}") đã được Ban Giám đốc duyệt hoàn tất.`;
+                         await this.notificationService.createForUser(repair.created_by, msg);
+                         this.repairsGateway.sendToUser(repair.created_by.user_id, msg);
+                    }
+
+                    // Notify Technicians of completion
+                    const technicians = await this.userRepo.find({ where: { role: UserRole.TECHNICIAN } });
+                    for (const tech of technicians) {
+                         const msg = `Quy trình sửa chữa #${repair.repair_id} ("${repair.device?.name}") đã hoàn tất.`;
+                         await this.notificationService.createForUser(tech, msg);
+                         this.repairsGateway.sendToUser(tech.user_id, msg);
                     }
 
                     if (repair.device) {
@@ -2060,10 +2146,40 @@ export class RepairsService {
         ];
     }
 
-    async exportPdf(id: number, type: 'B03' | 'B04' | 'B05') {
+    async exportPdf(id: number, type: 'B03' | 'B04' | 'B05' | 'COMBINED') {
         const repair = await this.findOne(id);
-        
-        const htmlContent = buildRepairPdfTemplate(repair, type);
+
+        if (type === 'COMBINED') {
+            const pdfsToMerge: Uint8Array[] = [];
+
+            // Generate each PDF individually to ensure independent page numbering (1/N)
+            const pdfB03 = await this.generateSinglePdf(repair, 'B03', true);
+            pdfsToMerge.push(pdfB03);
+
+            const pdfB04 = await this.generateSinglePdf(repair, 'B04', true);
+            pdfsToMerge.push(pdfB04);
+
+            const pdfB05 = await this.generateSinglePdf(repair, 'B05', true);
+            pdfsToMerge.push(pdfB05);
+
+            // Merge them
+            const mergedPdf = await PDFDocument.create();
+            for (const pdfBuffer of pdfsToMerge) {
+                const pdf = await PDFDocument.load(pdfBuffer);
+                const copiedPages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                copiedPages.forEach((page) => mergedPdf.addPage(page));
+            }
+
+            const buffer = await mergedPdf.save();
+            return Buffer.from(buffer);
+        } else {
+            return this.generateSinglePdf(repair, type);
+        }
+    }
+
+    private async generateSinglePdf(repair: Repair, type: 'B03' | 'B04' | 'B05', showSignature: boolean = false) {
+        // embedFooter=false so we can use Puppeteer's native footer which supports dynamic page numbers
+        const htmlContent = buildRepairPdfTemplate(repair, type, false, showSignature);
 
         const browser = await puppeteer.launch({
             headless: true,
@@ -2074,8 +2190,8 @@ export class RepairsService {
         await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
         const formCode = type === 'B03' ? 'B03.QT08/VCS-KT' :
-                         type === 'B04' ? 'B04.QT08/VCS-KT' :
-                         'B05.QT08/VCS-KT';
+            type === 'B04' ? 'B04.QT08/VCS-KT' :
+                type === 'B05' ? 'B05.QT08/VCS-KT' : '';
 
         const footerHTML = `
             <div style="font-size: 10pt; font-family: 'Times New Roman', serif; width: 100%; border-top: 1px solid black; padding-top: 5px; margin-left: 2cm; margin-right: 2cm; display: flex; justify-content: space-between;">
@@ -2090,12 +2206,12 @@ export class RepairsService {
         const buffer = await page.pdf({
             format: 'A4',
             printBackground: true,
-            displayHeaderFooter: true, 
+            displayHeaderFooter: true,
             footerTemplate: footerHTML,
-            headerTemplate: '<div></div>', // Empty header to avoid default date/title
+            headerTemplate: '<div style="font-size:10px; width:100%; text-align:center;"></div>',
             margin: {
                 top: '20px',
-                bottom: '50px', // Allocating space for footer
+                bottom: '50px',
                 left: '20px',
                 right: '20px',
             },

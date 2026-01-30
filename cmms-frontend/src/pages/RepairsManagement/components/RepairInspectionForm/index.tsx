@@ -265,7 +265,7 @@ export default function RepairInspectionForm({
                  <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>1. Lý lịch thiết bị</Typography.Text>
                  <Descriptions bordered size="small" column={2}>
                         <Descriptions.Item label="Tên thiết bị" span={3}>{initialData.device?.name}</Descriptions.Item>
-                        <Descriptions.Item label="Số đăng ký">{initialData.device?.brand || ''}</Descriptions.Item>
+                        <Descriptions.Item label="Số đăng ký">{initialData.device?.reg_number || initialData.device?.serial_number}</Descriptions.Item>
                         <Descriptions.Item label="Đơn vị quản lý tài sản" span={2}>{initialData.device?.using_department || initialData.created_department?.name || "N/A"}</Descriptions.Item>
                     <Descriptions.Item label="Số giờ/km hoạt động" span={2}>
                         <Space>

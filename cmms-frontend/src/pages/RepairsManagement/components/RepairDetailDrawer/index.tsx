@@ -182,12 +182,12 @@ export default function RepairDetailDrawer({
                  (role === 'DIRECTOR' && data.status_request === 'WAITING_DIRECTOR');
       }
       if (currentPhase === 'inspection') {
-          return (data.status_inspection === 'inspection_pending' && (role === 'TEAM_LEAD' || role === 'UNIT_HEAD')) ||
+          return (data.status_inspection === 'inspection_pending' && role === 'TEAM_LEAD') ||
                  (data.status_inspection === 'inspection_lead_approved' && role === 'UNIT_HEAD') ||
                  (data.status_inspection === 'inspection_manager_approved' && (role === 'ADMIN' || role === 'DIRECTOR'));
       }
       if (currentPhase === 'acceptance') {
-          return (data.status_acceptance === 'acceptance_pending' && (role === 'TEAM_LEAD' || role === 'UNIT_HEAD')) ||
+          return (data.status_acceptance === 'acceptance_pending' && role === 'TEAM_LEAD') ||
                  (data.status_acceptance === 'acceptance_lead_approved' && role === 'UNIT_HEAD') ||
                  (data.status_acceptance === 'acceptance_manager_approved' && (role === 'ADMIN' || role === 'DIRECTOR'));
       }
@@ -325,6 +325,7 @@ export default function RepairDetailDrawer({
                   key: `mat_${i}`,
                   item_name: name,
                   unit: m.unit,
+                  specifications: m.specifications || m.code || m.item_code,
                   quantity: m.quantity, // Replace Qty
                   recover_qty: '-',
                   scrap_qty: '-',
@@ -584,12 +585,8 @@ export default function RepairDetailDrawer({
                 {canReviewAction && (
                     <>
                         {(() => {
-                            const isVHTTBMD = currentUser?.department?.name === 'Tổ VHTTBMĐ';
-                            // Disable only if Team Lead is required (Step 1 of Inspection/Acceptance) but user is not in VHTTBMD
-                            const isApprovalDisabled = role === 'TEAM_LEAD' && 
-                                                      ((currentPhase === 'inspection' && data.status_inspection === 'inspection_pending') || 
-                                                       (currentPhase === 'acceptance' && data.status_acceptance === 'acceptance_pending')) && 
-                                                      !isVHTTBMD;
+                            // Simplified: Allow all Team Leads to approve
+                            const isApprovalDisabled = false;
 
                             const approveBtn = (
                                 <Button 

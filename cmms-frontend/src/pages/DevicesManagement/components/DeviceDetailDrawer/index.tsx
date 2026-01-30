@@ -135,8 +135,12 @@ export default function DeviceDetailDrawer({
       HUY_BO: "Huỷ bỏ",
   };
 
-  // Helper for displaying values
-  const display = (val: any) => (val === 0 ? 0 : val || "NIL");
+  // Helper for displaying values with newline preservation
+  const display = (val: any) => {
+      if (val === 0) return 0;
+      if (!val) return "NIL";
+      return <span style={{ whiteSpace: 'pre-wrap' }}>{val}</span>;
+  };
 
   // --- Tab 1: Lý lịch (Profile) ---
   const renderProfile = () => (
@@ -147,6 +151,7 @@ export default function DeviceDetailDrawer({
                     <Descriptions.Item label="Tên thiết bị">{display(device.name)}</Descriptions.Item>
                     <Descriptions.Item label="Mã thiết bị">{display(device.device_code)}</Descriptions.Item>
                     <Descriptions.Item label="Biển số">{display(device.reg_number)}</Descriptions.Item>
+                    <Descriptions.Item label="Loại thiết bị">{display(device.deviceType?.name)}</Descriptions.Item>
                     <Descriptions.Item label="Nhãn hiệu">{display(device.brand)}</Descriptions.Item>
                     <Descriptions.Item label="Số máy">{display(device.serial_number)}</Descriptions.Item>
                     <Descriptions.Item label="Nước sản xuất">{display(device.country_of_origin)}</Descriptions.Item>
@@ -159,6 +164,8 @@ export default function DeviceDetailDrawer({
                         <Tag color="cyan">{STATUS_LABELS[device.status] || device.status}</Tag>
                     </Descriptions.Item>
                     <Descriptions.Item label="Đơn vị sử dụng">{display(device.using_department)}</Descriptions.Item>
+                    <Descriptions.Item label="Xuất xứ khi di dời">{display(device.relocation_origin)}</Descriptions.Item>
+                    <Descriptions.Item label="Năm di dời">{display(device.relocation_year)}</Descriptions.Item>
                 </Descriptions>
             </Card>
 

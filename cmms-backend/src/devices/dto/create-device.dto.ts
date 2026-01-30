@@ -156,5 +156,10 @@ export class CreateDeviceDto {
     @IsOptional()
     @IsNumber()
     groupId?: number;
+
+    @ApiPropertyOptional()
+    @IsOptional()
+    @IsNumber()
+    deviceTypeId?: number;
 }
 

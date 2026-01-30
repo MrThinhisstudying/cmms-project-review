@@ -25,6 +25,7 @@ import { getToken } from "../../utils/auth";
 import DeviceDetailDrawer from "./components/DeviceDetailDrawer";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
 import { getAllDeviceGroups } from "../../apis/deviceGroups";
+import { getAllDeviceTypes, IDeviceType } from "../../apis/device-types";
 
 
 const { Option } = Select;
@@ -39,6 +40,7 @@ const DevicesManagement: React.FC = () => {
   const [searchText, setSearchText] = useState("");
   const [filterStatus, setFilterStatus] = useState<string | undefined>(undefined);
   const [filterGroup, setFilterGroup] = useState<number | undefined>(undefined);
+  const [filterDeviceType, setFilterDeviceType] = useState<number | undefined>(undefined);
   
   // UI State
   const [openForm, setOpenForm] = useState(false);
@@ -46,6 +48,7 @@ const DevicesManagement: React.FC = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailDevice, setDetailDevice] = useState<IDevice | null>(null);
   const [deviceGroups, setDeviceGroups] = useState<DeviceGroup[]>([]);
+  const [deviceTypesList, setDeviceTypesList] = useState<IDeviceType[]>([]);
 
   const userRole = user?.role;
   const userPermissions = user?.permissions || [];
@@ -62,25 +65,29 @@ const DevicesManagement: React.FC = () => {
 
   // Fetch initial data
   useEffect(() => {
-    fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup });
+    fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup, deviceTypeId: filterDeviceType });
     fetchReport(); // Fetch report stats
     
-    // Fetch groups
-    const fetchGroups = async () => {
+    // Fetch groups & types
+    const fetchData = async () => {
         try {
             const token = getToken();
-            const res = await getAllDeviceGroups(token);
+            const [groups, types] = await Promise.all([
+                getAllDeviceGroups(token),
+                getAllDeviceTypes(token)
+            ]);
              // Ensure it returns array
-            setDeviceGroups(Array.isArray(res) ? res : []);
+            setDeviceGroups(Array.isArray(groups) ? groups : []);
+            setDeviceTypesList(Array.isArray(types) ? types : []);
         } catch (e) {
-            console.error("Failed to fetch groups", e);
+            console.error("Failed to fetch filter data", e);
         }
     };
-    fetchGroups();
-  }, [filterStatus, filterGroup, fetchDevices, fetchReport, searchText]); // Trigger when Selects change. Search text handled separately on wrapper or debounce.
+    fetchData();
+  }, [filterStatus, filterGroup, filterDeviceType, fetchDevices, fetchReport, searchText]); // Trigger when Selects change. Search text handled separately on wrapper or debounce.
 
   const handleSearch = () => {
-      fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup });
+      fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup, deviceTypeId: filterDeviceType });
   };
 
   const handleAdd = () => {
@@ -104,7 +111,7 @@ const DevicesManagement: React.FC = () => {
       const token = getToken();
       await deleteDevice(id, token);
       notification.success({ message: "Xoá thành công", title: "Thành công" });
-      fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup });
+      fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup, deviceTypeId: filterDeviceType });
     } catch (error: any) {
        console.error(error);
        notification.error({ message: "Xoá thất bại", title: "Lỗi", description: error?.message });
@@ -122,7 +129,7 @@ const DevicesManagement: React.FC = () => {
             notification.success({ message: "Thêm mới thành công", title: "Thành công" });
         }
         setOpenForm(false);
-        fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup });
+        fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup, deviceTypeId: filterDeviceType });
       } catch (error: any) {
           throw error;
       }
@@ -134,8 +141,33 @@ const DevicesManagement: React.FC = () => {
 
   const handleUpload = async (file: File) => {
        const token = getToken();
-       await uploadDevices(token, file);
-       fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup });
+       try {
+           const res = await uploadDevices(token, file);
+           // res.data contains { imported, skipped, details }
+           const { imported, skipped } = res.data || {};
+           
+           if (skipped && skipped > 0) {
+               notification.warning({
+                   message: "Hoàn tất có cảnh báo",
+                   title: "Cảnh báo",
+                   description: `Đã nhập ${imported} thiết bị. Bỏ qua ${skipped} thiết bị do trùng lặp (Tên + Biển số/Số hiệu).`,
+                   duration: 5
+               });
+           } else {
+               notification.success({
+                   message: "Nhập dữ liệu thành công",
+                   title: "Thành công",
+                   description: `Đã nhập thành công ${imported} thiết bị.`,
+               });
+           }
+           fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup, deviceTypeId: filterDeviceType });
+       } catch (error: any) {
+           notification.error({
+               message: "Lỗi nhập dữ liệu",
+               title: "Thất bại",
+               description: error.message || "Đã có lỗi xảy ra khi xử lý file.",
+           });
+       }
   };
 
   return (
@@ -233,6 +265,16 @@ const DevicesManagement: React.FC = () => {
                      >
                          {deviceGroups.map((g) => (
                              <Option key={g.id} value={g.id}>{g.name}</Option>
+                         ))}
+                     </Select>
+                     <Select
+                        placeholder="Loại thiết bị"
+                        allowClear
+                        style={{ width: '100%', maxWidth: 200 }}
+                        onChange={setFilterDeviceType}
+                     >
+                         {deviceTypesList.map((t) => (
+                             <Option key={t.id} value={t.id}>{t.name}</Option>
                          ))}
                      </Select>
                      <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>

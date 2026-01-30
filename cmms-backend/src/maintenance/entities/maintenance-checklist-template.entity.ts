@@ -12,6 +12,12 @@ export class MaintenanceChecklistTemplate {
     @Column({nullable: true})
     device_type: string;
 
+    @Column({nullable: true})
+    release_no?: string; // Lần ban hành
+
+    @Column({nullable: true})
+    revision_no?: string; // Lần sửa đổi
+
     @Column({type: 'jsonb'})
     checklist_structure: any; // Chứa dữ liệu Excel
 
