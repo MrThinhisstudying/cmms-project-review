@@ -300,47 +300,6 @@ const Dashboard = () => {
         {/* Right Column - Widgets */}
         <Col span={7}>
           <Space direction="vertical" style={{ width: '100%' }} size={24}>
-             {/* Widget 1: Quick Actions */}
-             <Card title="Trung tâm điều hành" variant="borderless" style={{ borderRadius: 8 }}>
-                <Button 
-                   type="primary" 
-                   block 
-                   icon={<PlusOutlined />} 
-                   size="large" 
-                   style={{ marginBottom: 16, height: 48, fontSize: 16 }}
-                   onClick={() => navigate('/quan_ly_sua_chua')} // Ideally open create modal
-                >
-                  Tạo phiếu sửa chữa
-                </Button>
-                
-                <Row gutter={[12, 12]}>
-                   <Col span={12}>
-                      <Button block style={{ height: 80, flexDirection: 'column' }} onClick={() => navigate('/lay_vat_tu')}>
-                         <ExportOutlined style={{ fontSize: 20, marginBottom: 8, color: '#1890ff' }} />
-                         <span>Xuất kho</span>
-                      </Button>
-                   </Col>
-                   <Col span={12}>
-                       <Button block style={{ height: 80, flexDirection: 'column' }} onClick={() => navigate('/maintenance-procedures')}>
-                         <SearchOutlined style={{ fontSize: 20, marginBottom: 8, color: '#1890ff' }} />
-                         <span>Tra cứu</span>
-                      </Button>
-                   </Col>
-                    <Col span={12}>
-                       <Button block style={{ height: 80, flexDirection: 'column' }} onClick={() => navigate('/quan_ly_bao_duong')}>
-                         <CalendarOutlined style={{ fontSize: 20, marginBottom: 8, color: '#1890ff' }} />
-                         <span>Lịch</span>
-                      </Button>
-                   </Col>
-                    <Col span={12}>
-                       <Button block style={{ height: 80, flexDirection: 'column' }} onClick={() => navigate('/bao_cao_thong_ke')}>
-                         <AppstoreOutlined style={{ fontSize: 20, marginBottom: 8, color: '#1890ff' }} />
-                         <span>Báo cáo</span>
-                      </Button>
-                   </Col>
-                </Row>
-             </Card>
-
              {/* Widget 2: Today Schedule */}
              <Card title="Lịch bảo trì hôm nay" variant="borderless" style={{ borderRadius: 8 }}>
                 {todaySchedule.length === 0 ? (
@@ -356,7 +315,7 @@ const Dashboard = () => {
                              <Text strong>{m.device?.name}</Text>
                              <br/>
                              <Text type="secondary" style={{ fontSize: 12 }}>
-                                {m.level ? `Cấp ${m.level}` : 'Bảo dưỡng'}
+                                {m.level ? `Cấp ${m.level.replace('M', ' tháng')}` : 'Bảo dưỡng'}
                              </Text>
                           </>
                         )

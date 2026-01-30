@@ -271,11 +271,11 @@ const RepairsManagement: React.FC = () => {
   const hasPrev = selectedRepair ? repairs.findIndex((r: IRepair) => r.repair_id === selectedRepair.repair_id) > 0 : false;
   const hasNext = selectedRepair ? repairs.findIndex((r: IRepair) => r.repair_id === selectedRepair.repair_id) < repairs.length - 1 : false;
 
-  const handleExport = async (id: number, type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" | "COMBINED") => {
+  const handleExport = async (id: number, type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" | "COMBINED", options?: { hideNames?: boolean }) => {
     const key = "export_loading"; 
     try {
       message.loading({ content: "Đang tạo file...", key });
-      await exportRepairItem(id, type);
+      await exportRepairItem(id, type, options);
       message.success({ content: "Đã mở xem trước", key, duration: 2 });
     } catch {
       message.error({ content: "Xuất file thất bại", key, duration: 2 });
@@ -434,7 +434,7 @@ const RepairsManagement: React.FC = () => {
                         setSelectedRepair(r);
                         setOpenAcceptance(true);
                     }}
-                    onExport={(r, t) => handleExport(r.repair_id, t)}
+                    onExport={(r, t, opts) => handleExport(r.repair_id, t, opts)}
                     canReview={perms.includes("APPROVE_REPAIR") || role === "ADMIN"}
                     canDelete={perms.includes("DELETE_REPAIR") || role === "ADMIN"}
                     canUpdate={perms.includes("UPDATE_REPAIR") || role === "ADMIN"}

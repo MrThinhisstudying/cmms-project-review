@@ -130,11 +130,11 @@ const styles = `
 `;
 
 // Helper: Signature Block
-const signBlock = (title: string, user?: any, isDirector: boolean = false, showImage: boolean = false) => {
+const signBlock = (title: string, user?: any, isDirector: boolean = false, showImage: boolean = false, hideName: boolean = false) => {
     let signatureHtml = '<div class="signature-placeholder" style="height: 60px;"></div>';
     
-    // Only show signature if user exists, has a signature URL, and showImage is true
-    if (showImage && user && user.signature_url) {
+    // Only show signature if user exists, has a signature URL, and showImage is true, AND not hiding name
+    if (!hideName && showImage && user && user.signature_url) {
         try {
             let src = user.signature_url;
             let filePath = '';
@@ -170,11 +170,13 @@ const signBlock = (title: string, user?: any, isDirector: boolean = false, showI
         }
     }
 
+    const displayName = hideName ? '' : cleanText(user?.name);
+
     return `
         <div class="sign-block" style="margin-bottom: 20px;">
             <div class="sign-title ${isDirector ? 'director-sign-space' : ''}">${title}</div>
             ${signatureHtml}
-            <div class="bold" style="white-space: nowrap; margin-top: 5px;">${cleanText(user?.name)}</div>
+            <div class="bold" style="white-space: nowrap; margin-top: 5px;">${displayName}</div>
         </div>
     `;
 };
@@ -215,7 +217,7 @@ const getFormattedDate = (date: Date | string | null | undefined, fallbackToToda
 // ----------------------------------------------------
 // B03 GENERATOR
 // ----------------------------------------------------
-const generateB03 = (repair: Repair, embedFooter: boolean = false, pageIndex: number = 1, totalPages: number = 1, showSignature: boolean = false) => {
+const generateB03 = (repair: Repair, embedFooter: boolean = false, pageIndex: number = 1, totalPages: number = 1, showSignature: boolean = false, hideName: boolean = false) => {
     const d = getFormattedDate(repair.created_at, true); // Fallback to today if missing (required for new requests)
     
     const header = `
@@ -267,14 +269,14 @@ const generateB03 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
 
         <table class="sign-table">
             <tr>
-                <td width="33%">${signBlock('TỔ KỸ THUẬT', repair.approved_by_tech_request, false, showSignature)}</td>
-                <td width="33%">${signBlock('TỔ VHTTBMĐ', repair.created_by, false, showSignature)}</td>
-                <td width="33%">${signBlock('CÁN BỘ ĐỘI', repair.approved_by_manager_request, false, showSignature)}</td>
+                <td width="33%">${signBlock('TỔ KỸ THUẬT', repair.approved_by_tech_request, false, showSignature, hideName)}</td>
+                <td width="33%">${signBlock('TỔ VHTTBMĐ', repair.created_by, false, showSignature, hideName)}</td>
+                <td width="33%">${signBlock('CÁN BỘ ĐỘI', repair.approved_by_manager_request, false, showSignature, hideName)}</td>
             </tr>
             <tr>
                 <td colspan="3" style="padding-top: 30px;">
                     <div style="width: 40%; margin: 0 auto;">
-                        ${signBlock('BAN GIÁM ĐỐC', repair.approved_by_admin_request || repair.approved_by_manager_request, true, showSignature)}
+                        ${signBlock('BAN GIÁM ĐỐC', repair.approved_by_admin_request || repair.approved_by_manager_request, true, showSignature, hideName)}
                     </div>
                 </td>
             </tr>
@@ -287,7 +289,7 @@ const generateB03 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
 // ----------------------------------------------------
 // B04 GENERATOR
 // ----------------------------------------------------
-const generateB04 = (repair: Repair, embedFooter: boolean = false, pageIndex: number = 1, totalPages: number = 1, showSignature: boolean = false) => {
+const generateB04 = (repair: Repair, embedFooter: boolean = false, pageIndex: number = 1, totalPages: number = 1, showSignature: boolean = false, hideName: boolean = false) => {
     // For B04, if no inspection date, leave blank (dots) unless user wants otherwise. 
     // Assuming "Căn cứ vào thông tin phiếu" means if data exists, fill it.
     const d = getFormattedDate(repair.inspection_created_at || repair.created_at, true); 
@@ -405,12 +407,12 @@ const generateB04 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
 
         <table class="sign-table">
             <tr>
-                <td width="33%">${signBlock('TỔ KỸ THUẬT', repair.inspection_created_by, false, showSignature)}</td>
-                <td width="33%">${signBlock('TỔ VHTTBMĐ', repair.approved_by_operator_lead_inspection, false, showSignature)}</td>
-                <td width="33%">${signBlock('CÁN BỘ ĐỘI', repair.approved_by_manager_inspection, false, showSignature)}</td>
+                <td width="33%">${signBlock('TỔ KỸ THUẬT', repair.inspection_created_by, false, showSignature, hideName)}</td>
+                <td width="33%">${signBlock('TỔ VHTTBMĐ', repair.approved_by_operator_lead_inspection, false, showSignature, hideName)}</td>
+                <td width="33%">${signBlock('CÁN BỘ ĐỘI', repair.approved_by_manager_inspection, false, showSignature, hideName)}</td>
             </tr>
             <tr>
-                <td colspan="3" style="padding-top: 30px;">${signBlock('BAN GIÁM ĐỐC', repair.approved_by_admin_inspection || repair.approved_by_manager_inspection, true, showSignature)}</td>
+                <td colspan="3" style="padding-top: 30px;">${signBlock('BAN GIÁM ĐỐC', repair.approved_by_admin_inspection || repair.approved_by_manager_inspection, true, showSignature, hideName)}</td>
             </tr>
         </table>
         ${footer}
@@ -421,7 +423,7 @@ const generateB04 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
 // ----------------------------------------------------
 // B05 GENERATOR
 // ----------------------------------------------------
-const generateB05 = (repair: Repair, embedFooter: boolean = false, pageIndex: number = 1, totalPages: number = 1, showSignature: boolean = false) => {
+const generateB05 = (repair: Repair, embedFooter: boolean = false, pageIndex: number = 1, totalPages: number = 1, showSignature: boolean = false, hideName: boolean = false) => {
     const d = getFormattedDate(repair.acceptance_created_at || repair.inspection_created_at || repair.created_at, true);
     
     // For "3. Thời gian nghiệm thu"
@@ -601,14 +603,14 @@ const generateB05 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
 
         <table class="sign-table">
             <tr>
-                <td width="33%">${signBlock('TỔ KỸ THUẬT', repair.acceptance_created_by || repair.inspection_created_by, false, showSignature)}</td>
-                <td width="33%">${signBlock('TỔ VHTTBMĐ', repair.approved_by_operator_lead_acceptance, false, showSignature)}</td>
-                <td width="33%">${signBlock('CÁN BỘ ĐỘI', repair.approved_by_manager_acceptance, false, showSignature)}</td>
+                <td width="33%">${signBlock('TỔ KỸ THUẬT', repair.acceptance_created_by || repair.inspection_created_by, false, showSignature, hideName)}</td>
+                <td width="33%">${signBlock('TỔ VHTTBMĐ', repair.approved_by_operator_lead_acceptance, false, showSignature, hideName)}</td>
+                <td width="33%">${signBlock('CÁN BỘ ĐỘI', repair.approved_by_manager_acceptance, false, showSignature, hideName)}</td>
             </tr>
             <tr>
                 <td colspan="3" style="padding-top: 30px;">
                     <div style="width: 40%; margin: 0 auto;">
-                        ${signBlock('BAN GIÁM ĐỐC', repair.approved_by_admin_acceptance, true, showSignature)}
+                        ${signBlock('BAN GIÁM ĐỐC', repair.approved_by_admin_acceptance, true, showSignature, hideName)}
                     </div>
                 </td>
             </tr>
@@ -618,21 +620,21 @@ const generateB05 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
 };
 
 
-export const buildRepairPdfTemplate = (repair: Repair, type: 'B03' | 'B04' | 'B05' | 'COMBINED', embedFooter: boolean = false, forceShowSignature: boolean = false) => {
+export const buildRepairPdfTemplate = (repair: Repair, type: 'B03' | 'B04' | 'B05' | 'COMBINED', embedFooter: boolean = false, forceShowSignature: boolean = false, hideName: boolean = false) => {
     let content = '';
     const showSignature = type === 'COMBINED' || forceShowSignature;
 
     if (type === 'B03') {
-        content = `<div class="page">${generateB03(repair, embedFooter, 1, 1, showSignature)}</div>`;
+        content = `<div class="page">${generateB03(repair, embedFooter, 1, 1, showSignature, hideName)}</div>`;
     } else if (type === 'B04') {
-        content = `<div class="page">${generateB04(repair, embedFooter, 1, 1, showSignature)}</div>`;
+        content = `<div class="page">${generateB04(repair, embedFooter, 1, 1, showSignature, hideName)}</div>`;
     } else if (type === 'B05') {
-        content = `<div class="page">${generateB05(repair, embedFooter, 1, 1, showSignature)}</div>`;
+        content = `<div class="page">${generateB05(repair, embedFooter, 1, 1, showSignature, hideName)}</div>`;
     } else if (type === 'COMBINED') {
         content = `
-            <div class="page">${generateB03(repair, embedFooter, 1, 3, showSignature)}</div>
-            <div class="page">${generateB04(repair, embedFooter, 2, 3, showSignature)}</div>
-            <div class="page">${generateB05(repair, embedFooter, 3, 3, showSignature)}</div>
+            <div class="page">${generateB03(repair, embedFooter, 1, 3, showSignature, hideName)}</div>
+            <div class="page">${generateB04(repair, embedFooter, 2, 3, showSignature, hideName)}</div>
+            <div class="page">${generateB05(repair, embedFooter, 3, 3, showSignature, hideName)}</div>
         `;
     }
 

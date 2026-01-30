@@ -159,7 +159,8 @@ export const submitAcceptance = async (
 export const exportRepair = async (
   id: number,
   token: string | null,
-  type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" | "COMBINED" = "request"
+  type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" | "COMBINED" = "request",
+  options?: { hideNames?: boolean }
 ) => {
   const typeMap: Record<string, string> = {
     request: "B03",
@@ -170,6 +171,9 @@ export const exportRepair = async (
   const code = typeMap[type] || type;
   // GET /repairs/:id/export?type=...
   let url = `${BASE_URL}/${id}/export?type=${code}`;
+  if (options?.hideNames) {
+     url += `&hideNames=true`;
+  }
   
   const res = await fetch(url, {
     headers: { Authorization: token ? `Bearer ${token}` : "" },

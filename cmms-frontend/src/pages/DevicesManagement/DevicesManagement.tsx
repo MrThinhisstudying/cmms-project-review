@@ -55,13 +55,12 @@ const DevicesManagement: React.FC = () => {
 
   const canEdit =
     userRole === "ADMIN" || userRole === "admin" ||
-    (userRole === "manager" &&
-      (userPermissions.includes("ADD_DEVICE") ||
-        userPermissions.includes("UPDATE_DEVICE")));
+    userPermissions.includes("ADD_DEVICE") ||
+    userPermissions.includes("UPDATE_DEVICE");
 
   const canDelete =
     userRole === "ADMIN" || userRole === "admin" ||
-    (userRole === "manager" && userPermissions.includes("DELETE_DEVICE"));
+    userPermissions.includes("DELETE_DEVICE");
 
   // Fetch initial data
   useEffect(() => {

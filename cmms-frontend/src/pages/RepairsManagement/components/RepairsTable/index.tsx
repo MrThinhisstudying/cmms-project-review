@@ -12,6 +12,7 @@ import {
   PrinterOutlined,
   DownOutlined,
   FilePdfOutlined,
+  ThunderboltOutlined,
 } from "@ant-design/icons";
 import { getToken } from "../../../../utils/auth";
 import type { MenuProps } from 'antd';
@@ -34,7 +35,8 @@ interface RepairsTableProps {
   onDelete?: (id: number) => void;
   onExport?: (
     item: IRepair,
-    type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" | "COMBINED"
+    type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" | "COMBINED",
+    options?: { hideNames?: boolean }
   ) => void;
   canUpdate?: boolean;
   canReview?: boolean;
@@ -365,6 +367,7 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
                  </Tooltip>
             )}
 
+              {/* Dropdown In phiếu (Giữ nguyên logic cũ) */}
              {(() => {
                  const items: MenuProps['items'] = [];
                  
@@ -394,6 +397,70 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
                  );
              })()}
 
+             {/* Nút In gấp (Chỉ hiển thị khi CHƯA hoàn thành) */}
+             {(() => {
+                 if (isCompleted || record.canceled) return null;
+
+                 const urgentItems: MenuProps['items'] = [];
+                 
+                 // B03 Always available
+                 urgentItems.push({ 
+                     key: 'B03_Urgent', 
+                     label: 'B03 (Gấp - Không tên)', 
+                     onClick: () => onExport?.(record, 'B03', { hideNames: true }) 
+                 });
+
+                 // Check B04
+                 if (record.inspection_created_at || (record.inspection_items && record.inspection_items.length > 0)) {
+                      urgentItems.push({ 
+                         key: 'B04_Urgent', 
+                         label: 'B04 (Gấp - Không tên)', 
+                         onClick: () => onExport?.(record, 'B04', { hideNames: true }) 
+                     });
+                 }
+
+                 // Check B05
+                 if (record.acceptance_created_at) {
+                      urgentItems.push({ 
+                         key: 'B05_Urgent', 
+                         label: 'B05 (Gấp - Không tên)', 
+                         onClick: () => onExport?.(record, 'B05', { hideNames: true }) 
+                     });
+                 }
+
+                 if (urgentItems.length === 0) return null;
+
+                 if (urgentItems.length === 1) {
+                     const item = urgentItems[0] as any;
+                     return (
+                         <Tooltip title={item.label}>
+                             <Button 
+                                icon={<ThunderboltOutlined />} 
+                                style={{ color: '#faad14', borderColor: '#faad14' }} 
+                                size="small"
+                                onClick={item.onClick} 
+                             >
+                                In gấp
+                             </Button>
+                         </Tooltip>
+                     );
+                 }
+
+                 return (
+                     <Dropdown menu={{ items: urgentItems }} trigger={['click']}>
+                         <Tooltip title="In gấp (Ẩn tên)">
+                             <Button 
+                                icon={<ThunderboltOutlined />} 
+                                style={{ color: '#faad14', borderColor: '#faad14' }} 
+                                size="small"
+                             >
+                                In gấp <DownOutlined />
+                             </Button>
+                         </Tooltip>
+                     </Dropdown>
+                 );
+             })()}
+
              {showDelete && (
                 <Popconfirm title="Bạn có chắc chắn muốn xóa phiếu này?" onConfirm={() => onDelete?.(record.repair_id)}>
                     <Button icon={<DeleteOutlined />} size="small" danger />
@@ -413,6 +480,11 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
         rowKey="repair_id"
         scroll={{ x: 'max-content' }}
         pagination={{ pageSize: 10 }}
+        locale={{
+          triggerDesc: 'Nhấn để sắp xếp giảm dần',
+          triggerAsc: 'Nhấn để sắp xếp tăng dần',
+          cancelSort: 'Nhấn để hủy sắp xếp'
+        }}
       />
     </>
   );

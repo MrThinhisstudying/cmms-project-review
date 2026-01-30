@@ -96,6 +96,14 @@ export const protectedRoutes = (userRole: string) => {
           { path: "/quan_ly_bao_duong/*", element: <MaintenanceManagement /> },
           { path: "/quy_trinh_bao_duong/*", element: <MaintenanceTasksPage /> },
           { path: "/quan_ly_vat_tu/*", element: <InventoryManagementPage /> },
+          {
+            path: "/maintenance-procedures/*",
+            element: <MaintenanceProcedurePage />,
+          },
+          {
+            path: "/maintenance-history/*",
+            element: <MaintenanceHistoryPage />,
+          },
           { path: "*", element: <Navigate to="trang_chu" /> },
         ],
       },

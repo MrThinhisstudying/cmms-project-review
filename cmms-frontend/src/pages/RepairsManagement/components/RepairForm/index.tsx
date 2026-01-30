@@ -11,6 +11,7 @@ import {
 import { IRepair, RepairUpsertPayload } from "../../../../types/repairs.types";
 import { useDevicesContext } from "../../../../context/DevicesContext/DevicesContext";
 import { useAuthContext } from "../../../../context/AuthContext/AuthContext";
+import { useRepairsContext } from "../../../../context/RepairsContext/RepairsContext";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -60,6 +61,36 @@ const RepairForm: React.FC<RepairFormProps> = ({
     }
   };
 
+  const { repairs } = useRepairsContext();
+  const [busyDeviceIds, setBusyDeviceIds] = React.useState<number[]>([]);
+
+  useEffect(() => {
+    // Identify devices currently in an active repair process
+    if (!repairs) return;
+    
+    const busy = repairs
+      .filter((r: IRepair) => {
+          if (r.canceled) return false;
+          if (r.status_request === 'REJECTED' || r.status_request === 'REJECTED_B03') return false;
+          if (r.status_acceptance === 'acceptance_admin_approved') return false;
+          return true;
+      })
+      .map((r: IRepair) => r.device?.device_id)
+      .filter((id): id is number => typeof id === 'number');
+      
+    // Remove duplicates
+    setBusyDeviceIds(Array.from(new Set(busy)));
+  }, [repairs]);
+
+  const filteredDevices = devices.filter(d => {
+      // If editing, always allow the current device of this ticket
+      if (initialData && initialData.device.device_id === d.device_id) return true;
+      
+      // Otherwise, exclude if busy
+      return !busyDeviceIds.includes(d.device_id);
+  });
+
+  // Watch device_id to show details
   const selectedDeviceId = Form.useWatch("device_id", form);
   const selectedDevice = devices.find((d) => d.device_id === selectedDeviceId);
 
@@ -102,28 +133,28 @@ const RepairForm: React.FC<RepairFormProps> = ({
             filterOption={(input, option) =>
               (String(option?.label ?? "")).toLowerCase().includes(input.toLowerCase())
             }
-            options={devices.map((d) => ({
+            options={filteredDevices.map((d) => ({
               value: d.device_id,
               label: `${d.name} (${d.reg_number || 'N/A'}) - ${d.brand || 'N/A'}`,
             }))}
             onChange={() => {
-                // Force re-render descriptions below
+                // Force re-render descriptions via useWatch
             }}
           />
         </Form.Item>
 
         {selectedDevice && (
-          <Descriptions bordered size="small" column={1} style={{ marginBottom: 24 }}>
-            <Descriptions.Item label="Tên thiết bị">
-              {selectedDevice.name}
-            </Descriptions.Item>
-            <Descriptions.Item label="Số đăng ký">
-              {selectedDevice.reg_number} - {selectedDevice.brand}
-            </Descriptions.Item>
-            <Descriptions.Item label="Đơn vị quản lý tài sản">
-               {selectedDevice.using_department || "Đội Kỹ Thuật"}
-            </Descriptions.Item>
-          </Descriptions>
+           <Descriptions bordered size="small" column={1} style={{ marginBottom: 24 }}>
+             <Descriptions.Item label="Tên thiết bị">
+               {selectedDevice.name}
+             </Descriptions.Item>
+             <Descriptions.Item label="Số đăng ký">
+               {selectedDevice.reg_number} - {selectedDevice.brand}
+             </Descriptions.Item>
+             <Descriptions.Item label="Đơn vị quản lý tài sản">
+                {selectedDevice.using_department || "Đội Kỹ Thuật"}
+             </Descriptions.Item>
+           </Descriptions>
         )}
 
         {/* SECTION 2: FAULT DESCRIPTION */}

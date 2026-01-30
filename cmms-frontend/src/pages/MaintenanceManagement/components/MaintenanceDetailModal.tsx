@@ -62,7 +62,7 @@ const MaintenanceDetailModal: React.FC<Props> = ({
       styles={{ body: { padding: 24 } }}
     >
       <div style={{ marginBottom: 24 }}>
-          <Title level={4}><ToolOutlined /> Kết hoạch bảo dưỡng chi tiết</Title>
+          <Title level={4}><ToolOutlined /> Kế hoạch bảo dưỡng chi tiết</Title>
           <Text type="secondary">{deviceName}</Text>
       </div>
 

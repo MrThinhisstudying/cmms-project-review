@@ -107,7 +107,7 @@ export const RepairsProvider = ({
     return res;
   };
 
-  const exportRepairItem = async (id: number, type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" | "COMBINED") => {
+  const exportRepairItem = async (id: number, type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" | "COMBINED", options?: { hideNames?: boolean }) => {
     // Map internal phases to B-forms if needed, or pass through
     // API expects: B03, B04, B05, COMBINED
     let exportType: any = type;
@@ -115,7 +115,7 @@ export const RepairsProvider = ({
     if (type === 'inspection') exportType = 'B04';
     if (type === 'acceptance') exportType = 'B05';
     
-    await exportRepair(id, getToken(), exportType);
+    await exportRepair(id, getToken(), exportType, options);
     await fetchData();
   };
 

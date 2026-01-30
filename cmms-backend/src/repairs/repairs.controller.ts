@@ -140,9 +140,11 @@ export class RepairsController {
     async exportRepair(
         @Param('id') id: string,
         @Query('type') type: 'B03' | 'B04' | 'B05' | 'COMBINED',
+        @Query('hideNames') hideNames: string,
         @Res() res: Response
     ) {
-        const buffer = await this.repairService.exportPdf(+id, type);
+        const shouldHideNames = hideNames === 'true';
+        const buffer = await this.repairService.exportPdf(+id, type, shouldHideNames);
 
         const filename = type === 'COMBINED' ? `HoSoSuaChua_${id}.pdf` : `${type}_Repair_${id}.pdf`;
 

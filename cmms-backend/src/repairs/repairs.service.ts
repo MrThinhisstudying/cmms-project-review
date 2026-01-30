@@ -2146,20 +2146,21 @@ export class RepairsService {
         ];
     }
 
-    async exportPdf(id: number, type: 'B03' | 'B04' | 'B05' | 'COMBINED') {
+    async exportPdf(id: number, type: 'B03' | 'B04' | 'B05' | 'COMBINED', hideNames: boolean = false) {
         const repair = await this.findOne(id);
 
         if (type === 'COMBINED') {
             const pdfsToMerge: Uint8Array[] = [];
 
             // Generate each PDF individually to ensure independent page numbering (1/N)
-            const pdfB03 = await this.generateSinglePdf(repair, 'B03', true);
+            // If hideNames is true, propagate it.
+            const pdfB03 = await this.generateSinglePdf(repair, 'B03', true, hideNames);
             pdfsToMerge.push(pdfB03);
 
-            const pdfB04 = await this.generateSinglePdf(repair, 'B04', true);
+            const pdfB04 = await this.generateSinglePdf(repair, 'B04', true, hideNames);
             pdfsToMerge.push(pdfB04);
 
-            const pdfB05 = await this.generateSinglePdf(repair, 'B05', true);
+            const pdfB05 = await this.generateSinglePdf(repair, 'B05', true, hideNames);
             pdfsToMerge.push(pdfB05);
 
             // Merge them
@@ -2173,13 +2174,13 @@ export class RepairsService {
             const buffer = await mergedPdf.save();
             return Buffer.from(buffer);
         } else {
-            return this.generateSinglePdf(repair, type);
+            return this.generateSinglePdf(repair, type, false, hideNames);
         }
     }
 
-    private async generateSinglePdf(repair: Repair, type: 'B03' | 'B04' | 'B05', showSignature: boolean = false) {
+    private async generateSinglePdf(repair: Repair, type: 'B03' | 'B04' | 'B05', showSignature: boolean = false, hideNames: boolean = false) {
         // embedFooter=false so we can use Puppeteer's native footer which supports dynamic page numbers
-        const htmlContent = buildRepairPdfTemplate(repair, type, false, showSignature);
+        const htmlContent = buildRepairPdfTemplate(repair, type, false, showSignature, hideNames);
 
         const browser = await puppeteer.launch({
             headless: true,
