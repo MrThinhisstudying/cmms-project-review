@@ -217,8 +217,11 @@ const getFormattedDate = (date: Date | string | null | undefined, fallbackToToda
 // ----------------------------------------------------
 // B03 GENERATOR
 // ----------------------------------------------------
-const generateB03 = (repair: Repair, embedFooter: boolean = false, pageIndex: number = 1, totalPages: number = 1, showSignature: boolean = false, hideName: boolean = false) => {
+const generateB03 = (repair: Repair, embedFooter: boolean = false, pageIndex: number = 1, totalPages: number = 1, showSignature: boolean = false, hideName: boolean = false, hideDates: boolean = false) => {
     const d = getFormattedDate(repair.created_at, true); // Fallback to today if missing (required for new requests)
+    const dateStr = hideDates
+        ? "ngày ..... tháng ..... năm ......"
+        : `ngày ${d.day} tháng ${d.month} năm ${d.year}`;
     
     const header = `
         <div class="form-code italic">Biểu mẫu: B03.QT08/VCS-KT</div>
@@ -233,7 +236,7 @@ const generateB03 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
                     <div class="bold uppercase" style="white-space: nowrap;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
                     <div class="bold underline">Độc lập – Tự do – Hạnh phúc</div>
                     <div class="italic text-right" style="margin-top: 15px; margin-right: 0;">
-                        Côn Đảo, ngày ${d.day} tháng ${d.month} năm ${d.year}
+                        Côn Đảo, ${dateStr}
                     </div>
                 </td>
             </tr>
@@ -264,7 +267,7 @@ const generateB03 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
         </div>
 
         <div class="text-right italic" style="margin-top: 30px; margin-right: 0;">
-            Côn Đảo, ngày ${d.day} tháng ${d.month} năm ${d.year}
+            Côn Đảo, ${dateStr}
         </div>
 
         <table class="sign-table">
@@ -289,10 +292,13 @@ const generateB03 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
 // ----------------------------------------------------
 // B04 GENERATOR
 // ----------------------------------------------------
-const generateB04 = (repair: Repair, embedFooter: boolean = false, pageIndex: number = 1, totalPages: number = 1, showSignature: boolean = false, hideName: boolean = false) => {
+const generateB04 = (repair: Repair, embedFooter: boolean = false, pageIndex: number = 1, totalPages: number = 1, showSignature: boolean = false, hideName: boolean = false, hideDates: boolean = false) => {
     // For B04, if no inspection date, leave blank (dots) unless user wants otherwise. 
     // Assuming "Căn cứ vào thông tin phiếu" means if data exists, fill it.
-    const d = getFormattedDate(repair.inspection_created_at || repair.created_at, true); 
+    const d = getFormattedDate(repair.inspection_created_at || repair.created_at, true);
+    const dateStr = hideDates
+        ? "ngày ..... tháng ..... năm ......"
+        : `ngày ${d.day} tháng ${d.month} năm ${d.year}`; 
     
     const header = `
         <div class="form-code italic">Biểu mẫu: B04.QT08/VCS-KT</div>
@@ -307,7 +313,7 @@ const generateB04 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
                     <div class="bold uppercase" style="white-space: nowrap;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
                     <div class="bold underline">Độc lập – Tự do – Hạnh phúc</div>
                     <div class="italic text-right" style="margin-top: 15px; margin-right: 0;">
-                        Côn Đảo, ngày ${d.day} tháng ${d.month} năm ${d.year}
+                        Côn Đảo, ${dateStr}
                     </div>
                 </td>
             </tr>
@@ -338,7 +344,7 @@ const generateB04 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
 
     // Calculate inspection time for Section 3 if available
     let inspectionTime = '.....................................................................';
-    if (repair.inspection_created_at) {
+    if (!hideDates && repair.inspection_created_at) {
         inspectionTime = dayjs(repair.inspection_created_at).format('[ngày] DD/MM/YYYY');
     }
 
@@ -402,7 +408,7 @@ const generateB04 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
         </div>
 
         <div class="text-right italic" style="margin-top: 40px; margin-right: 20px;">
-            Côn Đảo, ngày ${d.day} tháng ${d.month} năm ${d.year}
+            Côn Đảo, ${dateStr}
         </div>
 
         <table class="sign-table">
@@ -423,12 +429,16 @@ const generateB04 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
 // ----------------------------------------------------
 // B05 GENERATOR
 // ----------------------------------------------------
-const generateB05 = (repair: Repair, embedFooter: boolean = false, pageIndex: number = 1, totalPages: number = 1, showSignature: boolean = false, hideName: boolean = false) => {
+const generateB05 = (repair: Repair, embedFooter: boolean = false, pageIndex: number = 1, totalPages: number = 1, showSignature: boolean = false, hideName: boolean = false, hideDates: boolean = false) => {
     const d = getFormattedDate(repair.acceptance_created_at || repair.inspection_created_at || repair.created_at, true);
     
+    const dateStr = hideDates
+        ? "ngày ..... tháng ..... năm ......"
+        : `ngày ${d.day} tháng ${d.month} năm ${d.year}`;
+
     // For "3. Thời gian nghiệm thu"
     // Use acceptance_created_at if available, otherwise blank dots
-    const acceptanceTime = repair.acceptance_created_at ? dayjs(repair.acceptance_created_at).format('[ngày] DD/MM/YYYY') : '................................................................';
+    const acceptanceTime = (repair.acceptance_created_at && !hideDates) ? dayjs(repair.acceptance_created_at).format('[ngày] DD/MM/YYYY') : '................................................................';
 
     const header = `
         <div class="form-code italic">Biểu mẫu: B05.QT08/VCS-KT</div>
@@ -443,7 +453,7 @@ const generateB05 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
                     <div class="bold uppercase" style="white-space: nowrap;">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
                     <div class="bold underline">Độc lập – Tự do – Hạnh phúc</div>
                     <div class="italic text-right" style="margin-top: 15px; margin-right: 0;">
-                        Côn Đảo, ngày ${d.day} tháng ${d.month} năm ${d.year}
+                        Côn Đảo, ${dateStr}
                     </div>
                 </td>
             </tr>
@@ -598,7 +608,7 @@ const generateB05 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
 
 
         <div class="text-right italic" style="margin-top: 30px;">
-            Côn Đảo, ngày ${d.day} tháng ${d.month} năm ${d.year}
+            Côn Đảo, ${dateStr}
         </div>
 
         <table class="sign-table">
@@ -620,21 +630,21 @@ const generateB05 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
 };
 
 
-export const buildRepairPdfTemplate = (repair: Repair, type: 'B03' | 'B04' | 'B05' | 'COMBINED', embedFooter: boolean = false, forceShowSignature: boolean = false, hideName: boolean = false) => {
+export const buildRepairPdfTemplate = (repair: Repair, type: 'B03' | 'B04' | 'B05' | 'COMBINED', embedFooter: boolean = false, forceShowSignature: boolean = false, hideName: boolean = false, hideDates: boolean = false) => {
     let content = '';
     const showSignature = type === 'COMBINED' || forceShowSignature;
 
     if (type === 'B03') {
-        content = `<div class="page">${generateB03(repair, embedFooter, 1, 1, showSignature, hideName)}</div>`;
+        content = `<div class="page">${generateB03(repair, embedFooter, 1, 1, showSignature, hideName, hideDates)}</div>`;
     } else if (type === 'B04') {
-        content = `<div class="page">${generateB04(repair, embedFooter, 1, 1, showSignature, hideName)}</div>`;
+        content = `<div class="page">${generateB04(repair, embedFooter, 1, 1, showSignature, hideName, hideDates)}</div>`;
     } else if (type === 'B05') {
-        content = `<div class="page">${generateB05(repair, embedFooter, 1, 1, showSignature, hideName)}</div>`;
+        content = `<div class="page">${generateB05(repair, embedFooter, 1, 1, showSignature, hideName, hideDates)}</div>`;
     } else if (type === 'COMBINED') {
         content = `
-            <div class="page">${generateB03(repair, embedFooter, 1, 3, showSignature, hideName)}</div>
-            <div class="page">${generateB04(repair, embedFooter, 2, 3, showSignature, hideName)}</div>
-            <div class="page">${generateB05(repair, embedFooter, 3, 3, showSignature, hideName)}</div>
+            <div class="page">${generateB03(repair, embedFooter, 1, 3, showSignature, hideName, hideDates)}</div>
+            <div class="page">${generateB04(repair, embedFooter, 2, 3, showSignature, hideName, hideDates)}</div>
+            <div class="page">${generateB05(repair, embedFooter, 3, 3, showSignature, hideName, hideDates)}</div>
         `;
     }
 

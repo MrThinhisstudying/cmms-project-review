@@ -160,7 +160,7 @@ export const exportRepair = async (
   id: number,
   token: string | null,
   type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" | "COMBINED" = "request",
-  options?: { hideNames?: boolean }
+  options?: { hideNames?: boolean; hideDates?: boolean }
 ) => {
   const typeMap: Record<string, string> = {
     request: "B03",
@@ -173,6 +173,9 @@ export const exportRepair = async (
   let url = `${BASE_URL}/${id}/export?type=${code}`;
   if (options?.hideNames) {
      url += `&hideNames=true`;
+  }
+  if (options?.hideDates) {
+     url += `&hideDates=true`;
   }
   
   const res = await fetch(url, {

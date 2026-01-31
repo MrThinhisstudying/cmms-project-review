@@ -141,10 +141,12 @@ export class RepairsController {
         @Param('id') id: string,
         @Query('type') type: 'B03' | 'B04' | 'B05' | 'COMBINED',
         @Query('hideNames') hideNames: string,
+        @Query('hideDates') hideDates: string,
         @Res() res: Response
     ) {
         const shouldHideNames = hideNames === 'true';
-        const buffer = await this.repairService.exportPdf(+id, type, shouldHideNames);
+        const shouldHideDates = hideDates === 'true';
+        const buffer = await this.repairService.exportPdf(+id, type, shouldHideNames, shouldHideDates);
 
         const filename = type === 'COMBINED' ? `HoSoSuaChua_${id}.pdf` : `${type}_Repair_${id}.pdf`;
 

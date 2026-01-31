@@ -36,7 +36,7 @@ interface RepairsTableProps {
   onExport?: (
     item: IRepair,
     type: "request" | "inspection" | "acceptance" | "B03" | "B04" | "B05" | "COMBINED",
-    options?: { hideNames?: boolean }
+    options?: { hideNames?: boolean; hideDates?: boolean }
   ) => void;
   canUpdate?: boolean;
   canReview?: boolean;
@@ -367,30 +367,30 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
                  </Tooltip>
             )}
 
-              {/* Dropdown In phiếu (Giữ nguyên logic cũ) */}
+              {/* Dropdown In phiếu (Modified as requested) */}
              {(() => {
                  const items: MenuProps['items'] = [];
                  
-                 // B03: Show only if Request is COMPLETED (fully approved)
+                 // Enable B03 if Request is COMPLETED
                  if (record.status_request === 'COMPLETED') {
-                     items.push({ key: 'B03', label: 'B03: Phiếu Yêu Cầu', onClick: () => onExport?.(record, 'B03') });
+                     items.push({ key: 'B03', label: 'B03: Phiếu Yêu Cầu', onClick: () => onExport?.(record, 'B03', { hideDates: true }) });
                  }
 
-                 // B04: Show only if Inspection is Admin Approved
+                 // Enable B04 if Inspection is Admin Approved
                  if (record.status_inspection === 'inspection_admin_approved') {
-                     items.push({ key: 'B04', label: 'B04: Phiếu Kiểm Nghiệm', onClick: () => onExport?.(record, 'B04') });
+                     items.push({ key: 'B04', label: 'B04: Phiếu Kiểm Nghiệm', onClick: () => onExport?.(record, 'B04', { hideDates: true }) });
                  }
 
-                 // B05: Show only if Acceptance is Admin Approved
+                 // Enable B05 if Acceptance is Admin Approved
                  if (record.status_acceptance === 'acceptance_admin_approved') {
-                     items.push({ key: 'B05', label: 'B05: Phiếu Nghiệm Thu', onClick: () => onExport?.(record, 'B05') });
+                     items.push({ key: 'B05', label: 'B05: Phiếu Nghiệm Thu', onClick: () => onExport?.(record, 'B05', { hideDates: true }) });
                  }
 
                  if (items.length === 0) return null;
 
                  return (
                   <Dropdown menu={{ items }} trigger={['click']}>
-                       <Button icon={<PrinterOutlined />}>
+                       <Button icon={<PrinterOutlined />} style={{ color: '#1890ff', borderColor: '#1890ff' }}>
                           In phiếu <DownOutlined />
                        </Button>
                    </Dropdown>
@@ -407,7 +407,7 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
                  urgentItems.push({ 
                      key: 'B03_Urgent', 
                      label: 'B03 (Gấp - Không tên)', 
-                     onClick: () => onExport?.(record, 'B03', { hideNames: true }) 
+                     onClick: () => onExport?.(record, 'B03', { hideNames: true, hideDates: true }) 
                  });
 
                  // Check B04
@@ -415,7 +415,7 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
                       urgentItems.push({ 
                          key: 'B04_Urgent', 
                          label: 'B04 (Gấp - Không tên)', 
-                         onClick: () => onExport?.(record, 'B04', { hideNames: true }) 
+                         onClick: () => onExport?.(record, 'B04', { hideNames: true, hideDates: true }) 
                      });
                  }
 
@@ -424,7 +424,7 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
                       urgentItems.push({ 
                          key: 'B05_Urgent', 
                          label: 'B05 (Gấp - Không tên)', 
-                         onClick: () => onExport?.(record, 'B05', { hideNames: true }) 
+                         onClick: () => onExport?.(record, 'B05', { hideNames: true, hideDates: true }) 
                      });
                  }
 
