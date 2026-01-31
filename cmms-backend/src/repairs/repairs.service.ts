@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, InternalServerErrorException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Brackets, In } from 'typeorm';
 import { Repair } from './entities/repair.entity';
@@ -2179,22 +2179,24 @@ export class RepairsService {
     }
 
     private async generateSinglePdf(repair: Repair, type: 'B03' | 'B04' | 'B05', showSignature: boolean = false, hideNames: boolean = false) {
-        // embedFooter=false so we can use Puppeteer's native footer which supports dynamic page numbers
-        const htmlContent = buildRepairPdfTemplate(repair, type, false, showSignature, hideNames);
+        try {
+            // embedFooter=false so we can use Puppeteer's native footer which supports dynamic page numbers
+            const htmlContent = buildRepairPdfTemplate(repair, type, false, showSignature, hideNames);
 
-        const browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        });
+            const browser = await puppeteer.launch({
+                headless: true,
+                args: ['--no-sandbox', '--disable-setuid-sandbox'],
+                executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined, 
+            });
 
-        const page = await browser.newPage();
-        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+            const page = await browser.newPage();
+            await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
-        const formCode = type === 'B03' ? 'B03.QT08/VCS-KT' :
-            type === 'B04' ? 'B04.QT08/VCS-KT' :
-                type === 'B05' ? 'B05.QT08/VCS-KT' : '';
+            const formCode = type === 'B03' ? 'B03.QT08/VCS-KT' :
+                type === 'B04' ? 'B04.QT08/VCS-KT' :
+                    type === 'B05' ? 'B05.QT08/VCS-KT' : '';
 
-        const footerHTML = `
+            const footerHTML = `
             <div style="font-size: 10pt; font-family: 'Times New Roman', serif; width: 100%; border-top: 1px solid black; padding-top: 5px; margin-left: 2cm; margin-right: 2cm; display: flex; justify-content: space-between;">
                 <div style="font-style: italic;">${formCode}</div>
                 <div style="font-style: italic;">Lần ban hành/sửa đổi: 01/00</div>
@@ -2204,21 +2206,25 @@ export class RepairsService {
             </div>
         `;
 
-        const buffer = await page.pdf({
-            format: 'A4',
-            printBackground: true,
-            displayHeaderFooter: true,
-            footerTemplate: footerHTML,
-            headerTemplate: '<div style="font-size:10px; width:100%; text-align:center;"></div>',
-            margin: {
-                top: '20px',
-                bottom: '50px',
-                left: '20px',
-                right: '20px',
-            },
-        });
+            const buffer = await page.pdf({
+                format: 'A4',
+                printBackground: true,
+                displayHeaderFooter: true,
+                footerTemplate: footerHTML,
+                headerTemplate: '<div style="font-size:10px; width:100%; text-align:center;"></div>',
+                margin: {
+                    top: '20px',
+                    bottom: '50px',
+                    left: '20px',
+                    right: '20px',
+                },
+            });
 
-        await browser.close();
-        return buffer;
+            await browser.close();
+            return buffer;
+        } catch (error: any) {
+            console.error(`Error generating PDF (${type}) for Repair #${repair.repair_id}:`, error);
+            throw new InternalServerErrorException(`Lỗi khi tạo file PDF (${type}): ${error?.message || error}`);
+        }
     }
 }
