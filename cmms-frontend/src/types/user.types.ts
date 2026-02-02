@@ -66,4 +66,6 @@ export interface IDepartment {
   scope?: 'PERSONAL' | 'GROUP' | 'DEPARTMENT' | 'ALL';
   created_at?: string;
   updated_at?: string;
+  parent_id?: number;
+  parent?: IDepartment;
 }

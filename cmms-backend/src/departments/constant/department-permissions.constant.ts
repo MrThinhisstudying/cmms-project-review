@@ -30,6 +30,11 @@ export const DEPARTMENT_PERMISSIONS = [
         description: 'Cho phép lập phiếu yêu cầu sửa chữa khi thiết bị hư hỏng, gặp sự cố hoặc cần thay thế linh kiện.',
     },
     {
+        code: 'VIEW_REPAIR',
+        name: 'Được xem danh sách phiếu sửa chữa',
+        description: 'Cho phép xem danh sách và chi tiết các phiếu sửa chữa của đơn vị.',
+    },
+    {
         code: 'UPDATE_REPAIR',
         name: 'Được chỉnh sửa phiếu sửa chữa',
         description: 'Cho phép cập nhật, bổ sung hoặc chỉnh sửa thông tin phiếu sửa chữa trước khi được duyệt.',

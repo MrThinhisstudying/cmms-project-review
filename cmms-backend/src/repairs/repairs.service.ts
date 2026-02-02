@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Brackets, In } from 'typeorm';
 import { Repair } from './entities/repair.entity';
 import { Device } from 'src/devices/entities/device.entity';
+import { Department } from 'src/departments/department.entity';
 import { User } from 'src/user/user.entity';
 import { CreateRepairDto } from './dto/create-repair.dto';
 import { ReviewRepairDto } from './dto/review-repair.dto';
@@ -31,6 +32,7 @@ export class RepairsService {
         @InjectRepository(StockOut) private readonly stockOutRepo: Repository<StockOut>,
         @InjectRepository(Item) private readonly itemRepo: Repository<Item>,
         @InjectRepository(UserDeviceGroup) private readonly userDeviceGroupRepo: Repository<UserDeviceGroup>,
+        @InjectRepository(Department) private readonly departmentRepo: Repository<Department>,
         private readonly notificationService: NotificationService,
         private readonly repairsGateway: RepairsGateway,
     ) { }
@@ -364,6 +366,8 @@ export class RepairsService {
 
             if (dto.action === 'approve') {
                 if (repair.status_request === 'WAITING_TECH') {
+                    if (user.role === UserRole.UNIT_HEAD) throw new ForbiddenException('Lãnh đạo Đội không được phép duyệt ở bước Tiếp nhận kỹ thuật. Vui lòng chờ nhân viên kỹ thuật.');
+
                     // Tech approvals (Normally specific Permission check here)
                     repair.status_request = 'WAITING_MANAGER';
                     repair.approved_by_tech_request = user; 
@@ -680,31 +684,60 @@ export class RepairsService {
             .leftJoinAndSelect('repair.rejected_by', 'rejected_by')
             .orderBy('repair.created_at', 'DESC');
 
-        if (user) {
-            if (user.role === UserRole.OPERATOR) {
-                 // Explicitly fetch user's groups to ensure strict filtering
-                 const userGroups = await this.userDeviceGroupRepo.find({ 
-                     where: { user_id: user.user_id },
-                     select: ['group_id']
-                 });
-                 
-                 const groupIds = userGroups.map(ug => ug.group_id);
-                 
-                 if (groupIds.length === 0) {
-                     // User has no groups -> See NOTHING
-                     return [];
-                 }
-                 
-                 // Filter by group IDs
-                 query.andWhere('device.group_id IN (:...groupIds)', { groupIds });
 
-            } else if (user.role === UserRole.UNIT_HEAD) {
-                 // Manager sees tickets from their department
-                 if (user.department) {
-                     query.andWhere('created_department.dept_id = :deptId', { deptId: user.department.dept_id });
-                 }
+        
+        // --- PRE-FETCH HIERARCHY FOR UNIT_HEAD ---
+        let permittedDeptIds: number[] = [];
+        let isUnitHeadFilter = false;
+
+        if (user && user.role === UserRole.UNIT_HEAD) {
+            isUnitHeadFilter = true;
+            // 1. Fetch user's department with children
+            if (user.department) {
+                const userDept = await this.departmentRepo.findOne({
+                     where: { dept_id: user.department.dept_id },
+                     relations: ['children'] // Load direct children
+                });
+                if (userDept) {
+                    permittedDeptIds.push(userDept.dept_id);
+                    if (userDept.children) {
+                        permittedDeptIds.push(...userDept.children.map(c => c.dept_id));
+                    }
+                }
             }
-            // Admin/Director sees all (no extra filter)
+
+            // 2. Fetch departments where user is Manager
+            const managedDepts = await this.departmentRepo.find({ 
+                where: { manager_id: user.user_id },
+                relations: ['children'] // Also load children of managed departments
+            });
+            
+            managedDepts.forEach(d => {
+                permittedDeptIds.push(d.dept_id);
+                if (d.children) {
+                    permittedDeptIds.push(...d.children.map(c => c.dept_id));
+                }
+            });
+        }
+        
+        // Apply Filters
+        if (isUnitHeadFilter) {
+             if (permittedDeptIds.length > 0) {
+                 query.andWhere('created_department.dept_id IN (:...permittedDeptIds)', { permittedDeptIds });
+             } else {
+                 // Fallback if no department found (shouldn't happen for valid users)
+                 query.andWhere('1=0'); 
+             }
+        } else if (user && user.role === UserRole.OPERATOR) {
+              // ... existing operator logic ...
+              // Re-implementing simplified Operator logic here to fit flow
+             const userGroups = await this.userDeviceGroupRepo.find({ 
+                 where: { user_id: user.user_id },
+                 select: ['group_id']
+             });
+             const groupIds = userGroups.map(ug => ug.group_id);
+             if (groupIds.length === 0) return [];
+             query.andWhere('device.group_id IN (:...groupIds)', { groupIds });
         }
 
         if (filters?.device_id) {

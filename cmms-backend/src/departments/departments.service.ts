@@ -20,7 +20,7 @@ export class DepartmentService {
         if (cached) return cached;
 
         const data = await this.departmentRepository.find({
-            relations: ['users', 'manager'],
+            relations: ['users', 'manager', 'parent', 'children'],
             order: {
                 updated_at: 'DESC',
             },
@@ -32,7 +32,7 @@ export class DepartmentService {
     async findOne(id: number): Promise<Department> {
         const dept = await this.departmentRepository.findOne({
             where: {dept_id: id},
-            relations: ['users', 'manager'],
+            relations: ['users', 'manager', 'parent', 'children'],
         });
         if (!dept) throw new NotFoundException('Không tìm thấy phòng ban');
         return dept;
@@ -41,7 +41,15 @@ export class DepartmentService {
     async create(data: CreateDepartmentDto): Promise<Department> {
         const existing = await this.departmentRepository.findOne({where: {name: data.name}});
         if (existing) throw new BadRequestException('Tên phòng ban đã tồn tại');
+
         const dept = this.departmentRepository.create(data);
+
+        if (data.parent_id) {
+            const parent = await this.departmentRepository.findOne({ where: { dept_id: data.parent_id } });
+            if (!parent) throw new BadRequestException('Đơn vị cấp trên không tồn tại');
+            dept.parent = parent;
+        }
+
         const result = await this.departmentRepository.save(dept);
         await this.cacheManager.del('departments_all');
         return result;
@@ -49,6 +57,16 @@ export class DepartmentService {
 
     async update(id: number, data: UpdateDepartmentDto): Promise<Department> {
         const dept = await this.findOne(id);
+        
+        if (data.parent_id) {
+            if (data.parent_id === id) throw new BadRequestException('Không thể chọn chính mình làm cấp trên');
+            const parent = await this.departmentRepository.findOne({ where: { dept_id: data.parent_id } });
+            if (!parent) throw new BadRequestException('Đơn vị cấp trên không tồn tại');
+            dept.parent = parent;
+        } else if (data.parent_id === null) {
+            dept.parent = null;
+        }
+
         Object.assign(dept, data);
         const result = await this.departmentRepository.save(dept);
         await this.cacheManager.del('departments_all');

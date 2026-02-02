@@ -28,7 +28,8 @@ const DepartmentFormModal: React.FC<Props> = ({ open, onClose, editingId }) => {
                     name: dept.name,
                     description: dept.description,
                     permissions: dept.permissions || [],
-                    manager_id: dept.manager_id || (dept.manager as any)?.user_id // Handle both potential structures
+                    manager_id: dept.manager_id || (dept.manager as any)?.user_id,
+                    parent_id: dept.parent_id || (dept as any).parent?.dept_id
                 });
             }
         } else {
@@ -44,7 +45,8 @@ const DepartmentFormModal: React.FC<Props> = ({ open, onClose, editingId }) => {
           name: values.name,
           description: values.description,
           permissions: values.permissions,
-          manager_id: values.manager_id
+          manager_id: values.manager_id,
+          parent_id: values.parent_id
       };
 
       if (editingId) {
@@ -89,6 +91,18 @@ const DepartmentFormModal: React.FC<Props> = ({ open, onClose, editingId }) => {
                 {users.map(u => (
                     <Select.Option key={u.user_id} value={u.user_id}>
                         {u.name} ({u.email})
+                    </Select.Option>
+                ))}
+            </Select>
+        </Form.Item>
+
+        <Form.Item name="parent_id" label="Đơn vị cấp trên">
+            <Select placeholder="Chọn đơn vị cấp trên (nếu có)" allowClear>
+                {departments
+                    .filter(d => !editingId || d.dept_id !== editingId)
+                    .map(d => (
+                    <Select.Option key={d.dept_id} value={d.dept_id}>
+                        {d.name}
                     </Select.Option>
                 ))}
             </Select>

@@ -17,6 +17,11 @@ export class CreateDepartmentDto {
     @IsNumber()
     manager_id?: number;
 
+    @ApiProperty({required: false})
+    @IsOptional()
+    @IsNumber()
+    parent_id?: number;
+
     @ApiProperty({ enum: ['PERSONAL', 'GROUP', 'DEPARTMENT', 'ALL'], default: 'DEPARTMENT' })
     @IsOptional()
     @IsString()

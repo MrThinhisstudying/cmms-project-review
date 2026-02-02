@@ -33,6 +33,16 @@ export class Department {
     @Column({ nullable: true })
     manager_id?: number;
 
+    @ManyToOne(() => Department, (department) => department.children, { nullable: true })
+    @JoinColumn({ name: 'parent_id' })
+    parent?: Department;
+
+    @Column({ nullable: true })
+    parent_id?: number;
+
+    @OneToMany(() => Department, (department) => department.parent)
+    children: Department[];
+
     @ApiProperty({ enum: ['PERSONAL', 'GROUP', 'DEPARTMENT', 'ALL'], default: 'DEPARTMENT' })
     @Column({
         type: 'enum',

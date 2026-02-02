@@ -12,9 +12,10 @@ import {Item} from 'src/inventory_item/entities/item.entity';
 import { ExportDocxService } from './export-docx.service';
 import { RepairsGateway } from './repairs.gateway';
 import { UserDeviceGroup } from 'src/device-groups/entities/user-device-group.entity';
+import { Department } from 'src/departments/department.entity';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Repair, Device, User, StockOut, Item, Notification, UserDeviceGroup])],
+    imports: [TypeOrmModule.forFeature([Repair, Device, User, StockOut, Item, Notification, UserDeviceGroup, Department])],
     controllers: [RepairsController],
     providers: [RepairsService, NotificationService, ExportDocxService, RepairsGateway],
     exports: [ExportDocxService],
