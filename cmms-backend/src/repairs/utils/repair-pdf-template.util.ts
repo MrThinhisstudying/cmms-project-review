@@ -320,17 +320,73 @@ const generateB04 = (repair: Repair, embedFooter: boolean = false, pageIndex: nu
         </table>
     `;
 
-    const itemsRows = repair.inspection_items?.map((item, idx) => `
+    // --- LOGIC GỘP Ô (MERGE CELLS) ---
+    // Chỉ thực hiện nếu settings cho phép (mặc định là true nếu không có config)
+    // Config được lưu trong repair.extra_config
+    const shouldMerge = repair.extra_config?.merge_cells !== false; 
+
+    // Pre-process items
+    const items = repair.inspection_items || [];
+    const processedItems: any[] = items.map((item, index) => ({
+        ...item,
+        causeRowSpan: 1,
+        causeDisplay: true,
+        solutionRowSpan: 1,
+        solutionDisplay: true,
+        index: index
+    }));
+
+    if (shouldMerge && items.length > 0) {
+        // Calculate Cause RowSpan
+        for (let i = 0; i < processedItems.length; i++) {
+            if (!processedItems[i].causeDisplay) continue;
+            let span = 1;
+            for (let j = i + 1; j < processedItems.length; j++) {
+                const currText = cleanText(processedItems[i].cause);
+                const nextText = cleanText(processedItems[j].cause);
+                // Merge if identical OR if next is empty (inherit concept)
+                if (nextText === currText || nextText === '') {
+                    span++;
+                    processedItems[j].causeDisplay = false; 
+                } else {
+                    break;
+                }
+            }
+            processedItems[i].causeRowSpan = span;
+        }
+
+        // Calculate Solution RowSpan
+        for (let i = 0; i < processedItems.length; i++) {
+            if (!processedItems[i].solutionDisplay) continue;
+            let span = 1;
+            for (let j = i + 1; j < processedItems.length; j++) {
+                const currText = cleanText(processedItems[i].solution);
+                const nextText = cleanText(processedItems[j].solution);
+                // Merge if identical OR if next is empty
+                if (nextText === currText || nextText === '') {
+                    span++;
+                    processedItems[j].solutionDisplay = false; 
+                } else {
+                    break;
+                }
+            }
+            processedItems[i].solutionRowSpan = span;
+        }
+    }
+
+    const itemsRows = processedItems.length > 0 ? processedItems.map((item, idx) => `
         <tr>
             <td class="text-center">${idx + 1}</td>
             <td>${cleanText(item.description)}</td>
-            <td>${cleanText(item.cause)}</td>
-            <td>${cleanText(item.solution)}</td>
+            ${item.causeDisplay ? `<td rowspan="${item.causeRowSpan}">${cleanText(item.cause)}</td>` : ''}
+            ${item.solutionDisplay ? `<td rowspan="${item.solutionRowSpan}">${cleanText(item.solution)}</td>` : ''}
             <td></td>
         </tr>
-    `).join('') || '<tr><td colspan="5" class="text-center italic">Không có dữ liệu</td></tr>';
+    `).join('') : '<tr><td colspan="5" class="text-center italic">Không có dữ liệu</td></tr>';
 
-    const materialRows = repair.inspection_materials?.map((mat: any, idx) => `
+    const materialRows = repair.inspection_materials
+        ?.filter((m: any) => m.phase !== 'acceptance')
+        .map((mat: any, idx) => `
         <tr>
             <td class="text-center">${idx + 1}</td>
             <td>${cleanText(mat.item_name)}</td>

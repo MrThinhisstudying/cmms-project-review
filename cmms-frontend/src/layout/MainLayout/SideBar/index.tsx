@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { Layout, Menu, Drawer } from "antd";
+import { Layout, Menu, Drawer, Badge } from "antd";
 import { Link, useLocation } from "react-router-dom";
-import { LogoutOutlined, MenuFoldOutlined, MenuUnfoldOutlined, RightOutlined, LeftOutlined } from "@ant-design/icons";
+import { LogoutOutlined, RightOutlined, LeftOutlined } from "@ant-design/icons";
 import { useAuthContext } from "../../../context/AuthContext/AuthContext";
+import { useRepairsContext } from "../../../context/RepairsContext/RepairsContext";
 import { SIDEBAR_MENU } from "../../../constants/sidebarMenu";
 import LOGO_ACV from "../../../assets/images/acv-logo.png";
 
@@ -34,17 +35,32 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, isMobile = fal
       (item.roles?.includes(user?.role ?? "") || (user?.role === "ADMIN" && item.roles?.includes("ADMIN")))
   );
 
-  const menuItems = filteredMenu.map((item) => ({
+  const { pendingCount } = useRepairsContext() || {};
+
+  const menuItems = filteredMenu.map((item) => {
+    const isRepair = item.path === '/quan_ly_sua_chua';
+    
+    // Simple render: Link text + Badge
+    const label = (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <Link to={item.path} style={{ color: item.textColor, flex: 1 }}>{item.name}</Link>
+             {isRepair && pendingCount > 0 && (
+                <Badge count={pendingCount} size="small" style={{ backgroundColor: '#ff4d4f', marginLeft: 8 }} />
+            )}
+        </div>
+    );
+
+    return {
     key: item.path,
     icon: item.icon,
-    label: <Link to={item.path} style={{ color: item.textColor }}>{item.name}</Link>,
+    label: label,
     style: {
         marginBottom: 12, // More breathable spacing
         color: item.textColor,
         fontSize: 14,
         fontWeight: 500
     }
-  }));
+  }});
 
   const sidebarContent = (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>

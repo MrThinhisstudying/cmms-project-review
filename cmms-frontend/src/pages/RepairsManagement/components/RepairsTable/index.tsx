@@ -14,9 +14,9 @@ import {
   FilePdfOutlined,
   ThunderboltOutlined,
 } from "@ant-design/icons";
-import { getToken } from "../../../../utils/auth";
+// import { getToken } from "../../../../utils/auth";
 import type { MenuProps } from 'antd';
-import { Dropdown, message } from 'antd';
+import { Dropdown } from 'antd';
 
 interface RepairsTableProps {
   rows: IRepair[];
@@ -203,7 +203,7 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
       width: 150,
       render: (_, record) => (
         <div style={{ fontSize: 13 }}>
-            <div>{record.device?.reg_number ? `BS: ${record.device.reg_number}` : '-'}</div>
+            <div>{record.device?.reg_number ? `BS: ${record.device.reg_number}` : <Tag color="warning">Đang chờ biển số</Tag>}</div>
             {record.device?.serial_number && <div style={{ color: "#888", fontSize: "12px" }}>SN: {record.device.serial_number}</div>}
         </div>
       ),

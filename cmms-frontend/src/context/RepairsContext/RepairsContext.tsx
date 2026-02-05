@@ -10,6 +10,7 @@ import {
   submitAcceptance,
   requestLimitedUse,
   reviewLimitedUse,
+  getRepairPendingStats,
 } from "../../apis/repairs";
 import { requestStockOut } from "../../apis/inventory";
 import { getToken } from "../../utils/auth";
@@ -33,7 +34,7 @@ export const RepairsProvider = ({
   const [repairs, setRepairs] = useState<IRepair[]>([]);
   const [loading, setLoading] = useState(false);
   const [userRole, setUserRole] = useState<Role>("viewer");
-  // const token = getToken(); // Moving inside functions to avoid dependency issues
+  const [pendingCount, setPendingCount] = useState(0);
 
   const fetchData = useCallback(async (params?: {
     status_request?: string;
@@ -49,6 +50,24 @@ export const RepairsProvider = ({
       setLoading(false);
     }
   }, []);
+
+  const fetchPendingStats = useCallback(async () => {
+      const count = await getRepairPendingStats(getToken());
+      setPendingCount(count);
+  }, []);
+
+  const reload = useCallback(async () => {
+    // Reload both list and stats
+    fetchPendingStats();
+    await fetchData();
+  }, [fetchData, fetchPendingStats]);
+
+  // Poll for stats every 60s
+  useEffect(() => {
+    fetchPendingStats();
+    const interval = setInterval(fetchPendingStats, 60000);
+    return () => clearInterval(interval);
+  }, [fetchPendingStats]);
 
   useEffect(() => {
     fetchData();
@@ -153,7 +172,9 @@ export const RepairsProvider = ({
         deleteRepairItem,
         requestLimitedUseItem,
         reviewLimitedUseItem,
-        reload: fetchData,
+        reload,
+        pendingCount,
+        fetchPendingStats,
       }}
     >
       {children}

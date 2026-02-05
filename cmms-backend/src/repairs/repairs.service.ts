@@ -173,6 +173,10 @@ export class RepairsService {
         repair.inspection_items = dto.inspection_items ?? repair.inspection_items;
         repair.inspection_other_opinions = dto.inspection_other_opinions ?? repair.inspection_other_opinions;
 
+        if (dto.merge_cells !== undefined) {
+            repair.extra_config = { ...repair.extra_config, merge_cells: dto.merge_cells };
+        }
+
         if (dto.inspection_committee_ids && dto.inspection_committee_ids.length > 0) {
             const users = await this.userRepo.findByIds(dto.inspection_committee_ids);
             if (users.length !== dto.inspection_committee_ids.length) {
@@ -294,6 +298,7 @@ export class RepairsService {
                     notes: m.notes ?? existing?.notes, // Preserve if undefined
                     item_code: m.item_code || (existing as any)?.item_code, // Preserve
                     specifications: m.specifications || (existing as any)?.specifications, // Preserve
+                    phase: m.phase || (existing as any)?.phase || 'inspection', // Default to inspection
                 };
             });
         }
@@ -2259,5 +2264,54 @@ export class RepairsService {
             console.error(`Error generating PDF (${type}) for Repair #${repair.repair_id}:`, error);
             throw new InternalServerErrorException(`Lỗi khi tạo file PDF (${type}): ${error?.message || error}`);
         }
+        }
+
+    async countPendingActions(user: any): Promise<number> {
+        // Use logic similar to findAll but optimized for counting only actionable items
+        const query = this.repairRepo.createQueryBuilder('repair')
+            .leftJoin('repair.created_by', 'created_by')
+            .leftJoin('repair.created_department', 'created_department') // Needed for Unit Head dept check
+            .leftJoin('repair.device', 'device') // Needed for Operator group check
+            .where('repair.canceled = :canceled', { canceled: false });
+
+        const role = user.role;
+
+        if (role === UserRole.ADMIN) {
+             // Admin sees all actions? Or specifically actions admin needs to take?
+             // Usually Admin is fallback for everything. Let's count all pending.
+             query.andWhere(new Brackets(qb => {
+                 qb.where("repair.status_request NOT IN ('COMPLETED', 'REJECTED', 'REJECTED_B03')")
+                   .orWhere("repair.status_inspection NOT IN ('inspection_admin_approved', 'inspection_rejected', 'REJECTED_B04') AND repair.status_request = 'COMPLETED'")
+                   .orWhere("repair.status_acceptance NOT IN ('acceptance_admin_approved', 'acceptance_rejected', 'REJECTED_B05') AND repair.status_inspection = 'inspection_admin_approved'");
+             }));
+        } else if (role === UserRole.TECHNICIAN) {
+             query.andWhere("repair.status_request = 'WAITING_TECH'");
+             // Also include redos?
+             query.orWhere("repair.status_request = 'REJECTED_B03' AND created_by.user_id = :uid", { uid: user.user_id });
+             query.orWhere("repair.status_inspection = 'REJECTED_B04'"); 
+             query.orWhere("repair.status_acceptance = 'REJECTED_B05'");
+        } else if (role === UserRole.TEAM_LEAD) {
+             query.andWhere(new Brackets(qb => {
+                 qb.where("repair.status_request = 'WAITING_TEAM_LEAD'")
+                   .orWhere("repair.status_inspection = 'inspection_pending' AND repair.inspection_created_at IS NOT NULL")
+                   .orWhere("repair.status_acceptance = 'acceptance_pending' AND repair.acceptance_created_at IS NOT NULL");
+             }));
+        } else if (role === UserRole.UNIT_HEAD) {
+             query.andWhere(new Brackets(qb => {
+                 qb.where("repair.status_request = 'WAITING_MANAGER'")
+                   .orWhere("repair.status_inspection = 'inspection_lead_approved'")
+                   .orWhere("repair.status_acceptance = 'acceptance_lead_approved'");
+             }));
+        } else if (role === UserRole.DIRECTOR) {
+             query.andWhere(new Brackets(qb => {
+                 qb.where("repair.status_request = 'WAITING_DIRECTOR'")
+                   .orWhere("repair.status_inspection = 'inspection_manager_approved'")
+                   .orWhere("repair.status_acceptance = 'acceptance_manager_approved'");
+             }));
+        } else {
+            return 0; // Viewer has no actions
+        }
+
+        return await query.getCount();
     }
 }

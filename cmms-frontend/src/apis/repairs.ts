@@ -37,6 +37,18 @@ export const getAllRepairs = async (
   return data.data;
 };
 
+export const getRepairPendingStats = async (token: string | null): Promise<number> => {
+  const res = await fetch(`${BASE_URL}/stats/pending-actions`, {
+    headers: {
+      Authorization: token ? `Bearer ${token}` : "",
+      "Content-Type": "application/json",
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) return 0; // Fail silent for stats
+  return data.data.count;
+};
+
 export const getRepairsByDevice = async (
   deviceId: number,
   token: string | null,

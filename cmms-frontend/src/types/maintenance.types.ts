@@ -64,7 +64,7 @@ export interface MaintenanceContextValue {
   maintenances: IMaintenance[];
   setMaintenances: (v: IMaintenance[]) => void;
   loading: boolean;
-  fetchMaintenances: () => Promise<void>;
+  fetchMaintenances: (silent?: boolean) => Promise<void>;
 }
 
 // ============================================================

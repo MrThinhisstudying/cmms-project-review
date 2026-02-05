@@ -55,6 +55,7 @@ interface ExtendedMaterial {
   is_new?: boolean;
   notes?: string;
   is_new_row?: boolean;
+  phase?: 'inspection' | 'acceptance';
 }
 
 export default function RepairAcceptanceForm({
@@ -212,6 +213,7 @@ export default function RepairAcceptanceForm({
       scrap_qty: 0,
       scrap_damage: 0,
       is_new_row: true,
+      phase: 'acceptance'
     };
     setMaterials([...materials, newMat]);
   };
@@ -260,13 +262,15 @@ export default function RepairAcceptanceForm({
              recovered_materials: recoveredMats,
              materials_to_scrap: scrapMats,
              inspection_materials: materials.filter(m => m.replace_qty > 0).map(m => ({
+                 item_id: m.item_id,
                  item_name: m.name,
                  quantity: m.replace_qty,
                  unit: m.unit,
-                 is_new: !m.name // simplistic check? No, let's map correctly from original if possible or treat as new text.
-                 // Actually we must preserve item_id if it was there.
-                 // But `materials` state lost item_id info?
-                 // Let's check `ExtendedMaterial` interface.
+                 is_new: !m.item_id, // If no item_id, it is new
+                 item_code: m.item_code,
+                 specifications: m.specifications,
+                 notes: m.notes,
+                 phase: m.phase
              })),
              action: finalAction,
              reason: finalAction === 'reject' ? rejectReason : undefined,

@@ -12,16 +12,11 @@ import {
   Tabs,
   Progress,
   Timeline,
-  theme
 } from "antd";
 import {
   ToolOutlined,
   AlertOutlined,
   AppstoreOutlined,
-  SearchOutlined,
-  CalendarOutlined,
-  ExportOutlined,
-  PlusOutlined,
   RightOutlined
 } from "@ant-design/icons";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
@@ -45,14 +40,25 @@ const Dashboard = () => {
   // const { token } = theme.useToken();
 
   useEffect(() => {
+    // Initial fetch
     refreshAll();
     fetchDevices();
     reloadRepairs();
     fetchMaintenances();
+
+    // Polling for Realtime Updates (every 10 seconds)
+    const interval = setInterval(() => {
+        reloadRepairs();
+        // Silent fetch to avoid loading header flicker
+        fetchMaintenances(true); 
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, [refreshAll, fetchDevices, reloadRepairs, fetchMaintenances]);
 
   // --- Stats Calculation ---
   const stats = useMemo(() => {
+    // ... (Keep existing stats logic, it depends on maintenances which updates automatically)
     // 1. Critical: Phiếu chờ xử lý
     const pendingRepairsCount = repairs.filter(
       (r: any) => 
@@ -62,8 +68,7 @@ const Dashboard = () => {
         r.status_request === 'IN_PROGRESS'
     ).length;
 
-    // 2. Performance: Tỷ lệ sẵn sàng
-    // Assumption: 'DANG_SU_DUNG' and 'MOI' mean ready/working.
+    // 2. Performance
     const activeDevices = devices.filter((d) => 
         d.status === "DANG_SU_DUNG" as DeviceStatus || 
         d.status === "MOI" as DeviceStatus
@@ -71,16 +76,14 @@ const Dashboard = () => {
     const totalDevices = devices.length;
     const readinessRate = totalDevices > 0 ? Math.round((activeDevices / totalDevices) * 100) : 0;
 
-    // 3. Danger: Bảo dưỡng quá hạn
-    // Count maintenances where next_maintenance_date < today
+    // 3. Danger
     const now = dayjs();
     const overdueCount = maintenances.filter((m) => {
       if (!m.next_maintenance_date) return false;
       return dayjs(m.next_maintenance_date).isBefore(now, 'day');
     }).length;
 
-    // 4. Inventory: Vật tư sắp hết
-    // Arbitrary threshold < 10
+    // 4. Inventory
     const lowStockCount = items.filter((item) => item.quantity < 10).length;
 
     return {
@@ -93,18 +96,26 @@ const Dashboard = () => {
 
   // --- Recent Repairs Data ---
   const recentRepairs = useMemo(() => {
-    // Sort by created_at desc
     return [...repairs]
       .sort((a, b) => dayjs(b.created_at).valueOf() - dayjs(a.created_at).valueOf())
       .slice(0, 5);
   }, [repairs]);
 
-  // --- Today's Schedule ---
-  const todaySchedule = useMemo(() => {
+  // --- Schedule Data (Today + Overdue) ---
+  const scheduleData = useMemo(() => {
     const today = dayjs().format('YYYY-MM-DD');
+    const now = dayjs();
+    
+    // Sort: Overdue first, then today
     return maintenances
-      .filter(m => m.next_maintenance_date && dayjs(m.next_maintenance_date).isSame(today, 'day'))
-      .slice(0, 4); // Show max 4
+      .filter(m => {
+          if (!m.next_maintenance_date) return false;
+          const date = dayjs(m.next_maintenance_date);
+          // Show if Overdue OR Today
+          return date.isBefore(now, 'day') || date.isSame(today, 'day');
+      })
+      .sort((a, b) => dayjs(a.next_maintenance_date).valueOf() - dayjs(b.next_maintenance_date).valueOf())
+      .slice(0, 5); // Show top 5
   }, [maintenances]);
 
 
@@ -130,22 +141,75 @@ const Dashboard = () => {
     },
     {
       title: 'Trạng thái',
-      dataIndex: 'status_request',
       key: 'status',
-      render: (status: string) => {
-          let label = status;
-          let color = 'default';
-          
-          if (status === 'COMPLETED') {
-            label = 'Hoàn thành';
-            color = 'success';
-          } else if (status.includes('WAITING') || status === 'PENDING') {
-            label = 'Đang xử lý';
-            color = 'processing'; // AntD Blue
-          } else if (status.includes('REJECTED')) {
-             label = 'Đã từ chối';
-             color = 'error';
-          }
+      render: (_, r: any) => {
+          // Logic copied from RepairsTable to ensure consistency
+          let currentPhase = 'request';
+          if (r.status_request !== 'COMPLETED') currentPhase = 'request';
+          else if (r.status_inspection === 'REJECTED_B04' || r.status_inspection === 'inspection_rejected') currentPhase = 'inspection';
+          else if (r.status_inspection !== 'inspection_admin_approved') currentPhase = 'inspection';
+          else if (r.status_acceptance === 'REJECTED_B05' || r.status_acceptance === 'acceptance_rejected') currentPhase = 'acceptance';
+          else if (r.status_acceptance !== 'acceptance_admin_approved') currentPhase = 'acceptance';
+          else currentPhase = 'completed';
+
+          let statusKey: string = r.status_request || 'WAITING_TECH';
+          if (currentPhase === 'completed') statusKey = 'COMPLETED'; // Real completed
+          else if (currentPhase === 'acceptance' || r.status_acceptance === 'REJECTED_B05' || r.status_acceptance === 'acceptance_rejected') statusKey = r.status_acceptance || 'acceptance_pending';
+          else if (currentPhase === 'inspection' || r.status_inspection === 'REJECTED_B04' || r.status_inspection === 'inspection_rejected') statusKey = r.status_inspection || 'inspection_pending';
+
+          const labelMap: Record<string, string> = {
+            WAITING_TECH: "Yêu cầu: Chờ KT tiếp nhận",
+            WAITING_TEAM_LEAD: "Yêu cầu: Chờ Tổ trưởng duyệt",
+            WAITING_MANAGER: "Yêu cầu: Chờ CB đội duyệt",
+            WAITING_DIRECTOR: "Yêu cầu: Chờ Ban GĐ duyệt",
+            REJECTED_B03: "B03: Đã từ chối",
+            REJECTED: "Đã hủy",
+            
+            // Inspection
+            inspection_pending: r.inspection_created_at ? "Kiểm nghiệm: chờ duyệt" : "Chờ kiểm nghiệm",
+            inspection_lead_approved: "Kiểm nghiệm: Chờ CB đội duyệt",
+            inspection_manager_approved: "Kiểm nghiệm: chờ ban GĐ duyệt",
+            inspection_admin_approved: "Hoàn tất kiểm nghiệm",
+            REJECTED_B04: "B04: Đã từ chối",
+            inspection_rejected: "B04: Đã từ chối",
+
+            // Acceptance
+            acceptance_pending: r.acceptance_created_at ? "Nghiệm thu: Chờ duyệt" : "Chờ nghiệm thu",
+            acceptance_lead_approved: "Nghiệm thu: Chờ CB đội duyệt",
+            acceptance_manager_approved: "Nghiệm thu: chờ ban GĐ duyệt",
+            acceptance_admin_approved: "Hoàn tất",
+            REJECTED_B05: "B05: Đã từ chối",
+            acceptance_rejected: "B05: Đã từ chối",
+            
+            COMPLETED: "Hoàn thành"
+          };
+
+           const colorMap: Record<string, string> = {
+            WAITING_TECH: "blue",
+            WAITING_TEAM_LEAD: "blue",
+            WAITING_MANAGER: "orange", 
+            WAITING_DIRECTOR: "purple",
+            REJECTED_B03: "red",
+            REJECTED: "red",
+            COMPLETED: "green",
+
+            inspection_pending: "purple",
+            inspection_lead_approved: "warning",
+            inspection_manager_approved: "cyan",
+            inspection_admin_approved: "teal",
+            REJECTED_B04: "red",
+            inspection_rejected: "red",
+
+            acceptance_pending: "cyan",
+            acceptance_lead_approved: "warning",
+            acceptance_manager_approved: "cyan",
+            acceptance_admin_approved: "green",
+            REJECTED_B05: "red",
+            acceptance_rejected: "red",
+          };
+
+          const label = labelMap[statusKey] || statusKey;
+          const color = colorMap[statusKey] || (statusKey.includes('REJECTED') ? 'error' : 'default');
           
           return <Tag color={color}>{label}</Tag>
       }
@@ -260,7 +324,7 @@ const Dashboard = () => {
       {/* 3. Content Area (70/30) */}
       <Row gutter={24}>
         {/* Left Column - Recent Activity */}
-        <Col span={17}>
+        <Col span={user?.role !== 'OPERATOR' ? 17 : 24}>
           <Card variant="borderless" style={{ borderRadius: 8, height: '100%' }} styles={{ body: { padding: 0 } }}>
              <Tabs 
                defaultActiveKey="1" 
@@ -297,26 +361,34 @@ const Dashboard = () => {
           </Card>
         </Col>
 
-        {/* Right Column - Widgets */}
+        {/* Right Column - Widgets (Hidden for OPERATOR/VHTTBMĐ) */}
+        {user?.role !== 'OPERATOR' && (
         <Col span={7}>
           <Space direction="vertical" style={{ width: '100%' }} size={24}>
              {/* Widget 2: Today Schedule */}
-             <Card title="Lịch bảo trì hôm nay" variant="borderless" style={{ borderRadius: 8 }}>
-                {todaySchedule.length === 0 ? (
+             <Card title="Lịch bảo trì cần thực hiện" variant="borderless" style={{ borderRadius: 8 }}>
+                {scheduleData.length === 0 ? (
                    <div style={{ textAlign: 'center', padding: '20px 0', color: '#8c8c8c' }}>
                       Không có lịch bảo trì hôm nay
                    </div>
                 ) : (
                   <Timeline 
-                    items={todaySchedule.map(m => ({
-                        color: m.status === 'active' ? 'green' : 'gray',
+                    items={scheduleData.map(m => ({
+                        color: dayjs(m.next_maintenance_date).isBefore(dayjs(), 'day') ? 'red' : 'green',
                         children: (
                           <>
-                             <Text strong>{m.device?.name}</Text>
+                             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Text strong>{m.device?.name}</Text>
+                                {dayjs(m.next_maintenance_date).isBefore(dayjs(), 'day') && 
+                                    <Tag color="error" style={{ marginRight: 0, transform: 'scale(0.8)' }}>Quá hạn</Tag>}
+                             </div>
                              <br/>
                              <Text type="secondary" style={{ fontSize: 12 }}>
                                 {m.level ? `Cấp ${m.level.replace('M', ' tháng')}` : 'Bảo dưỡng'}
                              </Text>
+                             <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 2 }}>
+                                {dayjs(m.next_maintenance_date).format('DD/MM/YYYY')}
+                             </div>
                           </>
                         )
                     }))}
@@ -328,6 +400,7 @@ const Dashboard = () => {
              </Card>
           </Space>
         </Col>
+        )}
       </Row>
     </Layout>
   );

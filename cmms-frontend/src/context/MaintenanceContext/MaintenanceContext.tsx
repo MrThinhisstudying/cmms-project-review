@@ -25,16 +25,16 @@ const MaintenanceProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const { user } = useAuthContext();
 
-  const fetchMaintenances = useCallback(async () => {
+  const fetchMaintenances = useCallback(async (silent = false) => {
     if (!user) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const data = await getAllMaintenances();
       setMaintenances(data || []);
     } catch {
       setMaintenances([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [user]);
 

@@ -111,6 +111,13 @@ export class RepairsController {
         return {message: 'Lấy danh sách phiếu thành công', data};
     }
 
+    @UseGuards(JWTAuthGuard)
+    @Get('stats/pending-actions')
+    async getPendingStats(@Req() req) {
+         const count = await this.repairService.countPendingActions(req.user);
+         return { message: 'Lấy số lượng chờ xử lý thành công', data: { count } };
+    }
+
     @Get('device/:deviceId')
     async findByDevice(
         @Param('deviceId') deviceId: string,

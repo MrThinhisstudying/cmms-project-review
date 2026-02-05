@@ -57,6 +57,7 @@ export class Repair {
         quantity?: number;
         is_new?: boolean;
         notes?: string;
+        phase?: 'inspection' | 'acceptance';
     }[];
 
     @ManyToOne(() => User, {eager: true, nullable: true})
@@ -75,8 +76,8 @@ export class Repair {
     @Column({type: 'jsonb', nullable: true})
     inspection_items?: {
         description: string;
-        cause: string;
-        solution: string;
+        cause?: string;
+        solution?: string;
         notes?: string;
     }[];
 
@@ -196,6 +197,9 @@ export class Repair {
     @Index()
     @CreateDateColumn()
     created_at: Date;
+
+    @Column({type: 'jsonb', nullable: true})
+    extra_config?: any;
 
     @UpdateDateColumn()
     updated_at: Date;

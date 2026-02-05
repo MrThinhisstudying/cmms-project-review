@@ -77,10 +77,19 @@ export default function RepairInspectionForm({
     if (!open || !initialData) return;
 
     // 1. Committee
+    const roleMap: Record<string, string> = {
+        'TECHNICIAN': 'Nhân viên kỹ thuật',
+        'TEAM_LEAD': 'Tổ trưởng',
+        'UNIT_HEAD': 'Đội trưởng',
+        'DIRECTOR': 'Ban Giám đốc',
+        'OPERATOR': 'Nhân viên vận hành',
+        'ADMIN': 'Quản lý'
+    };
+
     const initialCommittee = initialData.inspection_committee?.map(u => ({
         user_id: u.user_id,
         name: u.name,
-        role: u.role
+        role: roleMap[u.role] || u.role // Map raw role to friendly name
     })) || [];
     // Ensure at least 1 empty row if empty
     if (initialCommittee.length === 0) {
@@ -296,10 +305,24 @@ export default function RepairInspectionForm({
                                                 placeholder="Chọn thành viên"
                                                 showSearch
                                                 optionFilterProp="label"
-                                                onChange={(_, option: any) => {
+                                                onChange={(val, option: any) => {
                                                 const usersArr = form.getFieldValue('committee') || [];
                                                 if(usersArr[name]) {
-                                                    usersArr[name].role = option.position || '';
+                                                    // Use friendly name first, fallback to position provided by backend, else raw
+                                                    const rawRole = option.position || ''; 
+                                                    // Simple map if position is system-like (e.g. capitalized english)
+                                                    const roleMap: Record<string, string> = {
+                                                        'TECHNICIAN': 'Nhân viên kỹ thuật',
+                                                        'TEAM_LEAD': 'Tổ trưởng',
+                                                        'UNIT_HEAD': 'Đội trưởng',
+                                                        'DIRECTOR': 'Ban Giám đốc',
+                                                        'OPERATOR': 'Nhân viên vận hành',
+                                                        'ADMIN': 'Quản lý'
+                                                    };
+                                                    // Try to map if it looks like a system role key, otherwise use as is
+                                                    const displayRole = roleMap[rawRole] || (roleMap[val] ? roleMap[val] : rawRole);
+                                                    
+                                                    usersArr[name].role = displayRole;
                                                     form.setFieldsValue({ committee: [...usersArr] });
                                                 }
                                             }}
@@ -350,12 +373,54 @@ export default function RepairInspectionForm({
                                        </Form.Item>
                                    </Col>
                                    <Col span={8}>
-                                       <Form.Item {...restField} name={[name, 'cause']} label="Nguyên nhân hư hỏng">
+                                       <Form.Item {...restField} name={[name, 'cause']} label={
+                                            <Space>
+                                                <span>Nguyên nhân hư hỏng</span>
+                                                {name === 0 && (
+                                                    <Button 
+                                                        type="link" 
+                                                        size="small" 
+                                                        style={{ padding: 0, fontSize: 11 }}
+                                                        onClick={() => {
+                                                            const items = form.getFieldValue('inspection_items') || [];
+                                                            if (items.length > 0) {
+                                                                const firstVal = items[0].cause;
+                                                                const newItems = items.map((it: any) => ({ ...it, cause: firstVal }));
+                                                                form.setFieldsValue({ inspection_items: newItems });
+                                                            }
+                                                        }}
+                                                    >
+                                                        (Áp dụng tất cả)
+                                                    </Button>
+                                                )}
+                                            </Space>
+                                       }>
                                            <Input.TextArea autoSize={{ minRows: 1 }} />
                                        </Form.Item>
                                    </Col>
                                    <Col span={8}>
-                                       <Form.Item {...restField} name={[name, 'solution']} label="Biện pháp sửa chữa">
+                                       <Form.Item {...restField} name={[name, 'solution']} label={
+                                            <Space>
+                                                <span>Biện pháp sửa chữa</span>
+                                                {name === 0 && (
+                                                    <Button 
+                                                        type="link" 
+                                                        size="small" 
+                                                        style={{ padding: 0, fontSize: 11 }}
+                                                        onClick={() => {
+                                                            const items = form.getFieldValue('inspection_items') || [];
+                                                            if (items.length > 0) {
+                                                                const firstVal = items[0].solution;
+                                                                const newItems = items.map((it: any) => ({ ...it, solution: firstVal }));
+                                                                form.setFieldsValue({ inspection_items: newItems });
+                                                            }
+                                                        }}
+                                                    >
+                                                        (Áp dụng tất cả)
+                                                    </Button>
+                                                )}
+                                            </Space>
+                                       }>
                                            <Input.TextArea autoSize={{ minRows: 1 }} />
                                        </Form.Item>
                                    </Col>
@@ -434,6 +499,20 @@ export default function RepairInspectionForm({
              <Form.Item name="inspection_other_opinions">
                  <TextArea rows={3} placeholder="...." />
              </Form.Item>
+
+              {/* MERGE OPTION */}
+              <div style={{ marginTop: 10, marginBottom: 20, background: '#f6ffed', padding: 10, borderRadius: 6, border: '1px solid #b7eb8f' }}>
+                    <Form.Item name="merge_cells" valuePropName="checked" initialValue={true} style={{ marginBottom: 0 }}>
+                        <Typography.Text strong>
+                             <CheckCircleOutlined style={{ marginRight: 8, color: '#52c41a' }} />
+                             <input type="checkbox" style={{ marginRight: 8 }} />
+                             Gộp ô "Nguyên nhân" và "Biện pháp" nếu giống nhau (In PDF B04)
+                        </Typography.Text>
+                    </Form.Item>
+                    <div style={{ marginLeft: 28, fontSize: 12, color: '#666' }}>
+                        (Nếu bỏ chọn, mỗi dòng hư hỏng sẽ in kèm nguyên nhân và biện pháp riêng biệt, không gộp ô)
+                    </div>
+              </div>
 
         </Form>
       </Modal>

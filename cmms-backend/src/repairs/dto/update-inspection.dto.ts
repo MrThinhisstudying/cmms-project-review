@@ -5,11 +5,13 @@ class InspectionItemDto {
     @IsString()
     description: string;
 
+    @IsOptional()
     @IsString()
-    cause: string;
+    cause?: string;
 
+    @IsOptional()
     @IsString()
-    solution: string;
+    solution?: string;
 
     @IsOptional()
     @IsString()
@@ -71,4 +73,8 @@ export class UpdateInspectionDto {
     @IsOptional()
     @IsString()
     inspection_other_opinions?: string;
+
+    @IsOptional()
+    @IsBoolean()
+    merge_cells?: boolean;
 }

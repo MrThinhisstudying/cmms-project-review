@@ -182,12 +182,12 @@ export default function RepairDetailDrawer({
                  (role === 'DIRECTOR' && data.status_request === 'WAITING_DIRECTOR');
       }
       if (currentPhase === 'inspection') {
-          return (data.status_inspection === 'inspection_pending' && role === 'TEAM_LEAD') ||
+          return (data.status_inspection === 'inspection_pending' && role === 'TEAM_LEAD' && !!data.inspection_created_at) ||
                  (data.status_inspection === 'inspection_lead_approved' && role === 'UNIT_HEAD') ||
                  (data.status_inspection === 'inspection_manager_approved' && (role === 'ADMIN' || role === 'DIRECTOR'));
       }
       if (currentPhase === 'acceptance') {
-          return (data.status_acceptance === 'acceptance_pending' && role === 'TEAM_LEAD') ||
+          return (data.status_acceptance === 'acceptance_pending' && role === 'TEAM_LEAD' && !!data.acceptance_created_at) ||
                  (data.status_acceptance === 'acceptance_lead_approved' && role === 'UNIT_HEAD') ||
                  (data.status_acceptance === 'acceptance_manager_approved' && (role === 'ADMIN' || role === 'DIRECTOR'));
       }
@@ -262,13 +262,95 @@ export default function RepairDetailDrawer({
   const renderB04 = () => {
       if(!data.inspection_created_at && !data.inspection_items?.length && data.status_inspection !== 'REJECTED_B04' && data.status_inspection !== 'inspection_rejected') return <Empty description="Chưa có biên bản kiểm nghiệm" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
       
-      const inspectionCols = [
+      const inspectionItems = data.inspection_items || [];
+      const mergeConfig = (data.extra_config as any)?.merge_cells !== false; // Default true
+
+      const inspectionCols: any[] = [
+          { title: "STT", width: 50, align: "center" as const, render: (_: any, __: any, index: number) => index + 1 },
           { title: "Mô tả", dataIndex: "description", key: "desc" },
-          { title: "Nguyên nhân", dataIndex: "cause", key: "cause" },
-          { title: "Biện pháp", dataIndex: "solution", key: "sol" },
+          { 
+              title: "Nguyên nhân", 
+              dataIndex: "cause", 
+              key: "cause",
+              onCell: (record: any, index: number) => {
+                  if (!mergeConfig) return {};
+                  
+                  // If processed already, skip logic (Ant Design calls this per cell)
+                  // We need to look backward to see if we should be hidden (rowSpan = 0)
+                  // Or look forward to see how many to span.
+                  
+                  // Logic: If current matches previous OR previous covers current (because current is empty),
+                  // verify if we are the start of a group. 
+                  
+                  // Simpler: Pre-calculate spans outside
+                  return { rowSpan: record.causeRowSpan };
+              }
+          },
+          { 
+              title: "Biện pháp", 
+              dataIndex: "solution", 
+              key: "sol",
+              onCell: (record: any, index: number) => {
+                  if (!mergeConfig) return {};
+                  return { rowSpan: record.solutionRowSpan };
+              }
+          },
       ];
 
-      const dataSource = (data.inspection_materials || []).map((m: any, index: number) => ({
+      // Pre-calculate spans for UI
+      if (mergeConfig && inspectionItems.length > 0) {
+          // Reset
+          inspectionItems.forEach((item: any) => {
+              item.causeRowSpan = 1;
+              item.solutionRowSpan = 1;
+          });
+
+          // Cause
+          for (let i = 0; i < inspectionItems.length; i++) {
+              let item = inspectionItems[i] as any;
+              if (item.causeRowSpan === 0) continue; // Already merged
+              
+              let span = 1;
+              for (let j = i + 1; j < inspectionItems.length; j++) {
+                 const next = inspectionItems[j] as any;
+                 const currText = (item.cause || '').trim();
+                 const nextText = (next.cause || '').trim();
+                 
+                 if (nextText === currText || nextText === '') {
+                     span++;
+                     next.causeRowSpan = 0; // Hide
+                 } else {
+                     break;
+                 }
+              }
+              item.causeRowSpan = span;
+          }
+
+          // Solution
+           for (let i = 0; i < inspectionItems.length; i++) {
+              let item = inspectionItems[i] as any;
+              if (item.solutionRowSpan === 0) continue; 
+              
+              let span = 1;
+              for (let j = i + 1; j < inspectionItems.length; j++) {
+                 const next = inspectionItems[j] as any;
+                 const currText = (item.solution || '').trim();
+                 const nextText = (next.solution || '').trim();
+                 
+                 if (nextText === currText || nextText === '') {
+                     span++;
+                     next.solutionRowSpan = 0; 
+                 } else {
+                     break;
+                 }
+              }
+              item.solutionRowSpan = span;
+          }
+      }
+
+      const dataSource = (data.inspection_materials || [])
+        .filter((m: any) => m.phase !== 'acceptance')
+        .map((m: any, index: number) => ({
           ...m,
           key: m.item_id || index,
           formatted_specs: m.specifications || m.code || m.item_code || (m.item_id ? `MA-${m.item_id}` : ""),
@@ -276,6 +358,7 @@ export default function RepairDetailDrawer({
       }));
 
       const materialCols = [
+          { title: "STT", width: 50, align: "center" as const, render: (_: any, __: any, index: number) => index + 1 },
           { title: "Tên vật tư", dataIndex: "item_name", key: "name" },
           { title: "Quy cách, mã số", dataIndex: "formatted_specs", key: "specifications" },
           { title: "Số lượng", dataIndex: "formatted_qty", key: "qty" },

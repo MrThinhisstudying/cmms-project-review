@@ -108,6 +108,7 @@ export interface IRepair {
 
   created_at: string;
   updated_at?: string;
+  extra_config?: any; // For flexible configs like merge_cells
 }
 
 export interface RepairUpsertPayload {
@@ -124,6 +125,7 @@ export interface RepairInspectionPayload {
   reason?: string;
   inspection_items?: IInspectionItem[];
   inspection_other_opinions?: string;
+  merge_cells?: boolean;
 }
 
 export interface RepairAcceptancePayload {
