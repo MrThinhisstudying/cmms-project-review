@@ -105,7 +105,11 @@ const MaintenanceDetailModal: React.FC<Props> = ({
                     title: 'Ngày dự kiến',
                     dataIndex: 'next_maintenance_date',
                     key: 'date',
-                    render: (val) => dayjs(val).format('DD/MM/YYYY')
+                    render: (val) => {
+                        if (!val) return '---';
+                        const d = dayjs(val);
+                        return d.isValid() ? d.format('DD/MM/YYYY') : '---';
+                    }
                 },
                  {
                     title: 'Ngày hoàn thành',

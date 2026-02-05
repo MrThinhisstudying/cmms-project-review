@@ -39,6 +39,15 @@ export class MaintenanceController {
         }
     }
 
+    @Post('generate-series')
+    async generateSeries(@Body() dto: { device_id: number, levels: string[], start_date: string, description?: string }) {
+        try {
+            return await this.maintenanceService.generatePlanSeries(dto);
+        } catch (error: any) {
+            throw new HttpException(error.message || 'Lỗi tạo chuỗi kế hoạch', HttpStatus.BAD_REQUEST);
+        }
+    }
+
     @Get('dashboard')
     async getDashboardOverview() {
         const data = await this.maintenanceService.getDashboardOverview();

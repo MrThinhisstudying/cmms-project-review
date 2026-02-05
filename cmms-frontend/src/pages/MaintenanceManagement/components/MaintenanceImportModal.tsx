@@ -111,6 +111,20 @@ const MaintenanceImportModal: React.FC<MaintenanceImportModalProps> = ({
             </Button>,
           ]}
         >
+          {/* HIỂN THỊ THỐNG KÊ */}
+          {importResult?.stats && (
+             <div style={{ marginBottom: 16, textAlign: 'center' }}>
+                <Text type="success" style={{ marginRight: 16 }}>
+                    ✅ Thành công: <b>{importResult.stats.totalSuccess}</b>
+                </Text>
+                <Text type="danger">
+                    ❌ Thất bại/Bỏ qua: <b>{importResult.stats.totalFailed}</b>
+                </Text>
+                <div style={{ marginTop: 8, color: '#888' }}>
+                    Tổng số dòng xử lý: {importResult.stats.total}
+                </div>
+             </div>
+          )}
           {importResult?.details && (
             <div style={{ maxHeight: "200px", overflow: "auto" }}>
               <Table

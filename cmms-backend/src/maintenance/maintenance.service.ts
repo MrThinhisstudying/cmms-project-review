@@ -95,6 +95,7 @@ export class MaintenanceService {
             scheduled_date: this.toDateOrNull(dto.scheduled_date),
             next_maintenance_date: this.toDateOrNull(dto.scheduled_date),
             status: MaintenanceStatus.ACTIVE,
+            cycle_config: [dto.level], // <--- Fix: Populate cycle_config so it shows up in Original View
         });
         return await this.maintenanceRepo.save(m);
     }
@@ -579,13 +580,20 @@ export class MaintenanceService {
 
         // 1. Tìm Header
         let headerRowIdx = -1, colNameIdx = -1, dateColIdx = -1, modelColIdx = -1;
+        let regColIdx = -1, countryColIdx = -1;
+
         for (let i = 0; i < Math.min(rawRows.length, 20); i++) {
             const rowStr = rawRows[i].map(c => String(c).trim().toUpperCase());
             if (rowStr.findIndex(s => s.includes('TÊN') && (s.includes('THIẾT BỊ') || s.includes('TB'))) !== -1) {
                 headerRowIdx = i;
                 colNameIdx = rowStr.findIndex(s => s.includes('TÊN') && (s.includes('THIẾT BỊ') || s.includes('TB')));
                 dateColIdx = rowStr.findIndex(s => s.includes('NGÀY') && (s.includes('BD') || s.includes('GẦN')));
-                modelColIdx = rowStr.findIndex(s => (s.includes('KÝ HIỆU') || s.includes('MODEL')) && !s.includes('SỐ'));
+                modelColIdx = rowStr.findIndex(s => (s.includes('KÝ HIỆU') || s.includes('MODEL')) && !s.includes('SỐ')); // Tránh 'SỐ' vì có thể là Biển số
+                
+                // Mới: Tìm cột Biển số & Nước sản xuất
+                regColIdx = rowStr.findIndex(s => s.includes('BIỂN SỐ') || s.includes('REG') || s.includes('LICENSE'));
+                countryColIdx = rowStr.findIndex(s => s.includes('NƯỚC') || s.includes('XUẤT XỨ') || s.includes('ORIGIN'));
+
                 break;
             }
         }
@@ -617,49 +625,99 @@ export class MaintenanceService {
                 continue;
             }
 
-            // 1. Normalize: Trim info & replace non-breaking spaces
-            // Handle cases where Excel uses non-breaking space (char 160)
+            // 1. Normalize name
             const cleanName = String(deviceName).trim().replace(/\u00A0/g, ' ').replace(/\s+/g, ' ');
 
-            // Strategy 1: Direct Search
-            let device = await this.deviceRepo.findOne({
-                where: [
-                    { name: ILike(`%${cleanName}%`) },
-                    { serial_number: ILike(`%${cleanName}%`) },
-                    { reg_number: ILike(`%${cleanName}%`) }
-                ]
-            });
+            let device = null;
 
-            // Strategy 2: Fallback - Relaxed Search (Handle separators like /, -, .)
-            // Example: "Thiết bị/Mooc" vs "Thiết bị / Mooc"
-            if (!device) {
-                // Replace special syntax characters with %
-                const relaxedName = cleanName.replace(/[\/\-\.]/g, '%');
+            // --- CHIẾN LƯỢC TÌM THIẾT BỊ MỚI ---
+            
+            // Priority 1: Tìm theo Biển số xe (Nếu Excel có cột này và row có giá trị)
+            if (regColIdx !== -1 && rowArray[regColIdx]) {
+                const regRaw = String(rowArray[regColIdx]).trim();
                 device = await this.deviceRepo.findOne({
+                    where: { reg_number: ILike(`${regRaw}`) } // Exact text match first
+                });
+                
+                // Nếu chưa thấy, thử tìm gần đúng (phòng trường hợp user nhập thiếu dấu cách/gạch)
+                if (!device) {
+                     const relaxedReg = regRaw.replace(/[\s\-\.]/g, '%');
+                     device = await this.deviceRepo.findOne({
+                         where: { reg_number: ILike(`%${relaxedReg}%`) }
+                     });
+                }
+            }
+
+            // Priority 2: Tìm theo Name (Fallback cũ)
+            if (!device) {
+                 // Strategy 2.1: Direct Search
+                 device = await this.deviceRepo.findOne({
                     where: [
-                        { name: ILike(`%${relaxedName}%`) },
-                        { serial_number: ILike(`%${relaxedName}%`) },
-                        { reg_number: ILike(`%${relaxedName}%`) }
+                        { name: ILike(`%${cleanName}%`) },
+                        { serial_number: ILike(`%${cleanName}%`) }, // Vẫn giữ tìm theo serial number nếu lỡ user nhập vào cột Tên
+                        { reg_number: ILike(`%${cleanName}%`) }
                     ]
                 });
+
+                // Strategy 2.2: Fallback - Relaxed Search (Handle separators like /, -, .)
+                if (!device) {
+                    const relaxedName = cleanName.replace(/[\/\-\.]/g, '%');
+                    device = await this.deviceRepo.findOne({
+                        where: [
+                            { name: ILike(`%${relaxedName}%`) },
+                            { serial_number: ILike(`%${relaxedName}%`) },
+                            { reg_number: ILike(`%${relaxedName}%`) }
+                        ]
+                    });
+                }
             }
 
             if (!device) {
-                console.log(`[Import Fail] Could not find device: "${cleanName}" (Original: "${deviceName}")`);
+                console.log(`[Import Fail] Could not find device: "${cleanName}" (Reg: "${rowArray[regColIdx] || 'N/A'}")`);
                 results.push({ 
                     name: cleanName, 
-                    status: `Skipped (Device Not Found). Checked: Name/Serial/Reg. Input: "${cleanName}"` 
+                    status: `Skipped (Device Not Found). Checked Reg & Name.` 
                 });
                 continue;
             }
 
-            // Cập nhật Model (Brand) nếu có trong Excel
+            // --- FEATURE UPDATE THÔNG TIN THIẾT BỊ ---
+            let isDeviceUpdated = false;
+
+            // Cập nhật Model (Brand)
             if (modelColIdx !== -1 && rowArray[modelColIdx]) {
-                device.brand = String(rowArray[modelColIdx]).trim();
+                const newBrand = String(rowArray[modelColIdx]).trim();
+                if (device.brand !== newBrand) {
+                    device.brand = newBrand;
+                    isDeviceUpdated = true;
+                }
+            }
+
+            // Cập nhật Nước sản xuất (Country Origin)
+            if (countryColIdx !== -1 && rowArray[countryColIdx]) {
+                 const newOrigin = String(rowArray[countryColIdx]).trim();
+                 if (device.country_of_origin !== newOrigin) {
+                     device.country_of_origin = newOrigin;
+                     isDeviceUpdated = true;
+                 }
+            }
+            
+            // Cập nhật Biển số (nếu chưa có hoặc khác - CHỈ UPDATE NẾU DB ĐANG TRỐNG ĐỂ AN TOÀN)
+            // Nếu đã tìm thấy bằng reg_number thì nó khớp rồi.
+            // Nếu tìm thấy bằng Name mà DB chưa có reg_number, thì update từ Excel vào
+            if (regColIdx !== -1 && rowArray[regColIdx]) {
+                const newReg = String(rowArray[regColIdx]).trim();
+                if (!device.reg_number) {
+                    device.reg_number = newReg;
+                     isDeviceUpdated = true;
+                }
+            }
+
+            if (isDeviceUpdated) {
                 await this.deviceRepo.save(device);
             }
 
-            // Xóa dữ liệu cũ
+            // Xóa dữ liệu cũ của maintenance
             await this.maintenanceRepo.delete({ device: { device_id: device.device_id } });
 
             // Base Date & First Month Logic
@@ -798,10 +856,135 @@ export class MaintenanceService {
                 }
             }
 
-            await this.maintenanceRepo.save(plansToSave);
-            results.push({ name: deviceName, status: `Đã sinh lịch 2 năm (${plansToSave.length} phiếu). Bắt đầu: ${startMonthDate.format('MM/YYYY')}` });
+            // Lưu tất cả vào DB (Batch Insert)
+            if (plansToSave.length > 0) {
+                 await this.maintenanceRepo.save(plansToSave);
+                 results.push({name: deviceName, status: `Thành công: ${plansToSave.length} phiếu`});
+            } else {
+                 results.push({name: deviceName, status: `Skipped (No Config)`});
+            }
         }
-        return { message: 'Import Priority Full Schedule Success', details: results };
+
+        const totalSuccess = results.filter(r => r.status.includes('Thành công')).length;
+        const totalFailed = results.length - totalSuccess;
+
+        return {
+            message: 'Import hoàn tất!', 
+            details: results,
+            stats: {
+                totalSuccess,
+                totalFailed,
+                total: results.length
+            }
+        };
+    }
+
+    // --- 6. GENERATE SERIES (AUTO-GENERATE 2 YEARS) ---
+    async generatePlanSeries(dto: { device_id: number, levels: string[], start_date: string, description?: string }) {
+        const device = await this.deviceRepo.findOne({where: {device_id: dto.device_id}});
+        if (!device) throw new NotFoundException('Device not found');
+
+        const startDate = dayjs(dto.start_date);
+        const lastMaintDate = startDate.isValid() ? startDate.toDate() : null;
+
+        const levels = dto.levels;
+
+        // XÓA DỮ LIỆU CŨ TRƯỚC KHI TẠO MỚI (Làm sạch data rác)
+        await this.maintenanceRepo.delete({ device: { device_id: device.device_id } });
+        
+        // Config detection
+        const config = {
+            hasWeekly: levels.includes('Tuần') || levels.includes('Week'),
+            has1M: levels.includes('1M') || levels.includes('1 Tháng'),
+            has3M: levels.includes('3M') || levels.includes('3 Tháng'),
+            has6M: levels.includes('6M') || levels.includes('6 Tháng'),
+            has9M: levels.includes('9M') || levels.includes('9 Tháng'),
+            has1Y: levels.includes('1Y') || levels.includes('1 Năm'),
+            has2Y: levels.includes('2Y') || levels.includes('2 Năm'),
+        };
+
+        const jobCycles = [...levels]; // Use selected levels as config
+
+        const plansToSave = [];
+        let hasSetFirstActive = false;
+
+        // VÒNG LẶP 24 THÁNG
+        // Logic timeline: Bắt đầu từ tháng của startDate
+        // startDate > 20 -> Bắt đầu tính từ tháng sau
+        let startMonthDate = startDate.startOf('month');
+        if (startDate.date() > 20) {
+            startMonthDate = startMonthDate.add(1, 'month');
+        }
+
+        for (let m = 0; m < 24; m++) {
+            const currentMonth = startMonthDate.add(m, 'month');
+            const monthIndex = m + 1;
+
+            // 1. Weekly (Days 1, 8, 15, 22)
+             if (config.hasWeekly) {
+                const days = [1, 8, 15, 22];
+                for (const d of days) {
+                    const wDate = currentMonth.date(d).toDate();
+                    
+                    let status = MaintenanceStatus.INACTIVE;
+                    // Nếu là phiếu đầu tiên trong toàn bộ chuỗi --> Active
+                    if (!hasSetFirstActive) {
+                        status = MaintenanceStatus.ACTIVE;
+                        hasSetFirstActive = true;
+                    }
+
+                    plansToSave.push(this.maintenanceRepo.create({
+                        device,
+                        level: 'Tuần',
+                        status: status,
+                        scheduled_date: wDate,
+                        next_maintenance_date: wDate,
+                        last_maintenance_date: status === MaintenanceStatus.ACTIVE ? lastMaintDate : null,
+                        cycle_config: jobCycles,
+                        description: dto.description || `Bảo dưỡng Tuần - Ngày ${d}/${currentMonth.format('MM/YYYY')}`
+                    }));
+                }
+            }
+
+            // 2. Monthly (End of Month)
+            if (config.has1M) {
+                const mDate = currentMonth.endOf('month').toDate();
+                
+                let status = MaintenanceStatus.INACTIVE;
+                if (!hasSetFirstActive) {
+                    status = MaintenanceStatus.ACTIVE;
+                    hasSetFirstActive = true;
+                }
+
+                // Create monthly plan
+                plansToSave.push(this.createPlanEntity(device, '1M', mDate, jobCycles, status === MaintenanceStatus.ACTIVE, status === MaintenanceStatus.ACTIVE ? lastMaintDate : null));
+            }
+
+            // 3. Priority Layers (Exclusive: 2Y > 1Y > 9M > 6M > 3M)
+            let priorityLevel = null;
+            if (config.has2Y && monthIndex % 24 === 0) priorityLevel = '2Y';
+            else if (config.has1Y && monthIndex % 12 === 0) priorityLevel = '1Y';
+            else if (config.has9M && monthIndex % 9 === 0) priorityLevel = '9M';
+            else if (config.has6M && monthIndex % 6 === 0) priorityLevel = '6M';
+            else if (config.has3M && monthIndex % 3 === 0) priorityLevel = '3M';
+
+            if (priorityLevel) {
+                 const pDate = currentMonth.endOf('month').toDate();
+                 let status = MaintenanceStatus.INACTIVE;
+                 if (!hasSetFirstActive) {
+                     status = MaintenanceStatus.ACTIVE;
+                     hasSetFirstActive = true;
+                 }
+                 plansToSave.push(this.createPlanEntity(device, priorityLevel, pDate, jobCycles, status === MaintenanceStatus.ACTIVE, status === MaintenanceStatus.ACTIVE ? lastMaintDate : null));
+            }
+        }
+
+
+        if (plansToSave.length > 0) {
+            await this.maintenanceRepo.save(plansToSave);
+        }
+
+        return { success: true, count: plansToSave.length };
     }
 }
 

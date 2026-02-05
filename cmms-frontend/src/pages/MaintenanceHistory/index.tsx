@@ -145,8 +145,12 @@ const MaintenanceHistoryPage: React.FC = () => {
       render: (text: string, record: any) => (
         <div>
           <div style={{ fontWeight: 600, color: "#1890ff" }}>{text}</div>
-          <div style={{ fontSize: 12, color: "#888" }}>
-            {record.device?.brand} ({record.device?.serial_number})
+          <div style={{ fontSize: 12, color: "#888", marginTop: 4 }}>
+            {record.device?.reg_number ? (
+               <Tag color="cyan">{record.device.reg_number}</Tag>
+            ) : (
+                <span style={{ fontStyle: 'italic', color: '#ccc' }}>Chưa có biển số</span>
+            )}
           </div>
         </div>
       ),

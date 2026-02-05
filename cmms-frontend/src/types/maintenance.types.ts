@@ -27,6 +27,7 @@ export interface IDeviceRef {
   device_id: number;
   name: string;
   brand?: string | null;
+  reg_number?: string | null;
 }
 
 export interface IMaintenance {

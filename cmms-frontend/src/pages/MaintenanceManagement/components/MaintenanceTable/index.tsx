@@ -59,6 +59,13 @@ const MaintenanceTable: React.FC<Props> = ({
   };
   const columns = [
     {
+      title: "STT",
+      key: "index",
+      align: "center" as const,
+      width: 50,
+      render: (_: any, __: any, index: number) => index + 1,
+    },
+    {
       title: "Thiết bị",
       key: "device",
       render: (_, record: IMaintenance) => (
@@ -66,8 +73,12 @@ const MaintenanceTable: React.FC<Props> = ({
           <div style={{ fontWeight: "bold", color: "#1890ff" }}>
             {record.device?.name || "N/A"}
           </div>
-          <div style={{ fontSize: "12px", color: "#888" }}>
-            {record.device?.brand}
+          <div style={{ fontSize: "12px", color: "#555" }}>
+            {record.device?.reg_number ? (
+               <Tag color="cyan">{record.device.reg_number}</Tag>
+            ) : (
+                <span style={{ fontStyle: 'italic', color: '#ccc' }}>Chưa có biển số</span>
+            )}
           </div>
         </div>
       ),

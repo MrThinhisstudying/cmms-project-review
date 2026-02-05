@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Modal, Form, Select, DatePicker, Input, Button, message } from "antd";
 import { getAllDevices } from "../../../apis/devices";
-import { createMaintenance } from "../../../apis/maintenance";
+import { createMaintenance, generateMaintenanceSeries } from "../../../apis/maintenance";
 import { getToken } from "../../../utils/auth";
 import dayjs from "dayjs";
 
@@ -43,16 +43,19 @@ const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
     setLoading(true);
     try {
       const token = getToken();
+      // Logic mới: Gọi API tạo series 2 năm
+      const levels = Array.isArray(values.level) ? values.level : [values.level];
+      
       const payload = {
-        device_id: values.device_id,
-        scheduled_date: values.scheduled_date.toISOString(),
-        level: values.level,
-        status: "active" as const,
-        description: values.description,
+          device_id: values.device_id,
+          levels: levels,
+          start_date: values.scheduled_date.toISOString(),
+          description: values.description,
       };
 
-      await createMaintenance(token, payload);
-      message.success("Tạo kế hoạch bảo dưỡng thành công!");
+      await generateMaintenanceSeries(token, payload);
+
+      message.success(`Đã tạo chuỗi kế hoạch bảo dưỡng (2 năm) cho ${levels.join(', ')} thành công!`);
       onSuccess();
     } catch (error: any) {
       message.error(error.message || "Tạo kế hoạch thất bại");
@@ -87,11 +90,18 @@ const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
             placeholder="Chọn thiết bị..."
             showSearch
             optionFilterProp="children"
-            filterOption={(input, option) =>
-              (option?.children as unknown as string)
-                .toLowerCase()
-                .includes(input.toLowerCase())
-            }
+            filterOption={(input, option) => {
+              const children = option?.children as unknown;
+              // Nếu children là string
+              if (typeof children === 'string') {
+                return children.toLowerCase().includes(input.toLowerCase());
+              }
+              // Nếu children là array (VD: ["Name", " (", "Reg", ")", ...])
+              if (Array.isArray(children)) {
+                   return children.join('').toLowerCase().includes(input.toLowerCase());
+              }
+              return false;
+            }}
           >
             {devices.map((d) => (
               <Option key={d.device_id} value={d.device_id}>
@@ -103,7 +113,7 @@ const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
 
         <Form.Item
           name="scheduled_date"
-          label="Ngày bắt đầu theo dõi"
+          label="Ngày BD gần nhất"
           rules={[{ required: true, message: "Chọn ngày bắt đầu" }]}
         >
           <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
@@ -112,9 +122,14 @@ const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
         <Form.Item
           name="level"
           label="Chu kỳ ban đầu (Cấp độ)"
-          rules={[{ required: true, message: "Chọn cấp độ bảo dưỡng" }]}
+          rules={[{ required: true, message: "Chọn ít nhất 1 cấp độ bảo dưỡng" }]}
         >
-          <Select placeholder="Chọn chu kỳ...">
+          <Select 
+            placeholder="Chọn các chu kỳ..." 
+            mode="multiple" 
+            allowClear
+            style={{ width: '100%' }}
+          >
             <Option value="Tuần">1 Tuần</Option>
             <Option value="1M">01 Tháng</Option>
             <Option value="3M">03 Tháng</Option>

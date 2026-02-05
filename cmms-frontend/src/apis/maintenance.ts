@@ -283,3 +283,20 @@ export const cancelMaintenanceTicket = async (
   if (!res.ok) throw new Error("Hủy phiếu thất bại");
   return await res.json();
 };
+// 3. Tạo chuỗi kế hoạch (2 năm)
+export const generateMaintenanceSeries = async (
+  token: string | null,
+  payload: { device_id: number; levels: string[]; start_date: string; description?: string }
+) => {
+  const res = await fetch(`${BASE}/maintenance/generate-series`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: token ? `Bearer ${token}` : "",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Tạo chuỗi kế hoạch thất bại");
+  return data;
+};

@@ -164,7 +164,8 @@ const MaintenanceForm: React.FC<Props> = ({
     } else {
         console.log("Device has no type or no device selected. Device:", device);
         if (selectedDeviceId) {
-             setFilteredTemplates([]); 
+             // FIX: Show all templates if device has no type to prevent blocking
+             setFilteredTemplates(templates); 
         } else {
              setFilteredTemplates(templates);
         }
@@ -523,11 +524,16 @@ const MaintenanceForm: React.FC<Props> = ({
                                 showSearch
                                 optionFilterProp="children"
                                 style={{ width: "100%" }}
-                                filterOption={(input, option) =>
-                                  (option?.children as unknown as string)
-                                    .toLowerCase()
-                                    .includes(input.toLowerCase())
-                                }
+                                filterOption={(input, option) => {
+                                  const children = option?.children as unknown;
+                                  if (typeof children === 'string') {
+                                      return children.toLowerCase().includes(input.toLowerCase());
+                                  }
+                                  if (Array.isArray(children)) {
+                                      return children.join('').toLowerCase().includes(input.toLowerCase());
+                                  }
+                                  return false;
+                                }}
                               >
                                 {technicianList
                                   .filter((u) => !selectedIds.includes(u.name))

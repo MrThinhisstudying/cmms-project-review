@@ -81,16 +81,17 @@ const OriginalPlanModal: React.FC<Props> = ({ open, onCancel }) => {
       render: (text: string) => <b>{text}</b>,
     },
     {
-      title: "Ký hiệu/ Model",
-      dataIndex: ["device", "brand"],
-      key: "brand",
+      title: "Nước sản xuất",
+      dataIndex: ["device", "country_of_origin"],
+      key: "country",
       width: 120,
     },
     {
-      title: "Serial Number",
-      dataIndex: ["device", "serial_number"],
-      key: "serial_number",
+      title: "Biển số xe",
+      dataIndex: ["device", "reg_number"],
+      key: "reg_number",
       width: 150,
+      render: (text: string) => text ? <Tag color="blue">{text}</Tag> : <span style={{color: '#ccc', fontStyle: 'italic'}}>N/A</span>
     },
     {
       title: "Ngày BD Gần Nhất",

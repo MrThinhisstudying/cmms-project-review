@@ -95,9 +95,9 @@ const DeviceForm: React.FC<DeviceFormProps> = ({
               </Form.Item>
            </Col>
            <Col span={8}>
-               <Form.Item name="device_code" label="Mã thiết bị" rules={[{ required: true }]}>
-                   <Input />
-               </Form.Item>
+                <Form.Item name="device_code" label="Mã thiết bị">
+                    <Input />
+                </Form.Item>
            </Col>
         </Row>
         <Row gutter={16}>
