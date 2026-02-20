@@ -74,28 +74,93 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket, exportType: 'full' |
                 continue;
             }
 
-            checklistHtml += `
-                <tr>
-                    <td class="text-center bold" style="padding: 3px;">${categoryIndex}</td>
-                    <td colspan="9" class="bold uppercase" style="text-align: left; padding: 3px 5px;">${cleanText(categoryName)}</td>
-                </tr>
-            `;
-            items.forEach((item: any, idx: number) => {
-                const stt = `${categoryIndex}.${idx + 1}`;
+            // FIX: Nếu là "Hạng mục chung" (Category mặc định của file mới) thì KHÔNG hiện Header Nhóm
+            // Để tránh dòng thừa "1. HẠNG MỤC CHUNG"
+            const isDefaultCategory = categoryName === 'Hạng mục chung';
+
+            if (!isDefaultCategory) {
                 checklistHtml += `
                     <tr>
-                        <td class="text-center" style="padding: 3px;">${stt}</td>
-                        <td style="padding-left: 5px; padding-right: 2px;">
-                            ${cleanText(item.task)}
-                            ${item.type === 'input_number' ? '<br><i>(Đo thông số/Measure)</i>' : ''}
-                            ${item.note ? `<br><i>Ghi chú: ${cleanText(item.note)}</i>` : ''}
-                        </td>
-                        <td class="text-center">${getReqChar(item, '1M')}</td><td class="text-center">${getResultMark(item, '1M')}</td>
-                        <td class="text-center">${getReqChar(item, '6M')}</td><td class="text-center">${getResultMark(item, '6M')}</td>
-                        <td class="text-center">${getReqChar(item, '1Y')}</td><td class="text-center">${getResultMark(item, '1Y')}</td>
-                        <td class="text-center">${getReqChar(item, '2Y')}</td><td class="text-center">${getResultMark(item, '2Y')}</td>
+                        <td class="text-center bold" style="padding: 3px;">${categoryIndex}</td>
+                        <td colspan="9" class="bold uppercase" style="text-align: left; padding: 3px 5px;">${cleanText(categoryName)}</td>
                     </tr>
                 `;
+            }
+            
+            items.forEach((item: any, idx: number) => {
+                // Ưu tiên dùng Code từ Excel, nếu không có thì tự sinh
+                const stt = (item.code && item.code.length < 10) ? item.code : `${categoryIndex}.${idx + 1}`;
+                
+                if (item.type === 'group_header') {
+                    // Row cho Group Header (In đậm, Merge cột)
+                    checklistHtml += `
+                        <tr>
+                            <td class="text-center bold" style="padding: 3px;">${stt}</td>
+                            <td colspan="9" class="bold" style="padding-left: 5px; background-color: #f0f0f0;">
+                                ${cleanText(item.task)}
+                            </td>
+                        </tr>
+                    `;
+                } else if (item.type === 'sub_row') {
+                    // --- LOGIC GỘP DÒNG THÔNG MINH (SMART MERGE) ---
+                    // Kiểm tra xem dòng này có phải là dòng Ghi chú (chỉ có 1 ô có chữ dài) hay không?
+                    const reqKeys = ['1M', '6M', '1Y', '2Y']; // Các cột hiển thị trên PDF
+                    const validReqs = reqKeys.map(k => getReqChar(item, k)).filter(v => v && v.trim() !== '');
+                    const isLongNote = validReqs.length === 1 && validReqs[0].length > 5;
+                    
+                    if (isLongNote) {
+                         // MERGE 8 CỘT (Toàn bộ phần yêu cầu) để hiển thị dòng ghi chú dài
+                         // Vd: "R (thay thế mỗi 2 năm...)"
+                         checklistHtml += `
+                            <tr>
+                                <td class="text-center" style="padding: 3px; border-top: none;"></td>
+                                <td style="padding-left: 5px; padding-right: 2px; border-top: none;">
+                                    ${item.note ? `<i>Ghi chú: ${cleanText(item.note)}</i>` : ''}
+                                </td>
+                                <td colspan="8" class="text-center" style="border-top: none; text-align: left; padding-left: 10px;">
+                                    ${validReqs[0]}
+                                </td>
+                            </tr>
+                        `;
+                    } else {
+                        // Row Phụ thường (Hiển thị từng ô như bình thường)
+                        checklistHtml += `
+                            <tr>
+                                <td class="text-center" style="padding: 3px; border-top: none;"></td>
+                                <td style="padding-left: 5px; padding-right: 2px; border-top: none;">
+                                    ${item.type === 'input_number' ? '<i>(Đo thông số/Measure)</i>' : ''}
+                                    ${item.note ? `<i>Ghi chú: ${cleanText(item.note)}</i>` : ''}
+                                </td>
+                                <td class="text-center" style="border-top: none;">${getReqChar(item, '1M')}</td><td class="text-center" style="border-top: none;">${getResultMark(item, '1M')}</td>
+                                <td class="text-center" style="border-top: none;">${getReqChar(item, '6M')}</td><td class="text-center" style="border-top: none;">${getResultMark(item, '6M')}</td>
+                                <td class="text-center" style="border-top: none;">${getReqChar(item, '1Y')}</td><td class="text-center" style="border-top: none;">${getResultMark(item, '1Y')}</td>
+                                <td class="text-center" style="border-top: none;">${getReqChar(item, '2Y')}</td><td class="text-center" style="border-top: none;">${getResultMark(item, '2Y')}</td>
+                            </tr>
+                        `;
+                    }
+                } else {
+                    // Row cho Item thường
+                    // Tính thụt đầu dòng dựa vào số dấu chấm (3.1 -> 1, 3.1.1 -> 2)
+                    const dots = (item.code ? (item.code.match(/\./g) || []).length : 0);
+                    // Base padding 5px, mỗi cấp thụt thêm 15px.
+                    // Nếu dots=0 (Cấp 1) -> 5px. dots=1 (Cấp 2) -> 20px.
+                    const paddingLeft = dots * 15 + 5;
+
+                    checklistHtml += `
+                        <tr>
+                            <td class="text-center" style="padding: 3px;">${stt}</td>
+                            <td style="padding-left: ${paddingLeft}px; padding-right: 2px;">
+                                ${cleanText(item.task)}
+                                ${item.type === 'input_number' ? '<br><i>(Đo thông số/Measure)</i>' : ''}
+                                ${item.note ? `<br><i>Ghi chú: ${cleanText(item.note)}</i>` : ''}
+                            </td>
+                            <td class="text-center">${getReqChar(item, '1M')}</td><td class="text-center">${getResultMark(item, '1M')}</td>
+                            <td class="text-center">${getReqChar(item, '6M')}</td><td class="text-center">${getResultMark(item, '6M')}</td>
+                            <td class="text-center">${getReqChar(item, '1Y')}</td><td class="text-center">${getResultMark(item, '1Y')}</td>
+                            <td class="text-center">${getReqChar(item, '2Y')}</td><td class="text-center">${getResultMark(item, '2Y')}</td>
+                        </tr>
+                    `;
+                }
             });
             categoryIndex++;
         }
@@ -288,13 +353,15 @@ export const buildPdfTemplate = (ticket: MaintenanceTicket, exportType: 'full' |
             <tr><td width="50%"></td><td width="50%" class="italic">Côn Đảo, ngày ${day} tháng ${month} năm ${year}</td></tr>
             <tr>
                 <td>
-                    <div class="bold">ĐỘI-KT / DIVISION/TEAM</div>
+                    <div class="bold">ĐƠN VỊ BẢO DƯỠNG, SỬA CHỮA</div>
+                    <div class="bold italic">TECHNICAL TEAM</div>
                     <div class="italic">(ký tên/ signature)</div>
                     <div class="sign-space"></div>
                     <div class="bold">${ticket.leader_user?.name || ''}</div>
                 </td>
                 <td>
-                    <div class="bold">TỔ VHTTBMĐ / GSE OP. TEAM</div>
+                    <div class="bold">ĐƠN VỊ QUẢN LÝ SỬ DỤNG</div>
+                    <div class="bold italic">GSE OPERATIONAL TEAM</div>
                     <div class="italic">(ký tên/ signature)</div>
                     <div class="sign-space"></div>
                     <div class="bold">${ticket.operator_user?.name || ''}</div>

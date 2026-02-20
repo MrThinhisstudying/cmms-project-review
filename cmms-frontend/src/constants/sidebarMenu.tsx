@@ -69,6 +69,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
     path: "/quan_ly_bao_duong",
     roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR"],
   },
+  /*
   {
     name: Menu.THU_VIEN_QUY_TRINH,
     icon: <BookOutlined />,
@@ -77,6 +78,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
     path: "/maintenance-procedures",
     roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR"],
   },
+  */
   {
     name: Menu.QUAN_LY_LICH_SU_PHIEU,
     icon: <BookOutlined />,

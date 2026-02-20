@@ -134,7 +134,7 @@ export class MaintenanceService {
         return await this.maintenanceRepo.find({
             where: {device: {device_id: deviceId}},
             order: {next_maintenance_date: 'ASC'},
-            relations: ['device', 'user', 'department'],
+            relations: ['device', 'user', 'department', 'tickets', 'tickets.user', 'tickets.leader_user', 'tickets.operator_user'],
         });
     }
 
@@ -411,17 +411,84 @@ export class MaintenanceService {
     async importTemplate(fileBuffer: Buffer, name: string, code: string, deviceType: string, release_no?: string, revision_no?: string) {
         const workbook = XLSX.read(fileBuffer, {type: 'buffer'});
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rawData = XLSX.utils.sheet_to_json(sheet);
+        // 1. Setup Manual Parsing
+        const range = XLSX.utils.decode_range(sheet['!ref']); // Get valid range (e.g. A1:Z100)
+        
+        // Helper: Get strictly text value from cell (Priority: Formatted Text (.w) > Value (.v))
+        const getCellText = (r: number, c: number): string => {
+            const cellAddress = XLSX.utils.encode_cell({r, c});
+            const cell = sheet[cellAddress];
+            if (!cell) return '';
+            // Critical Fix: Prefer .w (Formatted Text) to avoid Date Serial numbers (46xxx)
+            return (cell.w !== undefined ? String(cell.w) : String(cell.v || '')).trim();
+        };
+
+        // 2. Scan for Header Row (First 15 rows)
+        let headerRowIndex = 0;
+        let colIndexMap: Record<string, number> = {};
+        
+        for (let r = 0; r < Math.min(range.e.r + 1, 15); r++) {
+            const rowValues: string[] = [];
+            for (let c = range.s.c; c <= range.e.c; c++) {
+                rowValues.push(getCellText(r, c).toUpperCase());
+            }
+            
+            const rowStr = JSON.stringify(rowValues);
+            
+            // Detection Logic
+            const hasKeyCols = 
+                (rowStr.includes('CODE') || rowStr.includes('MÃ')) && 
+                (rowStr.includes('TASK') || rowStr.includes('HẠNG MỤC') || rowStr.includes('NỘI DUNG'));
+            
+            const hasCycleCols = 
+                rowStr.includes('1M') || rowStr.includes('1 THÁNG') || rowStr.includes('1 MONTH') || rowStr.includes('1T') ||
+                rowStr.includes('1Y') || rowStr.includes('1 NĂM') || rowStr.includes('1 YEAR') || rowStr.includes('1N');
+
+            if (hasKeyCols || hasCycleCols) {
+                headerRowIndex = r;
+                // Build Column Map immediately
+                rowValues.forEach((val, idx) => {
+                    if (val) colIndexMap[val] = idx;
+                });
+                break;
+            }
+        }
 
         const structure = [];
         let currentCategory = null;
 
-        for (const row of rawData) {
-            // FIX: Handle missing Category -> Use "Hạng mục chung"
-            const categoryName = row['Category'] || 'Hạng mục chung';
+        // Helper: Find value by flexible key matching against Column Map
+        const getVal = (r: number, searchKeys: string[]): string => {
+            const normKeys = searchKeys.map(k => k.trim().toUpperCase());
+            const headerNames = Object.keys(colIndexMap);
+
+            for (const key of normKeys) {
+                // Find matching header column index
+                const matchingHeader = headerNames.find(h => 
+                    h === key || h.startsWith(key + '/') || h.startsWith(key + ' ') || h.includes(key)
+                );
+                
+                if (matchingHeader !== undefined) {
+                    const colIdx = colIndexMap[matchingHeader];
+                    const val = getCellText(r, colIdx);
+                    if (val) return val;
+                }
+            }
+            return '';
+        };
+
+            // 3. Iterate Data Rows
+        for (let r = headerRowIndex + 1; r <= range.e.r; r++) {
+            // Check if empty row
+            let isEmpty = true;
+            for (let c = range.s.c; c <= range.e.c; c++) {
+                if (getCellText(r, c)) { isEmpty = false; break; }
+            }
+            if (isEmpty) continue;
+
+            const categoryName = getVal(r, ['CATEGORY', 'NHÓM', 'SYSTEM']) || 'Hạng mục chung';
 
             if (!currentCategory || currentCategory.category !== categoryName) {
-                // Check if category already exists in structure to avoid duplicates if rows are not sorted
                 const existingCategory = structure.find(c => c.category === categoryName);
                 if (existingCategory) {
                     currentCategory = existingCategory;
@@ -430,33 +497,92 @@ export class MaintenanceService {
                     structure.push(currentCategory);
                 }
             }
-            // Helper: Find value by key (Case Insensitive & Trimmed)
-            const getValue = (r: any, keys: string[]) => {
-                const rowKeys = Object.keys(r);
-                for (const key of keys) {
-                    // 1. Try exact match
-                    if (r[key] !== undefined) return r[key];
-                    // 2. Try case-insensitive + trim match
-                    const normalize = (s: string) => s.trim().toUpperCase();
-                    const foundKey = rowKeys.find(k => normalize(k) === normalize(key));
-                    if (foundKey && r[foundKey] !== undefined) return r[foundKey];
-                }
-                return undefined;
+
+            // Get Raw Requirements (Preserve strings like "I", "D", "R", "I, L")
+            const requirements = {
+                'Tuần': getVal(r, ['Tuần', 'Weekly', 'Week']), 
+                '1M': getVal(r, ['1M', '1 Tháng', 'Month', '1T', '250G']), 
+                '3M': getVal(r, ['3M', '3 Tháng', '3T']), 
+                '6M': getVal(r, ['6M', '6 Tháng', '6T', '500G']), 
+                '9M': getVal(r, ['9M', '9 Tháng', '9T']),
+                '1Y': getVal(r, ['1Y', '1 Năm', 'Year', '1N', '1000G']), 
+                '2Y': getVal(r, ['2Y', '2 Năm', '2N', '2000G'])
             };
 
-            currentCategory.items.push({
-                code: row['Code'] || `ITEM_${Date.now()}_${Math.random()}`,
-                task: row['Task'],
-                type: row['Type'] === 'M' ? 'input_number' : 'checkbox',
-                requirements: {
-                    'Tuần': getValue(row, ['Tuần', 'Weekly', 'Week']), 
-                    '1M': getValue(row, ['1M', '1 Tháng', 'Month']), 
-                    '3M': getValue(row, ['3M', '3 Tháng']), 
-                    '6M': getValue(row, ['6M', '6 Tháng']), 
-                    '1Y': getValue(row, ['1Y', '1 Năm', 'Year']), 
-                    '2Y': getValue(row, ['2Y', '2 Năm'])
-                },
-            });
+            const hasAnyRequirement = Object.values(requirements).some(v => v !== undefined && v !== '');
+            const taskContent = getVal(r, ['Task', 'Hạng mục', 'Nội dung', 'Content', 'Description']);
+            
+            // Fix Code: Ensure it is treated as string. 
+            let codeContent = getVal(r, ['Code', 'Mã', 'STT', 'No.']);
+            
+            // --- DEBUG LOGGING ---
+            if (codeContent && codeContent.length > 3 && !isNaN(Number(codeContent))) {
+                console.log(`[IMPORT DEBUG] Row ${r} Code Raw: "${codeContent}"`);
+            }
+            // ---------------------
+
+            // HEURISTIC: Handle Excel Date Serial Conversion
+            // User sequences: 46023 (Jan 1), 46024 (Jan 2), 46025 (Jan 3)...
+            // Implies: Jan 1 -> 1.1, Jan 2 -> 1.2, Jan 3 -> 1.3
+            // So Logic: Code = Month.Day (m.d)
+            if (codeContent && !isNaN(Number(codeContent)) && Number(codeContent) > 30000) {
+                 const serial = parseInt(codeContent); // Truncate time
+                 const dateInfo = XLSX.SSF.parse_date_code(serial);
+                 
+                 console.log(`[IMPORT DEBUG] Row ${r} Serial: ${serial} -> Date: ${JSON.stringify(dateInfo)}`);
+
+                 if (dateInfo) {
+                     // CAUTION: dateInfo.m is 1-based (Jan=1).
+                     // Map: Jan 1 -> 1.1. Jan 2 -> 1.2.
+                     // This seems most consistent with "Checklist Codes" (Group.Item).
+                     codeContent = `${dateInfo.d}.${dateInfo.m}`;
+                     console.log(`[IMPORT DEBUG] -> FIXED to: "${codeContent}"`);
+                 }
+            }
+
+            if (!codeContent && !taskContent && !hasAnyRequirement) continue; // Skip completely empty processed rows
+
+            let itemType = 'checkbox';
+            
+            // LOGIC NHẬN DIỆN LOẠI DÒNG (REALITY-BASED)
+            if (!hasAnyRequirement && codeContent) {
+                // Có Mã nhưng KHÔNG có yêu cầu -> Có thể là Group Header (VD: 3.1 Hệ thống động cơ)
+                // Hoặc là dòng tiêu đề con. 
+                // Thường Group Header sẽ có chữ đậm hoặc IN HOA (nhưng ta khó check style ở đây).
+                // Giả định: Nếu Code có dạng X.X (Vd 3.1) mà không có yêu cầu -> Group Header
+                itemType = 'group_header';
+            } else if (!hasAnyRequirement && !codeContent && taskContent) {
+                 // Không Mã, Không Yêu cầu, chỉ có Nội dung -> Group Header hoặc Note Header
+                 itemType = 'group_header';
+            } else if (hasAnyRequirement && !codeContent) {
+                // Có Yêu cầu nhưng KHÔNG có Mã
+                // VD: "R (thay thế hàng năm)" -> Đây là Sub-row / Note
+                itemType = 'sub_row';
+            } else if (hasAnyRequirement && codeContent) {
+                 // Có cả Mã và Yêu cầu -> Item chuẩn
+                 const typeVal = getVal(r, ['Type', 'Loại']);
+                 itemType = (typeVal === 'M' || typeVal === 'Input' || typeVal.toUpperCase() === 'NHẬP') ? 'input_number' : 'checkbox';
+            }
+
+            // Clean data
+            if (!codeContent && itemType === 'group_header') {
+                 // Auto-generate code for header if missing? No, keep empty usually.
+                 // But for uniqueness in list keys, maybe?
+            }
+            
+            // Note extraction: If task content starts with "Ghi chú:" or "Note:", extract it?
+            // Or let `taskContent` be the full text.
+
+            const newItem = {
+                code: codeContent,
+                task: taskContent || (itemType === 'group_header' ? 'Nhóm (Category)' : ''),
+                type: itemType,
+                requirements: requirements,
+                // Optional: Store raw Note if detected in a separate column?
+                note: getVal(r, ['Note', 'Ghi chú', 'Remark'])
+            };
+
+            currentCategory.items.push(newItem);
         }
 
         const newTemplate = this.templateRepo.create({
@@ -465,11 +591,12 @@ export class MaintenanceService {
             device_type: deviceType,
             release_no,
             revision_no,
-            checklist_structure: structure,
+            checklist_structure: structure, // Save JSON Structure
         });
 
         return await this.templateRepo.save(newTemplate);
     }
+
 
     // --- CÁC HÀM KHÁC (Template/Dashboard) ---
 

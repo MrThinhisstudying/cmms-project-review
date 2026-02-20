@@ -160,12 +160,38 @@ const ChecklistExecutor: React.FC<Props> = ({
               pagination={false}
               size="small"
               columns={[
-                { title: "Hạng mục", dataIndex: "task", width: "40%" },
+                { 
+                  title: "Hạng mục", 
+                  dataIndex: "task", 
+                  width: "50%",
+                  render: (text, r) => {
+                    const isHeader = r.type === 'group_header';
+                    const isSubRow = r.type === 'sub_row';
+
+                    if (isSubRow) return null; // Ẩn tên hạng mục cho dòng phụ
+
+                    // Đếm số dấu chấm để thụt đầu dòng
+                    const dots = (r.code.match(/\./g) || []).length;
+                    const paddingLeft = isHeader ? 0 : dots * 20; 
+                    
+                    return (
+                      <div style={{ 
+                        paddingLeft, 
+                        fontWeight: isHeader ? 'bold' : 'normal',
+                        color: isHeader ? '#1890ff' : 'inherit'
+                      }}>
+                        {r.code && <span style={{ marginRight: 8, opacity: 0.7 }}>{r.code}</span>}
+                        {text}
+                      </div>
+                    );
+                  }
+                },
                 {
                   title: "Yêu cầu",
                   key: "req",
-                  width: "15%",
+                  width: "10%",
                   render: (_, r) => {
+                    if (r.type === 'group_header') return null;
                     const req = r.requirements?.[currentLevel];
                     return <Tag color="blue">{req}</Tag>;
                   },
@@ -173,17 +199,15 @@ const ChecklistExecutor: React.FC<Props> = ({
                 {
                   title: "Thực hiện",
                   key: "action",
-                  width: "25%",
+                  width: "20%",
                   render: (_, r) => {
+                    if (r.type === 'group_header') return null;
+
                     const req = r.requirements?.[currentLevel];
                     const reqNorm = req ? req.toUpperCase() : "";
                     
                     // Logic hiển thị updated:
-                    // 1. Chỉ hiện ô nhập nếu (type=input_number HOẶC có M) VÀ (KHÔNG có I)
-                    // Tức là nếu có I (Inspect) thì ưu tiên tích Đạt, bỏ qua nhập số (theo yêu cầu user)
                     const showInput = (r.type === "input_number" || reqNorm.includes("M")) && !reqNorm.includes("I");
-                    
-                    // 2. Hiện Checkbox nếu KHÔNG PHẢI Input thuần hoặc CÓ I
                     const showCheckbox = !showInput; 
 
                     return (
@@ -213,7 +237,7 @@ const ChecklistExecutor: React.FC<Props> = ({
                                 e.target.value === "pass"
                               )
                             }
-                            value={results[r.code]?.status === 'pass' ? 'pass' : (results[r.code]?.status === 'fail' ? 'fail' : null)}
+                            value={results[r.code]?.value ? 'pass' : (results[r.code]?.status === 'pass' ? 'pass' : (results[r.code]?.status === 'fail' ? 'fail' : null))}
                           >
                             <Radio value="pass" style={{ color: "green" }}>
                               Đạt
@@ -231,11 +255,13 @@ const ChecklistExecutor: React.FC<Props> = ({
                   title: "Ghi chú",
                   key: "note",
                   render: (_, r) => (
+                    r.type === 'group_header' ? null : (
                       <Input
                         onChange={(e) =>
                           handleUpdate(r, group.category, "note", e.target.value)
                         }
                       />
+                    )
                   ),
                 },
               ]}

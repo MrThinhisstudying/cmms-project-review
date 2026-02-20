@@ -211,22 +211,23 @@ const MaintenanceForm: React.FC<Props> = ({
     return !excluded.some((ex) => pos.includes(ex));
   });
 
-  const leaderList = users.filter((u) => {
+  // Updated filter based on user request (09/02/2026)
+  // Include: Nhân viên kỹ thuật, Tổ trưởng, Đội phó, Đội trưởng, Phó giám đốc, Giám đốc
+  const signatureList = users.filter((u) => {
     const pos = u.position?.toLowerCase() || "";
-    return pos.includes("đội trưởng") || pos.includes("đội phó");
+    const allowed = [
+      "nhân viên kỹ thuật",
+      "tổ trưởng",
+      "đội phó",
+      "đội trưởng",
+      "phó giám đốc",
+      "giám đốc",
+    ];
+    return allowed.some((role) => pos.includes(role));
   });
 
-  const operatorList = users.filter((u) => {
-    const pos = u.position?.toLowerCase() || "";
-    const excluded = [
-      "giám đốc",
-      "phó giám đốc",
-      "kế toán",
-      "đội trưởng",
-      "đội phó",
-    ];
-    return !excluded.some((ex) => pos.includes(ex));
-  });
+  const leaderList = signatureList;
+  const operatorList = signatureList;
 
   const handleTemplateChange = async (id: number) => {
     setLoading(true);
@@ -933,7 +934,8 @@ const MaintenanceForm: React.FC<Props> = ({
           <Row gutter={48}>
             <Col span={12} style={{ textAlign: "center" }}>
               <div style={{ fontWeight: "bold", marginBottom: 5 }}>
-                ĐỘI-KT / DIVISION/TEAM
+                <div>ĐƠN VỊ BẢO DƯỠNG, SỬA CHỮA</div>
+                <div style={{ fontStyle: "italic" }}>TECHNICAL TEAM</div>
               </div>
               <div
                 style={{ fontStyle: "italic", fontSize: 13, marginBottom: 15 }}
@@ -941,32 +943,52 @@ const MaintenanceForm: React.FC<Props> = ({
                 (Ký tên / Signature)
               </div>
               <Form.Item
-                name="leader_user_id"
-                rules={[{ required: true, message: "Chọn người ký!" }]}
+                shouldUpdate={(prev, curr) =>
+                  prev.operator_user_id !== curr.operator_user_id
+                }
+                noStyle
               >
-                <Select
-                  placeholder="-- Chọn Đội trưởng/Phó --"
-                  style={{ width: "100%", textAlign: "center" }}
-                  optionLabelProp="label"
-                  popupMatchSelectWidth={300}
-                >
-                  {leaderList.map((u) => (
-                    <Option
-                      key={u.user_id}
-                      value={u.user_id}
-                      label={
-                        <div style={{ textAlign: "center" }}>{u.name}</div>
-                      }
+                {({ getFieldValue }) => {
+                  const operatorId = getFieldValue("operator_user_id");
+                  return (
+                    <Form.Item
+                      name="leader_user_id"
+                      rules={[{ required: true, message: "Chọn người ký!" }]}
                     >
-                      <div style={{ textAlign: "center" }}>{u.name}</div>
-                    </Option>
-                  ))}
-                </Select>
+                      <Select
+                        placeholder="-- Chọn Đội trưởng/Phó --"
+                        style={{ width: "100%", textAlign: "center" }}
+                        optionLabelProp="label"
+                        popupMatchSelectWidth={300}
+                        allowClear
+                      >
+                        {leaderList
+                          .filter((u) => u.user_id !== operatorId)
+                          .map((u) => (
+                            <Option
+                              key={u.user_id}
+                              value={u.user_id}
+                              label={
+                                <div style={{ textAlign: "center" }}>
+                                  {u.name}
+                                </div>
+                              }
+                            >
+                              <div style={{ textAlign: "center" }}>
+                                {u.name}
+                              </div>
+                            </Option>
+                          ))}
+                      </Select>
+                    </Form.Item>
+                  );
+                }}
               </Form.Item>
             </Col>
             <Col span={12} style={{ textAlign: "center" }}>
               <div style={{ fontWeight: "bold", marginBottom: 5 }}>
-                TỔ VHTTBMĐ / GSE OP. TEAM
+                <div>ĐƠN VỊ QUẢN LÝ SỬ DỤNG</div>
+                <div style={{ fontStyle: "italic" }}>GSE OPERATIONAL TEAM</div>
               </div>
               <div
                 style={{ fontStyle: "italic", fontSize: 13, marginBottom: 15 }}
@@ -974,27 +996,46 @@ const MaintenanceForm: React.FC<Props> = ({
                 (Ký tên / Signature)
               </div>
               <Form.Item
-                name="operator_user_id"
-                rules={[{ required: true, message: "Chọn người ký!" }]}
+                shouldUpdate={(prev, curr) =>
+                  prev.leader_user_id !== curr.leader_user_id
+                }
+                noStyle
               >
-                <Select
-                  placeholder="-- Chọn Nhân viên --"
-                  style={{ width: "100%", textAlign: "center" }}
-                  optionLabelProp="label"
-                  popupMatchSelectWidth={300}
-                >
-                  {operatorList.map((u) => (
-                    <Option
-                      key={u.user_id}
-                      value={u.user_id}
-                      label={
-                        <div style={{ textAlign: "center" }}>{u.name}</div>
-                      }
+                {({ getFieldValue }) => {
+                  const leaderId = getFieldValue("leader_user_id");
+                  return (
+                    <Form.Item
+                      name="operator_user_id"
+                      rules={[{ required: true, message: "Chọn người ký!" }]}
                     >
-                      <div style={{ textAlign: "center" }}>{u.name}</div>
-                    </Option>
-                  ))}
-                </Select>
+                      <Select
+                        placeholder="-- Chọn Nhân viên --"
+                        style={{ width: "100%", textAlign: "center" }}
+                        optionLabelProp="label"
+                        popupMatchSelectWidth={300}
+                        allowClear
+                      >
+                        {operatorList
+                          .filter((u) => u.user_id !== leaderId)
+                          .map((u) => (
+                            <Option
+                              key={u.user_id}
+                              value={u.user_id}
+                              label={
+                                <div style={{ textAlign: "center" }}>
+                                  {u.name}
+                                </div>
+                              }
+                            >
+                              <div style={{ textAlign: "center" }}>
+                                {u.name}
+                              </div>
+                            </Option>
+                          ))}
+                      </Select>
+                    </Form.Item>
+                  );
+                }}
               </Form.Item>
             </Col>
           </Row>

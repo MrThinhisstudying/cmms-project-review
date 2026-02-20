@@ -27,6 +27,7 @@ import { useRepairsContext } from "../../context/RepairsContext/RepairsContext";
 import { useMaintenanceContext } from "../../context/MaintenanceContext/MaintenanceContext";
 import dayjs from "dayjs";
 import { DeviceStatus } from "../../types/devicesManagement.types";
+import RepairDetailDrawer from "../RepairsManagement/components/RepairDetailDrawer";
 
 const { Title, Text } = Typography;
 
@@ -34,10 +35,14 @@ const Dashboard = () => {
   const { user } = useAuthContext();
   const { items, refreshAll } = useInventoryContext();
   const { devices, fetchDevices } = useDevicesContext();
-  const { repairs, reload: reloadRepairs } = useRepairsContext();
+  const { repairs, reload: reloadRepairs, reviewRepairItem, exportRepairItem } = useRepairsContext();
   const { maintenances, fetchMaintenances } = useMaintenanceContext();
   const navigate = useNavigate();
   // const { token } = theme.useToken();
+
+  // Drawers State
+  const [selectedRepair, setSelectedRepair] = React.useState<any>(null);
+  const [isDetailOpen, setIsDetailOpen] = React.useState(false);
 
   useEffect(() => {
     // Initial fetch
@@ -98,7 +103,7 @@ const Dashboard = () => {
   const recentRepairs = useMemo(() => {
     return [...repairs]
       .sort((a, b) => dayjs(b.created_at).valueOf() - dayjs(a.created_at).valueOf())
-      .slice(0, 5);
+      .slice(0, 10);
   }, [repairs]);
 
   // --- Schedule Data (Today + Overdue) ---
@@ -121,6 +126,13 @@ const Dashboard = () => {
 
   // --- Columns ---
   const repairColumns = [
+    {
+      title: 'Số phiếu',
+      dataIndex: 'repair_id',
+      key: 'repair_id',
+      render: (text: string) => <Text strong>#{text}</Text>,
+      width: 100,
+    },
     {
       title: 'Thiết bị',
       dataIndex: ['device', 'name'],
@@ -215,6 +227,30 @@ const Dashboard = () => {
       }
     }
   ];
+
+  const handleReview = async (action: "approve" | "reject", reason?: string, phase?: any) => {
+     if(!selectedRepair) return;
+     try {
+       await reviewRepairItem(selectedRepair.repair_id, {
+         action,
+         reason,
+         phase
+       });
+       setIsDetailOpen(false);
+       reloadRepairs();
+     } catch (err) {
+       console.error(err);
+     }
+  };
+
+  const handleExport = async (type: any) => {
+    if(!selectedRepair) return;
+    try {
+      await exportRepairItem(selectedRepair.repair_id, type);
+    } catch(err) {
+      console.error(err);
+    }
+  };
 
   return (
     <Layout style={{ background: 'transparent', padding: 24 }}>
@@ -343,8 +379,8 @@ const Dashboard = () => {
                         rowKey="repair_id" 
                         onRow={(record) => ({
                           onClick: () => {
-                            // Navigate to details (list view for now)
-                            navigate(`/quan_ly_sua_chua`); 
+                            setSelectedRepair(record);
+                            setIsDetailOpen(true);
                           },
                           style: { cursor: 'pointer' }
                         })}
@@ -402,6 +438,17 @@ const Dashboard = () => {
         </Col>
         )}
       </Row>
+
+      {/* Details Drawer */}
+      <RepairDetailDrawer
+        open={isDetailOpen}
+        data={selectedRepair}
+        onClose={() => setIsDetailOpen(false)}
+        currentUser={user}
+        onReview={handleReview}
+        onExport={handleExport}
+        canExport={true}
+      />
     </Layout>
   );
 };

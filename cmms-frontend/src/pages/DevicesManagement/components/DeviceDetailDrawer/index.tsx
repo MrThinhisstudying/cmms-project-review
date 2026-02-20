@@ -60,20 +60,21 @@ export default function DeviceDetailDrawer({
     })();
   }, [open, device?.device_group?.id]);
 
-  useEffect(() => {
-    if (!open || !device?.device_id) return;
+  const fetchMaintenances = React.useCallback(async () => {
+    if (!device?.device_id) return;
     const token = getToken();
+    setLoadingMaint(true);
+    try {
+      const res = await getMaintenancesByDevice(device.device_id!, token ?? "");
+      setMaintenances(res || []);
+    } finally {
+      setLoadingMaint(false);
+    }
+  }, [device?.device_id]);
 
-    (async () => {
-      setLoadingMaint(true);
-      try {
-        const res = await getMaintenancesByDevice(device.device_id!, token ?? "");
-        setMaintenances(res || []);
-      } finally {
-        setLoadingMaint(false);
-      }
-    })();
-  }, [open, device?.device_id]);
+  useEffect(() => {
+    if (open) fetchMaintenances();
+  }, [open, fetchMaintenances]);
 
   useEffect(() => {
     if (!open || !device?.device_id) return;
@@ -329,7 +330,13 @@ export default function DeviceDetailDrawer({
 
   // --- Tab 5: Bảo dưỡng ---
   const renderMaintenanceHistory = () => (
-       <MaintenanceHistoryTab loading={loadingMaint} maintenances={maintenances} />
+       <MaintenanceHistoryTab 
+          loading={loadingMaint} 
+          maintenances={maintenances} 
+          deviceId={device.device_id!}
+          deviceName={device.name}
+          onRefresh={fetchMaintenances}
+       />
   );
 
   const items = [

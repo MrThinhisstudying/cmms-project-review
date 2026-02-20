@@ -325,7 +325,11 @@ const TicketDetailModal: React.FC<Props> = ({ open, onCancel, data }) => {
         <Row gutter={16} style={{ textAlign: "center" }}>
           <Col span={12}>
             <div>
-              <b>ĐỘI-KT / DIVISION TEAM</b>
+              <b>ĐƠN VỊ BẢO DƯỠNG, SỬA CHỮA</b>
+              <br />
+              <b>
+                <i>TECHNICAL TEAM</i>
+              </b>
             </div>
             <div style={{ fontStyle: "italic", fontSize: 12, color: "#888" }}>
               (Ký tên / Signature)
@@ -346,7 +350,11 @@ const TicketDetailModal: React.FC<Props> = ({ open, onCancel, data }) => {
           </Col>
           <Col span={12}>
             <div>
-              <b>TỔ VHTTBMĐ / GSE OP. TEAM</b>
+              <b>ĐƠN VỊ QUẢN LÝ SỬ DỤNG</b>
+              <br />
+              <b>
+                <i>GSE OPERATIONAL TEAM</i>
+              </b>
             </div>
             <div style={{ fontStyle: "italic", fontSize: 12, color: "#888" }}>
               (Ký tên / Signature)

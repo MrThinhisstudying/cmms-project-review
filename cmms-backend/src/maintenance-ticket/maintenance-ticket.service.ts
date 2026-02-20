@@ -42,10 +42,50 @@ export class MaintenanceTicketService {
         const plans = await this.maintenanceService.findByDevice(data.device_id);
         const activePlan = plans.find((p) => p.status === 'active' || p.status === 'warning' || p.status === 'overdue');
 
-        const template = await this.templateRepo.findOne({where: {id: data.template_id}});
+        // Allow template to be null (User Request: Temporarily disable template logic)
+        let template = null;
+        if (data.template_id) {
+             template = await this.templateRepo.findOne({where: {id: data.template_id}});
+        }
 
         // Lấy ngày thực hiện từ Form
         const actualDate = data.execution_date ? new Date(data.execution_date) : new Date();
+
+        // --- AUTO-GENERATE CHECKLIST IF MISSING (QUICK CREATE) ---
+        // Only generate if template is available
+        if ((!data.checklist_result || data.checklist_result.length === 0) && template && template.checklist_structure) {
+            const generatedChecklist: any[] = [];
+            const structure: any[] = template.checklist_structure as any[];
+            const targetLevel = (data.maintenance_level || '').trim().toLowerCase();
+
+            structure.forEach(group => {
+                if (group.items && Array.isArray(group.items)) {
+                    group.items.forEach(item => {
+                        // Tìm yêu cầu tương ứng với cấp độ (Normalized)
+                        const reqs = item.requirements || {};
+                        const levelKey = Object.keys(reqs).find(k => k.trim().toLowerCase() === targetLevel);
+                        const reqContent = levelKey ? reqs[levelKey] : null;
+
+                        // Chỉ thêm nếu có yêu cầu cho cấp này
+                        if (reqContent && reqContent !== '-' && reqContent !== '') {
+                            generatedChecklist.push({
+                                code: item.code,
+                                task: item.task,
+                                req: reqContent, // Snapshot yêu cầu tại thời điểm tạo
+                                category: group.category,
+                                type: item.type,
+                                requirements: item.requirements,
+                                status: null, // Mặc định chưa làm
+                                value: "",
+                                note: ""
+                            });
+                        }
+                    });
+                }
+            });
+            data.checklist_result = generatedChecklist;
+        }
+        // ---------------------------------------------------------
 
         // --- VALIDATION: CHECK SEQUENTIAL (Không cho làm phiếu mới nếu phiếu cũ chưa xong) ---
         // Tìm phiếu BẤT KỲ của thiết bị này có ngày kế hoạch TRƯỚC ngày này mà chưa DONE

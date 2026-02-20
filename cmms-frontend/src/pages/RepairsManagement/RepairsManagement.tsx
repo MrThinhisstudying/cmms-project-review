@@ -142,13 +142,16 @@ const RepairsManagement: React.FC = () => {
 
   // Sync selectedRepair with latest data from repairs list
   useEffect(() => {
+    // BLOCK UPDATE if any form is open (User is editing)
+    if (openForm || openInspection || openAcceptance) return;
+
     if (selectedRepair) {
       const updated = repairs.find(r => r.repair_id === selectedRepair.repair_id);
       if (updated && updated !== selectedRepair) {
         setSelectedRepair(updated);
       }
     }
-  }, [repairs, selectedRepair]);
+  }, [repairs, selectedRepair, openForm, openInspection, openAcceptance]);
 
   // Stats Calculation
   const stats = useMemo(() => {

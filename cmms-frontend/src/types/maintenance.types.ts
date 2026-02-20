@@ -47,6 +47,7 @@ export interface IMaintenance {
   current_level?: string | null; // Cấp độ hiện tại
   cycle_config?: string[]; // Cấu hình chu kỳ
   start_date?: string | null;
+  tickets?: any[]; // Danh sách phiếu bảo dưỡng liên quan
 }
 
 export interface MaintenanceUpsertPayload {
@@ -75,7 +76,7 @@ export interface MaintenanceContextValue {
 export interface ChecklistItem {
   code: string;
   task: string;
-  type: "input_number" | "checkbox";
+  type: "input_number" | "checkbox" | "group_header" | "sub_row";
   requirements: Record<string, string>; // Vd: { "1M": "I", "6M": "R" }
 }
 
