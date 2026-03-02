@@ -5,6 +5,7 @@ import { IUser } from '../../../../types/user.types';
 import { uploadSignature, updateProfile } from '../../../../apis/users';
 import { getToken } from '../../../../utils/auth';
 import { getBackendImageUrl } from '../../../../utils/imageUrl';
+import UserProfileDrawer from '../UserProfileDrawer';
 
 interface ProfileModalProps {
     open: boolean;
@@ -19,6 +20,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
     const [loading, setLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('info');
     const [signatureUrl, setSignatureUrl] = useState<string | undefined>(undefined);
+    const [showDrawer, setShowDrawer] = useState(false);
 
     useEffect(() => {
         if (open && user) {
@@ -209,19 +211,37 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     </div>
                 </Form>
             )
+        },
+        {
+            key: 'certificates',
+            label: 'Bằng cấp & Chứng chỉ',
+            children: (
+                <div style={{ padding: 24, textAlign: 'center' }}>
+                    <p>Xem danh sách các chứng chỉ chuyên môn, giấy phép và năng định của bạn.</p>
+                    <Button type="primary" onClick={() => setShowDrawer(true)}>Xem chi tiết</Button>
+                </div>
+            )
         }
     ];
 
     return (
-        <Modal
-            title="Hồ sơ cá nhân"
-            open={open}
-            onCancel={onCancel}
-            footer={null}
-            width={600}
-        >
-            <Tabs items={items} activeKey={activeTab} onChange={setActiveTab} />
-        </Modal>
+        <>
+            <Modal
+                title="Hồ sơ cá nhân"
+                open={open}
+                onCancel={onCancel}
+                footer={null}
+                width={600}
+            >
+                <Tabs items={items} activeKey={activeTab} onChange={setActiveTab} />
+            </Modal>
+            
+            <UserProfileDrawer 
+                open={showDrawer} 
+                user={user} 
+                onClose={() => setShowDrawer(false)} 
+            />
+        </>
     );
 };
 

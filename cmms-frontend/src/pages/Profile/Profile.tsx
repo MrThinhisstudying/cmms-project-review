@@ -5,12 +5,22 @@ import { getProfile, updateProfile } from "../../apis/users";
 import { getToken } from "../../utils/auth";
 import { IUser } from "../../types/user.types";
 import { getBackendImageUrl } from "../../utils/imageUrl";
+import certificatesApi from "../../apis/certificates";
+import { IEmployeeCertificate, IUserTrainingRequirement } from "../../types/certificates.types";
+import { Table, Tag } from "antd";
+import dayjs from "dayjs";
 
 const { Title } = Typography;
 
 const Profile: React.FC = () => {
     const [user, setUser] = useState<IUser | null>(null);
     const [loading, setLoading] = useState(false);
+    
+    // Certificate States
+    const [certificates, setCertificates] = useState<IEmployeeCertificate[]>([]);
+    const [requirements, setRequirements] = useState<IUserTrainingRequirement[]>([]);
+    const [certLoading, setCertLoading] = useState(false);
+
     const [form] = Form.useForm();
     const token = getToken();
 
@@ -33,6 +43,31 @@ const Profile: React.FC = () => {
     useEffect(() => {
         fetchProfile();
     }, [fetchProfile]);
+
+    useEffect(() => {
+        const fetchCerts = async () => {
+            if (!user) return;
+            setCertLoading(true);
+            try {
+                const reqData = await certificatesApi.getTrainingRequirements(user.user_id);
+                setRequirements(reqData);
+
+                const cccm = await certificatesApi.getUserCertificates(user.user_id, 'CCCM');
+                const bangCap = await certificatesApi.getUserCertificates(user.user_id, 'BANG_CAP');
+                const giayPhep = await certificatesApi.getUserCertificates(user.user_id, 'GIAY_PHEP');
+                
+                setCertificates([...cccm, ...bangCap, ...giayPhep]);
+            } catch (error) {
+                console.error("Failed to fetch certs");
+            } finally {
+                setCertLoading(false);
+            }
+        };
+
+        if (user) {
+            fetchCerts();
+        }
+    }, [user]);
 
     const handleUpdate = async (values: any) => {
         setLoading(true);
@@ -93,6 +128,40 @@ const Profile: React.FC = () => {
     };
 
     if (!user) return null;
+
+    const cccmColumns = [
+        { title: 'STT', render: (_: any, __: any, index: number) => index + 1, width: 50 },
+        { title: 'Loại', dataIndex: 'type', render: (t: string) => <Tag color="blue">{t}</Tag>},
+        { title: 'Khóa học / Chứng chỉ', dataIndex: ['program', 'name'] },
+        { title: 'Số CC/Bằng', dataIndex: 'certificate_number' },
+        { title: 'Ngày cấp', dataIndex: 'issue_date', render: (d: string) => d ? dayjs(d).format('DD/MM/YYYY') : '-' },
+        { 
+            title: 'Hạn / Học lại định kỳ', 
+            dataIndex: 'next_training_date', 
+            render: (d: string) => {
+                if (!d) return '-';
+                const isExpired = dayjs(d).isBefore(dayjs());
+                return <span style={{ color: isExpired ? 'red' : 'inherit', fontWeight: isExpired ? 'bold' : 'normal' }}>{dayjs(d).format('DD/MM/YYYY')}</span>;
+            }
+        },
+    ];
+
+    const reqColumns = [
+        { title: 'STT', render: (_: any, __: any, index: number) => index + 1, width: 50 },
+        { title: 'Mã', dataIndex: ['program', 'code'] },
+        { title: 'Yêu cầu khóa học', dataIndex: ['program', 'name'] },
+        { title: 'Hạn chót', dataIndex: 'required_date', render: (d: string) => d ? dayjs(d).format('DD/MM/YYYY') : '-' },
+        { 
+            title: 'Trạng thái', 
+            dataIndex: 'status',
+            render: (s: string) => (
+                <Tag color={s === 'FULFILLED' ? 'success' : 'warning'}>
+                    {s === 'FULFILLED' ? 'Đã hoàn thành' : 'Đang chờ'}
+                </Tag>
+            )
+        },
+        { title: 'Ghi chú', dataIndex: 'note' },
+    ];
 
     const infoTab = (
                         <Form form={form} layout="vertical" onFinish={handleUpdate}>
@@ -180,7 +249,37 @@ const Profile: React.FC = () => {
                     <Card>
                         <Tabs defaultActiveKey="1" items={[
                             { key: '1', label: <span><InfoCircleOutlined /> Thông tin chung</span>, children: infoTab },
-                            { key: '2', label: <span><LockOutlined /> Đổi mật khẩu</span>, children: passwordTab }
+                            { key: '2', label: <span><LockOutlined /> Đổi mật khẩu</span>, children: passwordTab },
+                            { 
+                                key: '3', 
+                                label: 'Bằng cấp & Chứng chỉ', 
+                                children: (
+                                    <Table 
+                                        dataSource={certificates} 
+                                        columns={cccmColumns} 
+                                        rowKey="id" 
+                                        loading={certLoading}
+                                        bordered 
+                                        size="small" 
+                                        pagination={false}
+                                    />
+                                ) 
+                            },
+                            { 
+                                key: '4', 
+                                label: 'Yêu cầu đào tạo', 
+                                children: (
+                                    <Table 
+                                        dataSource={requirements} 
+                                        columns={reqColumns} 
+                                        rowKey="id" 
+                                        loading={certLoading}
+                                        bordered 
+                                        size="small"
+                                        pagination={false}
+                                    />
+                                ) 
+                            }
                         ]} />
                     </Card>
                 </Col>

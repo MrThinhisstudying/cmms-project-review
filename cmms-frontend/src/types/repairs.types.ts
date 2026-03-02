@@ -118,6 +118,13 @@ export interface RepairUpsertPayload {
   note?: string;
 }
 
+export interface BulkRepairUpsertPayload {
+  device_ids: number[];
+  location_issue: string;
+  recommendation?: string;
+  note?: string;
+}
+
 export interface RepairInspectionPayload {
   inspection_materials: IInspectionMaterial[];
   inspection_committee_ids?: number[];

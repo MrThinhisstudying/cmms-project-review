@@ -91,6 +91,7 @@ const UserModal: React.FC<UserModalProps> = ({ open, onCancel, onOk, initialValu
                             <Select.Option value="TEAM_LEAD">Tổ trưởng</Select.Option>
                             <Select.Option value="UNIT_HEAD">Cán bộ đội</Select.Option>
                             <Select.Option value="DIRECTOR">Ban giám đốc</Select.Option>
+                            <Select.Option value="HR_MANAGER">Quản lý nhân sự</Select.Option>
                             <Select.Option value="ADMIN">Quản trị viên</Select.Option>
                         </Select>
                     </Form.Item>

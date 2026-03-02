@@ -28,6 +28,7 @@ import {StockOutModule} from './stock-out/stock-out.module';
 import {RepairsModule} from './repairs/repairs.module';
 import {DeviceGroupsModule} from './device-groups/device-groups.module';
 import {ReportModule} from './report/report.module';
+import {CertificatesModule} from './certificates/certificates.module';
 
 @Module({
     imports: [
@@ -78,6 +79,7 @@ import {ReportModule} from './report/report.module';
         RepairsModule,
         DeviceGroupsModule,
         ReportModule,
+        CertificatesModule,
     ],
     controllers: [AppController],
     providers: [

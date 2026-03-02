@@ -28,7 +28,7 @@ const DevicesTable: React.FC<DevicesTableProps> = ({
     if (!dateStr) return false;
     const date = dayjs(dateStr);
     const diff = date.diff(dayjs(), 'days');
-    return diff >= 0 && diff <= 30;
+    return diff >= 0 && diff <= 90;
   };
 
   const isExpired = (dateStr?: string) => {
@@ -99,7 +99,7 @@ const DevicesTable: React.FC<DevicesTableProps> = ({
                        {dayjs(date).format('DD/MM/YYYY')}
                    </span>
                    {(expired || expiring) && (
-                       <Tooltip title={expired ? "Đã hết hạn" : "Sắp hết hạn (<30 ngày)"}>
+                       <Tooltip title={expired ? "Đã hết hạn" : "Sắp hết hạn (<3 tháng)"}>
                            <WarningOutlined style={{ color: expired ? 'red' : 'orange' }} />
                        </Tooltip>
                    )}

@@ -8,10 +8,9 @@ import {
   Typography,
   Descriptions,
 } from "antd";
-import { IRepair, RepairUpsertPayload } from "../../../../types/repairs.types";
+import { IRepair, RepairUpsertPayload, BulkRepairUpsertPayload } from "../../../../types/repairs.types";
 import { useDevicesContext } from "../../../../context/DevicesContext/DevicesContext";
 import { useAuthContext } from "../../../../context/AuthContext/AuthContext";
-import { useRepairsContext } from "../../../../context/RepairsContext/RepairsContext";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -20,7 +19,7 @@ const { TextArea } = Input;
 interface RepairFormProps {
   open: boolean;
   onClose: () => void;
-  onSubmit: (data: RepairUpsertPayload) => void;
+  onSubmit: (data: RepairUpsertPayload | BulkRepairUpsertPayload) => void;
   loading: boolean;
   initialData: IRepair | null;
 }
@@ -61,38 +60,20 @@ const RepairForm: React.FC<RepairFormProps> = ({
     }
   };
 
-  const { repairs } = useRepairsContext();
-  const [busyDeviceIds, setBusyDeviceIds] = React.useState<number[]>([]);
+  // The user requested that a single device can have multiple repair tickets simultaneously.
+  // Therefore, we no longer filter out devices that are currently in an active repair process.
+  const filteredDevices = devices;
 
-  useEffect(() => {
-    // Identify devices currently in an active repair process
-    if (!repairs) return;
-    
-    const busy = repairs
-      .filter((r: IRepair) => {
-          if (r.canceled) return false;
-          if (r.status_request === 'REJECTED' || r.status_request === 'REJECTED_B03') return false;
-          if (r.status_acceptance === 'acceptance_admin_approved') return false;
-          return true;
-      })
-      .map((r: IRepair) => r.device?.device_id)
-      .filter((id): id is number => typeof id === 'number');
-      
-    // Remove duplicates
-    setBusyDeviceIds(Array.from(new Set(busy)));
-  }, [repairs]);
+  // Watch device_id to show details. For array, show the first selected device or a summary.
+  const selectedDeviceValue = Form.useWatch("device_id", form);
+  
+  // Decide whether the select field is single or multiple based on whether we are updating or creating.
+  const isMultiple = initialData === null;
 
-  const filteredDevices = devices.filter(d => {
-      // If editing, always allow the current device of this ticket
-      if (initialData && initialData.device.device_id === d.device_id) return true;
-      
-      // Otherwise, exclude if busy
-      return !busyDeviceIds.includes(d.device_id);
-  });
-
-  // Watch device_id to show details
-  const selectedDeviceId = Form.useWatch("device_id", form);
-  const selectedDevice = devices.find((d) => d.device_id === selectedDeviceId);
+  // Selected Device for detail display. If multiple, show details of the first selected just as preview
+  const firstSelectedId = Array.isArray(selectedDeviceValue) ? selectedDeviceValue[0] : selectedDeviceValue;
+  const selectedDevice = devices.find((d) => d.device_id === firstSelectedId);
+  const selectedCount = Array.isArray(selectedDeviceValue) ? selectedDeviceValue.length : (selectedDeviceValue ? 1 : 0);
 
   return (
     <Modal
@@ -123,10 +104,11 @@ const RepairForm: React.FC<RepairFormProps> = ({
         <Typography.Title level={5}>I. THÔNG TIN THIẾT BỊ</Typography.Title>
         <Form.Item
           name="device_id"
-          label="Chọn thiết bị"
-          rules={[{ required: true, message: "Vui lòng chọn thiết bị" }]}
+          label={isMultiple ? "Chọn thiết bị (Có thể chọn nhiều)" : "Chọn thiết bị"}
+          rules={[{ required: true, message: "Vui lòng chọn ít nhất 1 thiết bị" }]}
         >
           <Select
+            mode={isMultiple ? "multiple" : undefined}
             placeholder="Tìm kiếm thiết bị..."
             showSearch
             optionFilterProp="children"
@@ -143,17 +125,35 @@ const RepairForm: React.FC<RepairFormProps> = ({
           />
         </Form.Item>
 
-        {selectedDevice && (
+        {selectedCount > 0 && (
            <Descriptions bordered size="small" column={1} style={{ marginBottom: 24 }}>
-             <Descriptions.Item label="Tên thiết bị">
-               {selectedDevice.name}
-             </Descriptions.Item>
-             <Descriptions.Item label="Số đăng ký">
-               {selectedDevice.reg_number} - {selectedDevice.brand}
-             </Descriptions.Item>
-             <Descriptions.Item label="Đơn vị quản lý tài sản">
-                {selectedDevice.using_department || "Đội Kỹ Thuật"}
-             </Descriptions.Item>
+             {isMultiple && selectedCount > 1 ? (
+                <>
+                  <Descriptions.Item label="Số lượng đã chọn">
+                    <Typography.Text type="success" strong>{selectedCount} thiết bị</Typography.Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Danh sách thiết bị">
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {Array.isArray(selectedDeviceValue) && selectedDeviceValue.map(id => {
+                        const d = devices.find(x => x.device_id === id);
+                        return d ? <Typography.Text key={id}>• {d.name} ({d.reg_number || 'N/A'})</Typography.Text> : null;
+                      })}
+                    </div>
+                  </Descriptions.Item>
+                </>
+             ) : (
+                <>
+                  <Descriptions.Item label="Tên thiết bị">
+                    {selectedDevice?.name}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Số đăng ký">
+                    {selectedDevice?.reg_number} {selectedDevice?.brand ? `- ${selectedDevice.brand}` : ''}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Đơn vị quản lý tài sản">
+                      {selectedDevice?.using_department || "Đội Kỹ Thuật"}
+                  </Descriptions.Item>
+                </>
+             )}
            </Descriptions>
         )}
 

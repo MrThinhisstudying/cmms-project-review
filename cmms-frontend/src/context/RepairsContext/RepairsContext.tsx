@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useCallback } from "rea
 import {
   getAllRepairs,
   createRepair,
+  createBulkRepair,
   updateRepair,
   reviewRepair,
   exportRepair,
@@ -19,6 +20,7 @@ import {
   RepairAcceptancePayload,
   RepairInspectionPayload,
   RepairUpsertPayload,
+  BulkRepairUpsertPayload,
 } from "../../types/repairs.types";
 import { StockOutPayload } from "../../types/inventory.types";
 
@@ -76,7 +78,13 @@ export const RepairsProvider = ({
   const setRole = (role: Role) => setUserRole(role);
 
   const createRepairItem = async (payload: RepairUpsertPayload) => {
-    const res = await createRepair(getToken(), payload);
+    const res = await createRepair(payload, getToken());
+    await fetchData();
+    return res;
+  };
+
+  const createBulkRepairItem = async (payload: BulkRepairUpsertPayload) => {
+    const res = await createBulkRepair(payload, getToken());
     await fetchData();
     return res;
   };
@@ -163,6 +171,7 @@ export const RepairsProvider = ({
         userRole,
         setRole,
         createRepairItem,
+        createBulkRepairItem,
         updateRepairItem,
         reviewRepairItem,
         submitInspectionStep,

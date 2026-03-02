@@ -6,9 +6,10 @@ import {MaintenanceTicketController} from './maintenance-ticket.controller';
 import {MaintenanceModule} from 'src/maintenance/maintenance.module';
 import {Maintenance} from 'src/maintenance/entities/maintenance.entity';
 import {MaintenanceChecklistTemplate} from 'src/maintenance/entities/maintenance-checklist-template.entity';
+import {CertificatesModule} from 'src/certificates/certificates.module';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([MaintenanceTicket, Maintenance, MaintenanceChecklistTemplate]), forwardRef(() => MaintenanceModule)],
+    imports: [TypeOrmModule.forFeature([MaintenanceTicket, Maintenance, MaintenanceChecklistTemplate]), forwardRef(() => MaintenanceModule), CertificatesModule],
     providers: [MaintenanceTicketService],
     controllers: [MaintenanceTicketController],
     exports: [MaintenanceTicketService],

@@ -22,6 +22,8 @@ import { RepairsGateway } from './repairs.gateway';
 import { buildRepairPdfTemplate } from './utils/repair-pdf-template.util';
 import * as puppeteer from 'puppeteer';
 import { PDFDocument } from 'pdf-lib';
+import { CertificatesService } from '../certificates/certificates.service';
+import { CertificateType } from '../certificates/entities/user-certificate.entity';
 
 @Injectable()
 export class RepairsService {
@@ -35,7 +37,24 @@ export class RepairsService {
         @InjectRepository(Department) private readonly departmentRepo: Repository<Department>,
         private readonly notificationService: NotificationService,
         private readonly repairsGateway: RepairsGateway,
+        private readonly certificatesService: CertificatesService,
     ) { }
+
+    async createBulk(dto: { device_ids: number[], location_issue?: string, recommendation?: string, note?: string }, userId: number) {
+        // Iterate and call create manually to leverage all the existing validations and notifications
+        const createdRepairs = [];
+        for (const deviceId of dto.device_ids) {
+            const singleDto = {
+                device_id: deviceId,
+                location_issue: dto.location_issue,
+                recommendation: dto.recommendation,
+                note: dto.note,
+            };
+            const repair = await this.create(singleDto, userId);
+            createdRepairs.push(repair);
+        }
+        return createdRepairs;
+    }
 
     async create(dto: CreateRepairDto, userId: number) {
         const creator = await this.userRepo.findOne({ where: { user_id: userId }, relations: ['department'] });
@@ -182,6 +201,15 @@ export class RepairsService {
             if (users.length !== dto.inspection_committee_ids.length) {
                 throw new BadRequestException('Một hoặc nhiều người dùng không tồn tại');
             }
+
+            // Validate technician CCCM
+            for (const u of users) {
+                if (u.role === UserRole.TECHNICIAN) {
+                    const isValid = await this.certificatesService.validateUserHasValidCertificate(u.user_id, CertificateType.CCCM);
+                    if (!isValid) throw new BadRequestException(`Nhân viên ${u.name} không có chứng chỉ CCCM hợp lệ hoặc đã hết hạn.`);
+                }
+            }
+
             repair.inspection_committee = users;
         }
 
@@ -277,6 +305,15 @@ export class RepairsService {
             if (users.length !== dto.acceptance_committee_ids.length) {
                 throw new BadRequestException('Một hoặc nhiều người dùng không tồn tại');
             }
+
+            // Validate technician CCCM
+            for (const u of users) {
+                if (u.role === UserRole.TECHNICIAN) {
+                    const isValid = await this.certificatesService.validateUserHasValidCertificate(u.user_id, CertificateType.CCCM);
+                    if (!isValid) throw new BadRequestException(`Nhân viên ${u.name} không có chứng chỉ CCCM hợp lệ hoặc đã hết hạn.`);
+                }
+            }
+
             repair.acceptance_committee = users;
         }
 

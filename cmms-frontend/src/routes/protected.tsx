@@ -13,9 +13,10 @@ import RepairsManagement from "../pages/RepairsManagement/RepairsManagement";
 import MaintenanceProcedurePage from "../pages/MaintenanceProcedure";
 import MaintenanceHistoryPage from "../pages/MaintenanceHistory";
 import Profile from "../pages/Profile/Profile";
+import HRDashboard from "../pages/HRDashboard";
 
 export const protectedRoutes = (userRole: string) => {
-  if (['admin', 'ADMIN'].includes(userRole)) {
+  if (['admin', 'ADMIN', 'HR_MANAGER'].includes(userRole)) {
     return [
       {
         path: "/",
@@ -28,6 +29,7 @@ export const protectedRoutes = (userRole: string) => {
           { path: "/trang_chu/*", element: <Dashboard /> },
           { path: "/profile", element: <Profile /> },
           { path: "/quan_ly_nguoi_dung/*", element: <Users /> },
+          { path: "/hr-dashboard/*", element: <HRDashboard /> },
           { path: "/quan_ly_ttb_pt/*", element: <DevicesManagement /> },
           { path: "/quan_ly_sua_chua/*", element: <RepairsManagement /> },
           { path: "/quan_ly_bao_duong/*", element: <MaintenanceManagement /> },

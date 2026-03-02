@@ -24,6 +24,7 @@ import { useDevicesContext } from "../../context/DevicesContext/DevicesContext";
 import {
   IRepair,
   RepairUpsertPayload,
+  BulkRepairUpsertPayload,
   RepairInspectionPayload,
   RepairAcceptancePayload,
 } from "../../types/repairs.types";
@@ -38,6 +39,7 @@ const RepairsManagement: React.FC = () => {
     repairs,
     loading,
     createRepairItem,
+    createBulkRepairItem,
     updateRepairItem,
     reviewRepairItem,
     submitInspectionStep,
@@ -163,18 +165,34 @@ const RepairsManagement: React.FC = () => {
     return { total, requests, inspections, acceptances, cancelled };
   }, [repairs]);
 
-  const handleSubmit = async (data: RepairUpsertPayload) => {
+  const handleSubmit = async (data: any) => {
     try {
       setSaving(true);
       if (selectedRepair) {
-        await updateRepairItem(selectedRepair.repair_id, data);
+        // Updating always uses single RepairUpsertPayload
+        await updateRepairItem(selectedRepair.repair_id, data as RepairUpsertPayload);
         notification.success({
             message: "Cập nhật thành công",
             title: "Cập nhật thành công",
             description: "Thông tin phiếu sửa chữa đã được cập nhật."
         });
       } else {
-        await createRepairItem(data);
+        // Creating can be bulk or single
+        // AntD Select mode="multiple" assigns an array to the name="device_id" field.
+        if (Array.isArray(data.device_id)) {
+            // Bulk
+            const bulkData: BulkRepairUpsertPayload = {
+               device_ids: data.device_id,
+               location_issue: data.location_issue,
+               recommendation: data.recommendation,
+               note: data.note,
+            };
+            await createBulkRepairItem(bulkData);
+        } else {
+            // Single fallback just in case
+            await createRepairItem(data as RepairUpsertPayload);
+        }
+        
         const nextApprover = (role === 'TECHNICIAN' || role === 'OPERATOR') ? 'Đội trưởng / Quản lý' : 'Ban Giám đốc';
         notification.success({
             message: "Tạo phiếu thành công",

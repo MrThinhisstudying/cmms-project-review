@@ -1,6 +1,7 @@
 import {Controller, Get, Post, Body, Param, Delete, Patch, Req, Res, UseGuards, Query} from '@nestjs/common';
 import {RepairsService} from './repairs.service';
 import {CreateRepairDto} from './dto/create-repair.dto';
+import {CreateRepairBulkDto} from './dto/create-repair-bulk.dto';
 import {ReviewRepairDto} from './dto/review-repair.dto';
 import {UpdateInspectionDto} from './dto/update-inspection.dto';
 import {UpdateAcceptanceDto} from './dto/update-acceptance.dto';
@@ -20,6 +21,14 @@ export class RepairsController {
         private readonly repairService: RepairsService,
         private readonly exportDocxService: ExportDocxService // Added
     ) {}
+
+    @UseGuards(JWTAuthGuard, PermissionsGuard)
+    @RequirePermissions('CREATE_REPAIR')
+    @Post('bulk')
+    async createBulk(@Body() dto: CreateRepairBulkDto, @Req() req) {
+        const repairs = await this.repairService.createBulk(dto, req.user.user_id);
+        return {message: `Tạo thành công ${repairs.length} phiếu yêu cầu`, data: repairs};
+    }
 
     @UseGuards(JWTAuthGuard, PermissionsGuard)
     @RequirePermissions('CREATE_REPAIR')

@@ -1,6 +1,7 @@
 import {
   IRepair,
   RepairUpsertPayload,
+  BulkRepairUpsertPayload,
   RepairInspectionPayload,
   RepairAcceptancePayload,
 } from "../types/repairs.types";
@@ -73,20 +74,37 @@ export const getRepairsByDevice = async (
 };
 
 export const createRepair = async (
-  token: string | null,
-  payload: RepairUpsertPayload
-) => {
+  payload: RepairUpsertPayload,
+  token: string | null
+): Promise<IRepair> => {
   const res = await fetch(BASE_URL, {
     method: "POST",
     headers: {
-      Authorization: token ? `Bearer ${token}` : "",
       "Content-Type": "application/json",
+      Authorization: token ? `Bearer ${token}` : "",
     },
     body: JSON.stringify(payload),
   });
   const data = await res.json();
-  if (!res.ok) throw new Error(data.message || "Tạo phiếu sửa chữa thất bại");
-  return data;
+  if (!res.ok) throw new Error(data.message || "Tạo phiếu thất bại");
+  return data.data;
+};
+
+export const createBulkRepair = async (
+  payload: BulkRepairUpsertPayload,
+  token: string | null
+): Promise<IRepair[]> => {
+  const res = await fetch(`${BASE_URL}/bulk`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: token ? `Bearer ${token}` : "",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Tạo phiếu hàng loạt thất bại");
+  return data.data;
 };
 
 export const updateRepair = async (

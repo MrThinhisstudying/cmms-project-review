@@ -1,5 +1,6 @@
 import React from "react";
 import HomeIcon from "@mui/icons-material/Home";
+import DashboardIcon from "@mui/icons-material/Dashboard";
 import ExitToAppIcon from "@mui/icons-material/ExitToApp";
 import PeopleIcon from "@mui/icons-material/People";
 import AssessmentIcon from "@mui/icons-material/Assessment";
@@ -43,7 +44,15 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
     color: "#FFC900",
     textColor: "#fff",
     path: "/quan_ly_nguoi_dung",
-    roles: ["ADMIN"],
+    roles: ["ADMIN", "HR_MANAGER"],
+  },
+  {
+    name: "Dashboard Nhân Sự",
+    icon: <DashboardIcon />,
+    color: "#FFC900",
+    textColor: "#fff",
+    path: "/hr-dashboard",
+    roles: ["ADMIN", "HR_MANAGER"],
   },
   {
     name: Menu.QUAN_LY_TTB_PT,

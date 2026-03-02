@@ -9,6 +9,10 @@ import { Table, Button, Space, Tag, Popconfirm, message, Input, Tooltip, Row, Co
 import { ICreateUser, IUser } from "../../types/user.types";
 import DepartmentModal from "./components/DepartmentModal";
 import DeviceGroupModal from "./components/DeviceGroupModal";
+import UserProfileDrawer from "./components/UserProfileDrawer";
+import certificatesApi from "../../apis/certificates";
+import { IEmployeeCertificate } from "../../types/certificates.types";
+import dayjs from "dayjs";
 import { getToken } from "../../utils/auth";
 
 const { Content } = Layout;
@@ -19,23 +23,26 @@ const Users: React.FC = () => {
   const { departments } = useDepartmentsContext();
   
   const [deviceGroups, setDeviceGroups] = useState<IDeviceGroup[]>([]);
+  const [expiringCerts, setExpiringCerts] = useState<IEmployeeCertificate[]>([]);
   const [searchText, setSearchText] = useState("");
   const [openUserModal, setOpenUserModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState<IUser | null>(null);
   const [openDeptModal, setOpenDeptModal] = useState(false);
   const [openGroupModal, setOpenGroupModal] = useState(false);
+  const [openProfileDrawer, setOpenProfileDrawer] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [viewOnlyMode, setViewOnlyMode] = useState(false);
 
   useEffect(() => {
      // Fetch device groups
      getDeviceGroups().then(groups => setDeviceGroups(groups)).catch(console.error);
+     // Fetch expiring certificates
+     certificatesApi.getExpiringCertificates(30).then(certs => setExpiringCerts(certs)).catch(console.error);
   }, []);
 
   const handleView = (user: IUser) => {
       setSelectedUser(user);
-      setViewOnlyMode(true);
-      setOpenUserModal(true);
+      setOpenProfileDrawer(true);
   }
 
   const handleCreate = () => {
@@ -198,6 +205,22 @@ const Users: React.FC = () => {
     <Layout style={{ height: '100%', background: '#f0f2f5', padding: 24 }}>
       <Content style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
         
+        {expiringCerts.length > 0 && (
+            <Card variant="borderless" style={{ marginBottom: 24, borderRadius: 8, borderColor: '#ffa39e', backgroundColor: '#fff1f0', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }} styles={{ body: { padding: '16px 24px' } }}>
+                <Title level={5} style={{ margin: 0, color: '#cf1322' }}>
+                    <WarningOutlined style={{ marginRight: 8 }} />
+                    Cảnh báo: Có {expiringCerts.length} chứng chỉ sắp hết hạn (trong vòng 30 ngày)
+                </Title>
+                <div style={{ marginTop: 8 }}>
+                    {expiringCerts.map(cert => (
+                        <div key={cert.id} style={{ marginBottom: 4 }}>
+                            • Nhân viên <strong>{cert.user?.name}</strong> - Chứng chỉ <strong>{cert.program?.name}</strong> (Hết hạn: {dayjs(cert.next_training_date).format('DD/MM/YYYY')})
+                        </div>
+                    ))}
+                </div>
+            </Card>
+        )}
+
         {/* Toolbar */}
         <Card variant="borderless" styles={{ body: { padding: '16px 24px' } }} style={{ marginBottom: 24, borderRadius: 8, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
             <Row justify="space-between" align="middle" gutter={[16, 16]}>
@@ -263,6 +286,12 @@ const Users: React.FC = () => {
         <DeviceGroupModal
             open={openGroupModal}
             onClose={() => setOpenGroupModal(false)}
+        />
+
+        <UserProfileDrawer
+            open={openProfileDrawer}
+            onClose={() => setOpenProfileDrawer(false)}
+            user={selectedUser}
         />
       </Content>
     </Layout>

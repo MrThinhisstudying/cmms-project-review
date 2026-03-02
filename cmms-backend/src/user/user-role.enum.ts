@@ -4,5 +4,6 @@ export enum UserRole {
     TEAM_LEAD = 'TEAM_LEAD',
     UNIT_HEAD = 'UNIT_HEAD',
     DIRECTOR = 'DIRECTOR',
+    HR_MANAGER = 'HR_MANAGER',
     ADMIN = 'ADMIN',
 }
