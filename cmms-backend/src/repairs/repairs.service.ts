@@ -63,8 +63,8 @@ export class RepairsService {
         if (!device) throw new NotFoundException('Không tìm thấy thiết bị');
         
         const currentStatus = (device.status || '').toUpperCase().trim();
-        if (![DeviceStatus.MOI, DeviceStatus.DANG_SU_DUNG].includes(currentStatus as DeviceStatus)) {
-            throw new BadRequestException(`Chỉ thiết bị mới hoặc đang sử dụng mới được lập phiếu (Trạng thái hiện tại: ${device.status})`);
+        if (![DeviceStatus.MOI, DeviceStatus.DANG_SU_DUNG, DeviceStatus.DANG_SUA_CHUA].includes(currentStatus as DeviceStatus)) {
+            throw new BadRequestException(`Chỉ thiết bị mới, đang sử dụng, hoặc đang sửa chữa mới được lập phiếu (Trạng thái hiện tại: ${device.status})`);
         }
             
         const repair = this.repairRepo.create({
