@@ -81,6 +81,11 @@ export class RepairsService {
             created_at: new Date(),
         });
         const saved = await this.repairRepo.save(repair);
+        
+        // Immediately set device to DANG_SUA_CHUA to reflect it's under repair process
+        device.status = DeviceStatus.DANG_SUA_CHUA;
+        await this.deviceRepo.save(device);
+        
         const managers = await this.userRepo.find({ where: { role: UserRole.UNIT_HEAD }, relations: ['department'] });
         const approverManagers = managers.filter(
             (m) => Array.isArray(m.department?.permissions) && m.department.permissions.includes('APPROVE_REPAIR'),
@@ -128,8 +133,11 @@ export class RepairsService {
 
         const device = await this.deviceRepo.findOne({ where: { device_id: dto.device_id } });
         if (!device) throw new NotFoundException('Không tìm thấy thiết bị');
-        if (![DeviceStatus.MOI, DeviceStatus.DANG_SU_DUNG].includes(device.status))
-            throw new BadRequestException('Chỉ thiết bị mới hoặc đang sử dụng mới được lập phiếu');
+        
+        const currentStatus = (device.status || '').toUpperCase().trim();
+        if (![DeviceStatus.MOI, DeviceStatus.DANG_SU_DUNG, DeviceStatus.DANG_SUA_CHUA].includes(currentStatus as DeviceStatus)) {
+            throw new BadRequestException(`Chỉ thiết bị mới, đang sử dụng, hoặc đang sửa chữa mới được lập phiếu (Trạng thái hiện tại: ${device.status})`);
+        }
 
         repair.device = device;
         repair.location_issue = dto.location_issue;
@@ -463,6 +471,12 @@ export class RepairsService {
                 repair.canceled_at = new Date();
                 repair.rejection_reason = dto.reason;
                 repair.rejected_by = user;
+                
+                // Revert status to DANG_SU_DUNG if rejected
+                if (repair.device) {
+                    repair.device.status = DeviceStatus.DANG_SU_DUNG;
+                    await this.deviceRepo.save(repair.device);
+                }
             }
         }
 
