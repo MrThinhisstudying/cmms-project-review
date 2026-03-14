@@ -214,13 +214,15 @@ export class RepairsService {
                 throw new BadRequestException('Một hoặc nhiều người dùng không tồn tại');
             }
 
-            // Validate technician CCCM
+            // Validation for technician CCCM removed as per user request
+            /*
             for (const u of users) {
                 if (u.role === UserRole.TECHNICIAN) {
                     const isValid = await this.certificatesService.validateUserHasValidCertificate(u.user_id, CertificateType.CCCM);
                     if (!isValid) throw new BadRequestException(`Nhân viên ${u.name} không có chứng chỉ CCCM hợp lệ hoặc đã hết hạn.`);
                 }
             }
+            */
 
             repair.inspection_committee = users;
         }
@@ -318,13 +320,15 @@ export class RepairsService {
                 throw new BadRequestException('Một hoặc nhiều người dùng không tồn tại');
             }
 
-            // Validate technician CCCM
+            // Validation for technician CCCM removed as per user request
+            /*
             for (const u of users) {
                 if (u.role === UserRole.TECHNICIAN) {
                     const isValid = await this.certificatesService.validateUserHasValidCertificate(u.user_id, CertificateType.CCCM);
                     if (!isValid) throw new BadRequestException(`Nhân viên ${u.name} không có chứng chỉ CCCM hợp lệ hoặc đã hết hạn.`);
                 }
             }
+            */
 
             repair.acceptance_committee = users;
         }
