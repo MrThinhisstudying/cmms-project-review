@@ -56,6 +56,12 @@ export class UserCertificate {
     @Column({ type: 'date', nullable: true })
     evaluation_submit_date: Date; // Ngày nộp phiếu đánh giá
 
+    @Column({ nullable: true })
+    grading: string; // Xếp loại
+
+    @Column({ type: 'int', default: 0 })
+    evaluation_days: number; // Số ngày đánh giá
+
     @Column({ type: 'date', nullable: true })
     next_training_date: Date; // Ngày phải học định kỳ
 

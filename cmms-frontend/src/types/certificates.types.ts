@@ -25,6 +25,8 @@ export interface IEmployeeCertificate {
     evaluation_submit_date: string | null;
     next_training_date: string | null;
     status: CertificateStatus;
+    grading?: string;
+    evaluation_days?: number;
 }
 
 export type RequirementStatus = 'PENDING' | 'FULFILLED';
