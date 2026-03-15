@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Form, Input, Select, DatePicker, Upload, message, InputNumber } from 'antd';
+import { Modal, Form, Input, Select, DatePicker, Upload, message, InputNumber, Button } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
 import { IEmployeeCertificate, ITrainingProgram, CertificateType } from '../../../types/certificates.types';
 import dayjs from 'dayjs';
@@ -96,10 +96,23 @@ const CertificateModal: React.FC<CertificateModalProps> = ({
             onCancel={onCancel}
             onOk={handleSubmit}
             confirmLoading={loading}
-            width={700}
+            width={900}
+            style={{ top: 40 }}
+            footer={[
+                <Button key="back" onClick={onCancel}>
+                    Đóng
+                </Button>,
+                <Button key="submit" type="primary" loading={loading} onClick={handleSubmit}>
+                    Lưu
+                </Button>,
+            ]}
         >
-            <Form form={form} layout="vertical">
-                <Form.Item name="program_id" label="Chứng chỉ chuyên môn" rules={[{ required: true, message: 'Vui lòng chọn chứng chỉ' }]}>
+            <Form form={form} layout="vertical" requiredMark={false}>
+                <Form.Item 
+                    name="program_id" 
+                    label={<span>Chứng chỉ chuyên môn <span style={{color: 'red'}}>*</span></span>} 
+                    rules={[{ required: true, message: 'Vui lòng chọn chứng chỉ' }]}
+                >
                     <Select showSearch optionFilterProp="children" placeholder="--Chọn--">
                         {trainingPrograms.map(p => (
                             <Select.Option key={p.id} value={p.id}>{p.name} ({p.code})</Select.Option>
@@ -107,23 +120,28 @@ const CertificateModal: React.FC<CertificateModalProps> = ({
                     </Select>
                 </Form.Item>
 
-                <div style={{ display: 'flex', gap: 16 }}>
-                    <Form.Item name="start_date" label="Ngày bắt đầu khóa học" style={{ flex: 1 }}>
+                <div style={{ display: 'flex', gap: 24, marginBottom: 8 }}>
+                    <Form.Item name="start_date" label={<span>Ngày bắt đầu khóa học</span>} style={{ flex: 1, marginBottom: 0 }}>
                         <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Ngày cấp" />
                     </Form.Item>
-                    <Form.Item name="end_date" label="Ngày kết thúc khóa học" style={{ flex: 1 }}>
+                    <Form.Item name="end_date" label={<span>Ngày kết thúc khóa học</span>} style={{ flex: 1, marginBottom: 0 }}>
                         <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Ngày hết hạn" />
                     </Form.Item>
-                    <Form.Item name="return_date" label="Ngày học viên trở về" style={{ flex: 1 }}>
+                    <Form.Item name="return_date" label={<span>Ngày học viên trở về</span>} style={{ flex: 1, marginBottom: 0 }}>
                         <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Ngày học viên trở về" />
                     </Form.Item>
-                    <Form.Item name="issue_date" label="Ngày ban hành QĐ cấp CCCM" style={{ flex: 1 }} rules={[{ required: true, message: 'Vui lòng chọn ngày cấp' }]}>
+                    <Form.Item 
+                        name="issue_date" 
+                        label={<span>Ngày ban hành QĐ cấp CCCM <span style={{color: 'red'}}>*</span></span>} 
+                        style={{ flex: 1, marginBottom: 0 }} 
+                        rules={[{ required: true, message: 'Vui lòng chọn ngày cấp' }]}
+                    >
                         <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Ngày ban hành QĐ cấp CCCM" />
                     </Form.Item>
                 </div>
 
-                <div style={{ display: 'flex', gap: 16 }}>
-                    <Form.Item name="grading" label="Xếp loại" style={{ flex: 1 }}>
+                <div style={{ display: 'flex', gap: 24, marginBottom: 16 }}>
+                    <Form.Item name="grading" label={<span>Xếp loại</span>} style={{ flex: 1, marginBottom: 0 }}>
                         <Select placeholder="-- Chọn --" allowClear>
                             <Select.Option value="Xuất sắc">Xuất sắc</Select.Option>
                             <Select.Option value="Giỏi">Giỏi</Select.Option>
@@ -131,13 +149,18 @@ const CertificateModal: React.FC<CertificateModalProps> = ({
                             <Select.Option value="Trung bình">Trung bình</Select.Option>
                         </Select>
                     </Form.Item>
-                    <Form.Item name="decision_number" label="Số QĐ cấp CCCM" style={{ flex: 1 }}>
+                    <Form.Item name="decision_number" label={<span>Số QĐ cấp CCCM</span>} style={{ flex: 1, marginBottom: 0 }}>
                         <Input />
                     </Form.Item>
-                    <Form.Item name="certificate_number" label="Số CCCM" style={{ flex: 1 }} rules={[{ required: true, message: 'Vui lòng nhập số CCCM' }]}>
+                    <Form.Item 
+                        name="certificate_number" 
+                        label={<span>Số CCCM <span style={{color: 'red'}}>*</span></span>} 
+                        style={{ flex: 1, marginBottom: 0 }} 
+                        rules={[{ required: true, message: 'Vui lòng nhập số CCCM' }]}
+                    >
                         <Input />
                     </Form.Item>
-                    <Form.Item name="evaluation_days" label="Số ngày đánh giá" style={{ flex: 1 }} initialValue={0}>
+                    <Form.Item name="evaluation_days" label={<span>Số ngày đánh giá</span>} style={{ flex: 1, marginBottom: 0 }} initialValue={0}>
                         <InputNumber style={{ width: '100%' }} min={0} />
                     </Form.Item>
                 </div>
