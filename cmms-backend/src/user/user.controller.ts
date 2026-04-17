@@ -1,7 +1,8 @@
 import {Body, Controller, Delete, Get, HttpCode, HttpException, HttpStatus, Param, Post, Put, Patch, Query, UseGuards, UseInterceptors, UploadedFile} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
-import { extname } from 'path';
+import { extname, join } from 'path';
+import { compressImage } from '../common/utils/image-compression.util';
 import {AuthUser} from './user.decorator';
 import {User} from './user.entity';
 import {UserService} from './user.service';
@@ -151,12 +152,19 @@ export class UserController {
                 }
                 cb(null, true);
             },
+            limits: { fileSize: 5 * 1024 * 1024 }, // Max 5MB
         }),
     )
     async uploadSignature(@Param('id') id: number, @UploadedFile() file: Express.Multer.File) {
         try {
              if (!file) throw new HttpException('File is required', HttpStatus.BAD_REQUEST);
-             const signatureUrl = `/uploads/signatures/${file.filename}`;
+
+             // Compress signature (keep PNG for transparency)
+             const filePath = join(process.cwd(), 'uploads', 'signatures', file.filename);
+             const result = await compressImage(filePath, { keepPng: true, skipBelowBytes: 500 * 1024 });
+             const finalFilename = require('path').basename(result.outputPath);
+             const signatureUrl = `/uploads/signatures/${finalFilename}`;
+
              await this.userService.updateProfile(id, { signature_url: signatureUrl });
              return {
                  message: 'Cập nhật chữ ký thành công',

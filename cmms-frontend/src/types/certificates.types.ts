@@ -27,6 +27,18 @@ export interface IEmployeeCertificate {
     status: CertificateStatus;
     grading?: string;
     evaluation_days?: number;
+    // Bằng cấp fields
+    degree_type?: string;
+    major?: string;
+    school_name?: string;
+    graduation_year?: number;
+    study_mode?: string;
+    // GPLX fields
+    license_class?: string;
+    issuing_place?: string;
+    expiry_date?: string | null;
+    is_permanent?: boolean;
+    qualification_type?: string;
 }
 
 export type RequirementStatus = 'PENDING' | 'FULFILLED';

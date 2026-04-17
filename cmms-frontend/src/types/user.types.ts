@@ -8,7 +8,15 @@ export interface IUser {
   role: string;
   citizen_identification_card: string;
   avatar: string;
+  phone_number?: string;
+  employee_code?: string;
   signature_url?: string;
+  date_of_birth?: string;
+  place_of_birth?: string;
+  cccd_issue_date?: string;
+  permanent_address?: string;
+  temporary_address?: string;
+  hometown?: string;
   department?: IDepartment;
   user_device_groups?: IUserDeviceGroup[];
   created_at: Date;
@@ -34,7 +42,15 @@ export interface ICreateUser {
   role: string;
   citizen_identification_card: string;
   avatar?: string;
+  phone_number?: string;
+  employee_code?: string;
   signature_url?: string;
+  date_of_birth?: string;
+  place_of_birth?: string;
+  cccd_issue_date?: string;
+  permanent_address?: string;
+  temporary_address?: string;
+  hometown?: string;
   dept_id?: number;
   // For UI form handling
   group_id?: number;

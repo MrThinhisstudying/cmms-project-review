@@ -29,6 +29,10 @@ import {RepairsModule} from './repairs/repairs.module';
 import {DeviceGroupsModule} from './device-groups/device-groups.module';
 import {ReportModule} from './report/report.module';
 import {CertificatesModule} from './certificates/certificates.module';
+import {ProfileRequestModule} from './profile-requests/profile-request.module';
+import { LaborContractsModule } from './labor-contracts/labor-contracts.module';
+import { RewardDisciplinesModule } from './reward-disciplines/reward-disciplines.module';
+import { AnnualLeavesModule } from './annual-leaves/annual-leaves.module';
 
 @Module({
     imports: [
@@ -80,6 +84,10 @@ import {CertificatesModule} from './certificates/certificates.module';
         DeviceGroupsModule,
         ReportModule,
         CertificatesModule,
+        ProfileRequestModule,
+        LaborContractsModule,
+        RewardDisciplinesModule,
+        AnnualLeavesModule,
     ],
     controllers: [AppController],
     providers: [

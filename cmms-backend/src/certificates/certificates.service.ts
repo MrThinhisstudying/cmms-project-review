@@ -30,6 +30,39 @@ export class CertificatesService {
         return await this.trainingProgramRepository.save(program);
     }
 
+    async updateTrainingProgram(id: number, data: Partial<TrainingProgram>): Promise<TrainingProgram> {
+        const program = await this.trainingProgramRepository.findOne({ where: { id } });
+        if (!program) throw new NotFoundException('Training program not found');
+        Object.assign(program, data);
+        return await this.trainingProgramRepository.save(program);
+    }
+
+    async deleteTrainingProgram(id: number): Promise<void> {
+        const program = await this.trainingProgramRepository.findOne({ where: { id } });
+        if (!program) throw new NotFoundException('Training program not found');
+        await this.trainingProgramRepository.remove(program);
+    }
+
+    async renameGroup(oldName: string, newName: string): Promise<number> {
+        const result = await this.trainingProgramRepository
+            .createQueryBuilder()
+            .update(TrainingProgram)
+            .set({ group_name: newName })
+            .where('group_name = :oldName', { oldName })
+            .execute();
+        return result.affected || 0;
+    }
+
+    async renameCode(oldCode: string, newCode: string): Promise<number> {
+        const result = await this.trainingProgramRepository
+            .createQueryBuilder()
+            .update(TrainingProgram)
+            .set({ code: newCode })
+            .where('code = :oldCode', { oldCode })
+            .execute();
+        return result.affected || 0;
+    }
+
     // --- User Certificates ---
     async getCertificatesByUser(userId: number, type?: CertificateType): Promise<UserCertificate[]> {
         const where: any = { user: { user_id: userId } };
@@ -105,7 +138,7 @@ export class CertificatesService {
         }
     }
 
-    async getExpiringCertificates(days: number = 30): Promise<UserCertificate[]> {
+    async getExpiringCertificates(days: number = 90): Promise<UserCertificate[]> {
         const targetDate = new Date();
         targetDate.setDate(targetDate.getDate() + days);
 
@@ -183,4 +216,70 @@ export class CertificatesService {
         const result = await this.reqRepo.delete(id);
         if (result.affected === 0) throw new NotFoundException('Yêu cầu đào tạo không tồn tại');
     }
+
+    // --- Qualification Stats for HR Dashboard ---
+    async getQualificationStats(): Promise<any> {
+        const allBangCap = await this.userCertificateRepository.find({
+            where: { type: CertificateType.BANG_CAP, status: CertificateStatus.ACTIVE },
+            relations: ['user']
+        });
+
+        // Degree distribution
+        const degreeDistribution: Record<string, number> = {};
+        const licenseDistribution: Record<string, number> = {};
+
+        allBangCap.forEach(cert => {
+            if (cert.qualification_type === 'GIAY_PHEP_LAI_XE' || cert.license_class) {
+                const cls = cert.license_class || 'Khác';
+                licenseDistribution[cls] = (licenseDistribution[cls] || 0) + 1;
+            } else {
+                const deg = cert.degree_type || 'Khác';
+                degreeDistribution[deg] = (degreeDistribution[deg] || 0) + 1;
+            }
+        });
+
+        // Count expiring licenses (within 90 days)
+        const now = new Date();
+        const target = new Date();
+        target.setDate(target.getDate() + 90);
+
+        const expiringLicenses = allBangCap.filter(cert => {
+            if (cert.is_permanent || !cert.expiry_date) return false;
+            const exp = new Date(cert.expiry_date);
+            return exp <= target && exp >= now;
+        });
+
+        const expiredLicenses = allBangCap.filter(cert => {
+            if (cert.is_permanent || !cert.expiry_date) return false;
+            return new Date(cert.expiry_date) < now;
+        });
+
+        return {
+            degreeDistribution,
+            licenseDistribution,
+            totalDegrees: Object.values(degreeDistribution).reduce((a, b) => a + b, 0),
+            totalLicenses: Object.values(licenseDistribution).reduce((a, b) => a + b, 0),
+            expiringLicensesCount: expiringLicenses.length,
+            expiredLicensesCount: expiredLicenses.length,
+            expiringLicenses: expiringLicenses.map(c => ({
+                id: c.id,
+                license_class: c.license_class,
+                certificate_number: c.certificate_number,
+                expiry_date: c.expiry_date,
+                issuing_place: c.issuing_place,
+                user_name: c.user?.name,
+                user_id: c.user?.user_id,
+            })),
+            expiredLicenses: expiredLicenses.map(c => ({
+                id: c.id,
+                license_class: c.license_class,
+                certificate_number: c.certificate_number,
+                expiry_date: c.expiry_date,
+                issuing_place: c.issuing_place,
+                user_name: c.user?.name,
+                user_id: c.user?.user_id,
+            })),
+        };
+    }
 }
+

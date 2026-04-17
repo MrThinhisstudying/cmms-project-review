@@ -69,6 +69,38 @@ export class User {
     @Column({nullable: true})
     avatar?: string;
 
+    @ApiProperty()
+    @Column({nullable: true})
+    phone_number?: string;
+
+    @ApiProperty()
+    @Column({nullable: true})
+    employee_code?: string;
+
+    @ApiProperty({ description: 'Ngày sinh' })
+    @Column({ type: 'date', nullable: true })
+    date_of_birth?: Date;
+
+    @ApiProperty({ description: 'Nơi sinh' })
+    @Column({ nullable: true })
+    place_of_birth?: string;
+
+    @ApiProperty({ description: 'Ngày cấp CCCD' })
+    @Column({ type: 'date', nullable: true })
+    cccd_issue_date?: Date;
+
+    @ApiProperty({ description: 'Nơi thường trú' })
+    @Column({ type: 'text', nullable: true })
+    permanent_address?: string;
+
+    @ApiProperty({ description: 'Nơi tạm trú' })
+    @Column({ type: 'text', nullable: true })
+    temporary_address?: string;
+
+    @ApiProperty({ description: 'Quê quán' })
+    @Column({ nullable: true })
+    hometown?: string;
+
     @CreateDateColumn()
     created_at?: Date;
 

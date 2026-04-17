@@ -11,6 +11,44 @@ const certificatesApi = {
         return res.json();
     },
 
+    createTrainingProgram: async (data: any): Promise<ITrainingProgram> => {
+        const token = getToken();
+        const res = await fetch(`${process.env.REACT_APP_BASE_URL}/certificates/programs`, {
+            method: 'POST',
+            headers: { 
+                'Authorization': token ? `Bearer ${token}` : '',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        if (!res.ok) throw new Error('Failed to create training program');
+        return res.json();
+    },
+
+    updateTrainingProgram: async (id: number | string, data: any): Promise<ITrainingProgram> => {
+        const token = getToken();
+        const res = await fetch(`${process.env.REACT_APP_BASE_URL}/certificates/programs/${id}`, {
+            method: 'PUT',
+            headers: { 
+                'Authorization': token ? `Bearer ${token}` : '',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(data)
+        });
+        if (!res.ok) throw new Error('Failed to update training program');
+        return res.json();
+    },
+
+    deleteTrainingProgram: async (id: number | string): Promise<any> => {
+        const token = getToken();
+        const res = await fetch(`${process.env.REACT_APP_BASE_URL}/certificates/programs/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        });
+        if (!res.ok) throw new Error('Failed to delete training program');
+        return res.json();
+    },
+
     getUserCertificates: async (userId: number | string, type?: string): Promise<IEmployeeCertificate[]> => {
         const token = getToken();
         const url = new URL(`${process.env.REACT_APP_BASE_URL}/certificates/user/${userId}`);
@@ -127,6 +165,43 @@ const certificatesApi = {
             headers: { 'Authorization': token ? `Bearer ${token}` : '' }
         });
         if (!res.ok) throw new Error('Failed to delete training requirement');
+        return res.json();
+    },
+
+    getQualificationStats: async (): Promise<any> => {
+        const token = getToken();
+        const res = await fetch(`${process.env.REACT_APP_BASE_URL}/certificates/qualification-stats`, {
+            headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        });
+        if (!res.ok) throw new Error('Failed to fetch qualification stats');
+        return res.json();
+    },
+
+    renameGroup: async (oldName: string, newName: string): Promise<any> => {
+        const token = getToken();
+        const res = await fetch(`${process.env.REACT_APP_BASE_URL}/certificates/programs/rename-group`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': token ? `Bearer ${token}` : '',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ oldName, newName })
+        });
+        if (!res.ok) throw new Error('Failed to rename group');
+        return res.json();
+    },
+
+    renameCode: async (oldCode: string, newCode: string): Promise<any> => {
+        const token = getToken();
+        const res = await fetch(`${process.env.REACT_APP_BASE_URL}/certificates/programs/rename-code`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': token ? `Bearer ${token}` : '',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ oldCode, newCode })
+        });
+        if (!res.ok) throw new Error('Failed to rename code');
         return res.json();
     }
 };

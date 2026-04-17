@@ -3,6 +3,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { CertificatesService } from './certificates.service';
 import { CertificateType } from './entities/user-certificate.entity';
 import { diskStorage } from 'multer';
+import { join } from 'path';
+import { compressImage } from '../common/utils/image-compression.util';
 import { extname } from 'path';
 
 @Controller('certificates')
@@ -17,6 +19,29 @@ export class CertificatesController {
     @Post('programs')
     async createTrainingProgram(@Body() data: any) {
         return this.certificatesService.createTrainingProgram(data);
+    }
+
+    @Put('programs/:id')
+    async updateTrainingProgram(@Param('id') id: string, @Body() data: any) {
+        return this.certificatesService.updateTrainingProgram(parseInt(id), data);
+    }
+
+    @Delete('programs/:id')
+    async deleteTrainingProgram(@Param('id') id: string) {
+        await this.certificatesService.deleteTrainingProgram(parseInt(id));
+        return { success: true, message: 'Training program deleted successfully' };
+    }
+
+    @Put('programs/rename-group')
+    async renameGroup(@Body() body: { oldName: string; newName: string }) {
+        const affected = await this.certificatesService.renameGroup(body.oldName, body.newName);
+        return { success: true, affected };
+    }
+
+    @Put('programs/rename-code')
+    async renameCode(@Body() body: { oldCode: string; newCode: string }) {
+        const affected = await this.certificatesService.renameCode(body.oldCode, body.newCode);
+        return { success: true, affected };
     }
 
     @Get('user/:userId')
@@ -42,7 +67,13 @@ export class CertificatesController {
         @Body() body: any,
         @UploadedFile() file: any,
     ) {
-        const fileUrl = file ? `/uploads/certificates/${file.filename}` : undefined;
+        let fileUrl: string | undefined;
+        if (file) {
+            const filePath = join(process.cwd(), 'uploads', 'certificates', file.filename);
+            const result = await compressImage(filePath);
+            const finalFilename = require('path').basename(result.outputPath);
+            fileUrl = `/uploads/certificates/${finalFilename}`;
+        }
         return this.certificatesService.createCertificate(parseInt(userId), body, fileUrl);
     }
 
@@ -61,7 +92,13 @@ export class CertificatesController {
         @Body() body: any,
         @UploadedFile() file: any,
     ) {
-        const fileUrl = file ? `/uploads/certificates/${file.filename}` : undefined;
+        let fileUrl: string | undefined;
+        if (file) {
+            const filePath = join(process.cwd(), 'uploads', 'certificates', file.filename);
+            const result = await compressImage(filePath);
+            const finalFilename = require('path').basename(result.outputPath);
+            fileUrl = `/uploads/certificates/${finalFilename}`;
+        }
         return this.certificatesService.updateCertificate(id, body, fileUrl);
     }
 
@@ -73,7 +110,12 @@ export class CertificatesController {
 
     @Get('expiring')
     async getExpiringCertificates(@Query('days') days?: number) {
-        return this.certificatesService.getExpiringCertificates(days ? parseInt(String(days)) : 30);
+        return this.certificatesService.getExpiringCertificates(days ? parseInt(String(days)) : 90);
+    }
+
+    @Get('qualification-stats')
+    async getQualificationStats() {
+        return this.certificatesService.getQualificationStats();
     }
 
     // --- Training Requirements ---

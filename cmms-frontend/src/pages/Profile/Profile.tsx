@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { Form, Input, Button, Upload, message, Card, Descriptions, Avatar, Typography, Row, Col, Tabs } from "antd";
-import { UploadOutlined, UserOutlined, LockOutlined, InfoCircleOutlined } from "@ant-design/icons";
+import { Form, Input, Button, Upload, message, Card, Descriptions, Avatar, Typography, Row, Col, Tabs, DatePicker } from "antd";
+import { UploadOutlined, UserOutlined, LockOutlined, InfoCircleOutlined, PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { getProfile, updateProfile } from "../../apis/users";
 import { getToken } from "../../utils/auth";
 import { IUser } from "../../types/user.types";
 import { getBackendImageUrl } from "../../utils/imageUrl";
 import certificatesApi from "../../apis/certificates";
 import { IEmployeeCertificate, IUserTrainingRequirement } from "../../types/certificates.types";
-import { Table, Tag } from "antd";
+import { Table, Tag, Popconfirm, Space } from "antd";
 import dayjs from "dayjs";
+import QualificationModal from "../Users/components/QualificationModal";
 
 const { Title } = Typography;
 
@@ -21,6 +22,14 @@ const Profile: React.FC = () => {
     const [requirements, setRequirements] = useState<IUserTrainingRequirement[]>([]);
     const [certLoading, setCertLoading] = useState(false);
 
+    // Qualification modal
+    const [qualModalOpen, setQualModalOpen] = useState(false);
+    const [selectedQual, setSelectedQual] = useState<IEmployeeCertificate | null>(null);
+    const [qualModalLoading, setQualModalLoading] = useState(false);
+
+    // Qualification data
+    const [qualifications, setQualifications] = useState<IEmployeeCertificate[]>([]);
+
     const [form] = Form.useForm();
     const token = getToken();
 
@@ -32,7 +41,13 @@ const Profile: React.FC = () => {
                 form.setFieldsValue({
                     name: data.name,
                     email: data.email,
-                    // phone: '', 
+                    phone_number: data.phone_number,
+                    date_of_birth: data.date_of_birth ? dayjs(data.date_of_birth) : null,
+                    place_of_birth: data.place_of_birth,
+                    cccd_issue_date: data.cccd_issue_date ? dayjs(data.cccd_issue_date) : null,
+                    permanent_address: data.permanent_address,
+                    temporary_address: data.temporary_address,
+                    hometown: data.hometown,
                 });
             }
         } catch (error) {
@@ -56,7 +71,8 @@ const Profile: React.FC = () => {
                 const bangCap = await certificatesApi.getUserCertificates(user.user_id, 'BANG_CAP');
                 const giayPhep = await certificatesApi.getUserCertificates(user.user_id, 'GIAY_PHEP');
                 
-                setCertificates([...cccm, ...bangCap, ...giayPhep]);
+                setCertificates([...cccm, ...giayPhep]);
+                setQualifications(bangCap);
             } catch (error) {
                 console.error("Failed to fetch certs");
             } finally {
@@ -72,17 +88,6 @@ const Profile: React.FC = () => {
     const handleUpdate = async (values: any) => {
         setLoading(true);
         try {
-            // Handle signature upload -> Convert to Base64 or URL?
-            // If signature is file, upload it? Backend expects URL string in updateProfile.
-            // But usually upload returns a URL.
-            // My backend updateProfile expects `signature_url` string.
-            // So I need to upload first (where?) or send base64?
-            // User requested "Signature Upload: Implement AntD Upload with preview".
-            // If I don't have a file upload API, I might need to send base64 or create one.
-            // Current backend has no "upload" endpoint for general files in my changes.
-            // There is `FileUploadComponent` in project (`Users.tsx` uses it). It reads as DataURL.
-            // So I can send Base64 string as `signature_url`.
-            
             let signatureUrl = user?.signature_url;
             if (values.signature && values.signature.fileList && values.signature.fileList.length > 0) {
                  const file = values.signature.fileList[0].originFileObj;
@@ -95,7 +100,6 @@ const Profile: React.FC = () => {
 
             const payload: Partial<IUser> = {
                 name: values.name,
-                // email: values.email, // email usually read-only or requires verify
                 signature_url: signatureUrl,
             };
 
@@ -124,6 +128,48 @@ const Profile: React.FC = () => {
             message.error("Đổi mật khẩu thất bại");
         } finally {
             setLoading(false);
+        }
+    };
+
+    // --- Qualification handlers ---
+    const handleAddQual = () => {
+        setSelectedQual(null);
+        setQualModalOpen(true);
+    };
+
+    const handleEditQual = (cert: IEmployeeCertificate) => {
+        setSelectedQual(cert);
+        setQualModalOpen(true);
+    };
+
+    const handleDeleteQual = async (id: number) => {
+        try {
+            await certificatesApi.deleteCertificate(id);
+            setQualifications(prev => prev.filter(q => q.id !== id));
+            message.success('Đã xóa');
+        } catch (error: any) {
+            message.error(error.message || 'Lỗi khi xóa');
+        }
+    };
+
+    const handleQualModalOk = async (values: any, file?: File | null) => {
+        if (!user) return;
+        setQualModalLoading(true);
+        try {
+            if (selectedQual) {
+                const res = await certificatesApi.updateCertificate(selectedQual.id, values, file || undefined);
+                setQualifications(prev => prev.map(q => q.id === selectedQual.id ? res : q));
+                message.success('Cập nhật thành công');
+            } else {
+                const res = await certificatesApi.createCertificate(user.user_id, values, file || undefined);
+                setQualifications(prev => [...prev, res]);
+                message.success('Thêm mới thành công');
+            }
+            setQualModalOpen(false);
+        } catch (error: any) {
+            message.error(error.message || 'Lỗi lưu thông tin');
+        } finally {
+            setQualModalLoading(false);
         }
     };
 
@@ -162,6 +208,88 @@ const Profile: React.FC = () => {
         },
         { title: 'Ghi chú', dataIndex: 'note' },
     ];
+
+    // Degree & license columns for qualifications tab
+    const degrees = qualifications.filter(c => c.qualification_type === 'BANG_CAP' || (!c.qualification_type && !c.license_class));
+    const licenses = qualifications.filter(c => c.qualification_type === 'GIAY_PHEP_LAI_XE' || (!c.qualification_type && c.license_class));
+
+    const degreeColumns = [
+        { title: 'STT', render: (_: any, __: any, i: number) => i + 1, width: 50 },
+        { title: 'Loại bằng', dataIndex: 'degree_type', width: 100 },
+        { title: 'Chuyên ngành', dataIndex: 'major', ellipsis: true },
+        { title: 'Trường', dataIndex: 'school_name', ellipsis: true },
+        { title: 'Năm TN', dataIndex: 'graduation_year', width: 80, align: 'center' as const },
+        { title: 'Xếp loại', dataIndex: 'grading', width: 80 },
+        {
+            title: 'Hành động', key: 'action', width: 90,
+            render: (_: any, record: IEmployeeCertificate) => (
+                <Space size="small">
+                    <Button type="text" size="small" icon={<EditOutlined style={{ color: '#1890ff' }} />} onClick={() => handleEditQual(record)} />
+                    <Popconfirm title="Xóa bằng cấp này?" onConfirm={() => handleDeleteQual(record.id)} okText="Xóa" cancelText="Hủy" okButtonProps={{ danger: true }}>
+                        <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                </Space>
+            )
+        }
+    ];
+
+    const licenseColumns = [
+        { title: 'STT', render: (_: any, __: any, i: number) => i + 1, width: 50 },
+        { title: 'Hạng', dataIndex: 'license_class', width: 60, render: (v: string) => <Tag color="blue">{v}</Tag> },
+        { title: 'Số GP', dataIndex: 'certificate_number', width: 120 },
+        { title: 'Ngày cấp', dataIndex: 'issue_date', width: 100, render: (d: string) => d ? dayjs(d).format('DD/MM/YYYY') : '-' },
+        { 
+            title: 'Có giá trị đến', width: 120,
+            render: (_: any, record: IEmployeeCertificate) => {
+                if (record.is_permanent) return <Tag color="green">Không thời hạn</Tag>;
+                if (!record.expiry_date) return '-';
+                const daysLeft = dayjs(record.expiry_date).diff(dayjs(), 'day');
+                const color = daysLeft <= 0 ? '#ff4d4f' : daysLeft <= 90 ? '#faad14' : '#52c41a';
+                return <span style={{ color, fontWeight: 'bold' }}>{dayjs(record.expiry_date).format('DD/MM/YYYY')}</span>;
+            }
+        },
+        { title: 'Nơi cấp', dataIndex: 'issuing_place' },
+        {
+            title: 'Hành động', key: 'action', width: 90,
+            render: (_: any, record: IEmployeeCertificate) => (
+                <Space size="small">
+                    <Button type="text" size="small" icon={<EditOutlined style={{ color: '#1890ff' }} />} onClick={() => handleEditQual(record)} />
+                    <Popconfirm title="Xóa giấy phép này?" onConfirm={() => handleDeleteQual(record.id)} okText="Xóa" cancelText="Hủy" okButtonProps={{ danger: true }}>
+                        <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+                    </Popconfirm>
+                </Space>
+            )
+        }
+    ];
+
+    const qualificationsTab = (
+        <div>
+            <div style={{ marginBottom: 16 }}>
+                <Button type="primary" icon={<PlusOutlined />} onClick={handleAddQual}>Thêm bằng cấp / GPLX</Button>
+            </div>
+            
+            <h4 style={{ margin: '0 0 8px', color: '#1890ff' }}>🎓 Bằng cấp ({degrees.length})</h4>
+            <Table 
+                dataSource={degrees}
+                columns={degreeColumns}
+                rowKey="id"
+                loading={certLoading}
+                bordered size="small" pagination={false}
+                locale={{ emptyText: 'Chưa có bằng cấp. Nhấn "Thêm bằng cấp / GPLX" để thêm.' }}
+                style={{ marginBottom: 20 }}
+            />
+
+            <h4 style={{ margin: '0 0 8px', color: '#faad14' }}>🚗 Giấy phép lái xe ({licenses.length})</h4>
+            <Table
+                dataSource={licenses}
+                columns={licenseColumns}
+                rowKey="id"
+                loading={certLoading}
+                bordered size="small" pagination={false}
+                locale={{ emptyText: 'Chưa có giấy phép lái xe.' }}
+            />
+        </div>
+    );
 
     const infoTab = (
                         <Form form={form} layout="vertical" onFinish={handleUpdate}>
@@ -233,6 +361,11 @@ const Profile: React.FC = () => {
                             <Descriptions.Item label="Chức vụ">{user.position}</Descriptions.Item>
                             <Descriptions.Item label="Phòng ban">{user.department?.name}</Descriptions.Item>
                             <Descriptions.Item label="CCCD">{user.citizen_identification_card}</Descriptions.Item>
+                            <Descriptions.Item label="Ngày sinh">{user.date_of_birth ? dayjs(user.date_of_birth).format('DD/MM/YYYY') : '-'}</Descriptions.Item>
+                            <Descriptions.Item label="Nơi sinh">{user.place_of_birth || '-'}</Descriptions.Item>
+                            <Descriptions.Item label="Quê quán">{user.hometown || '-'}</Descriptions.Item>
+                            <Descriptions.Item label="Nơi thường trú">{user.permanent_address || '-'}</Descriptions.Item>
+                            <Descriptions.Item label="Nơi tạm trú">{user.temporary_address || '-'}</Descriptions.Item>
                             {user.user_device_groups && user.user_device_groups.length > 0 && (
                                 <Descriptions.Item label="Nhóm thiết bị">
                                     {user.user_device_groups.map(g => (
@@ -252,7 +385,12 @@ const Profile: React.FC = () => {
                             { key: '2', label: <span><LockOutlined /> Đổi mật khẩu</span>, children: passwordTab },
                             { 
                                 key: '3', 
-                                label: 'Bằng cấp & Chứng chỉ', 
+                                label: '🎓 Bằng cấp & GPLX',
+                                children: qualificationsTab
+                            },
+                            { 
+                                key: '4', 
+                                label: 'Chứng chỉ chuyên môn', 
                                 children: (
                                     <Table 
                                         dataSource={certificates} 
@@ -266,7 +404,7 @@ const Profile: React.FC = () => {
                                 ) 
                             },
                             { 
-                                key: '4', 
+                                key: '5', 
                                 label: 'Yêu cầu đào tạo', 
                                 children: (
                                     <Table 
@@ -284,6 +422,15 @@ const Profile: React.FC = () => {
                     </Card>
                 </Col>
             </Row>
+
+            <QualificationModal
+                open={qualModalOpen}
+                onCancel={() => setQualModalOpen(false)}
+                onOk={handleQualModalOk}
+                initialValues={selectedQual}
+                loading={qualModalLoading}
+                user={user}
+            />
         </div>
     );
 };

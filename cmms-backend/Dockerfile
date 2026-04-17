@@ -5,6 +5,8 @@ COPY package.json yarn.lock ./
 RUN yarn install --frozen-lockfile
 
 COPY . .
+# ⚡ TỐI ƯU: Khóa giới hạn RAM ở mức 512MB để ngăn chặn Out Of Memory (OOM Killer) làm sập Server khi build
+ENV NODE_OPTIONS="--max_old_space_size=512"
 RUN yarn build
 
 

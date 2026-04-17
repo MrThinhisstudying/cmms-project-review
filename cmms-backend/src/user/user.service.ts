@@ -61,6 +61,16 @@ export class UserService {
                  if (allowedUserIds.length === 0) return { result: [] };
             }
 
+            // If user is TEAM_LEAD, only show users in the same department
+            if (currentUser && currentUser.role === UserRole.TEAM_LEAD) {
+                 const fullUser = await this.userRepository.findOne({ where: { user_id: currentUser.user_id }, relations: ['department'] });
+                 if (fullUser && fullUser.department) {
+                     whereClause.department = { dept_id: fullUser.department.dept_id };
+                 } else {
+                     return { result: [] }; // No department, see nothing
+                 }
+            }
+
             if (allowedUserIds !== null) {
                 whereClause.user_id = In(allowedUserIds);
             }
@@ -100,6 +110,10 @@ export class UserService {
          if (data.name) user.name = data.name;
          if (data.email) user.email = data.email;
          if (data.signature_url) user.signature_url = data.signature_url;
+         if (data.phone_number !== undefined) user.phone_number = data.phone_number;
+         if (data.citizen_identification_card !== undefined) user.citizen_identification_card = data.citizen_identification_card;
+         if (data.employee_code !== undefined) user.employee_code = data.employee_code;
+         if (data.position !== undefined) user.position = data.position;
          
          // Logic to help update password
          if (data.password) {

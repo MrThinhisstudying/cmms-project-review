@@ -68,6 +68,38 @@ export class UserCertificate {
     @Column({ type: 'enum', enum: CertificateStatus, default: CertificateStatus.ACTIVE })
     status: CertificateStatus;
 
+    // === Bằng cấp (Degree) fields ===
+    @Column({ nullable: true })
+    degree_type: string; // Cao đẳng, Cử nhân, Thạc sĩ, Tiến sĩ...
+
+    @Column({ nullable: true })
+    major: string; // Chuyên ngành
+
+    @Column({ nullable: true })
+    school_name: string; // Tên trường
+
+    @Column({ type: 'int', nullable: true })
+    graduation_year: number; // Năm tốt nghiệp
+
+    @Column({ nullable: true })
+    study_mode: string; // Hình thức đào tạo: Chính quy, Tại chức, Từ xa
+
+    // === Giấy phép lái xe (Driver License) fields ===
+    @Column({ nullable: true })
+    license_class: string; // Hạng: A1, A2, B1, B2, C, D, E
+
+    @Column({ nullable: true })
+    issuing_place: string; // Nơi cấp
+
+    @Column({ type: 'date', nullable: true })
+    expiry_date: Date; // Có giá trị đến
+
+    @Column({ type: 'boolean', default: false })
+    is_permanent: boolean; // Không thời hạn
+
+    @Column({ nullable: true })
+    qualification_type: string; // 'BANG_CAP' | 'GIAY_PHEP_LAI_XE' - phân biệt loại trong tab Quản lý trình độ
+
     @CreateDateColumn()
     created_at: Date;
 

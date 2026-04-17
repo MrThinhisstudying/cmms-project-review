@@ -1,15 +1,17 @@
-import React, { useState } from "react";
-import { Layout, Dropdown, MenuProps, Avatar, Badge, Space, Breadcrumb, Button, Input, Typography } from "antd";
+import React, { useState, useMemo } from "react";
+import { Layout, Dropdown, MenuProps, Avatar, Badge, Space, Breadcrumb, Button, Input, Typography, AutoComplete, Tag } from "antd";
 import { 
     UserOutlined, 
     LogoutOutlined, 
     BellOutlined, 
     MenuFoldOutlined, 
     MenuUnfoldOutlined, 
-    HomeOutlined 
+    HomeOutlined,
+    SearchOutlined
 } from "@ant-design/icons";
 import { useAuthContext } from "../../../context/AuthContext/AuthContext";
 import { useNotificationContext } from "../../../context/NotificationContext/NotificationContext";
+import { useUsersContext } from "../../../context/UsersContext/UsersContext";
 import { Link, useLocation } from "react-router-dom";
 import ProfileModal from "../../../pages/Users/components/ProfileModal";
 
@@ -25,7 +27,53 @@ interface TopBarProps {
 const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
   const { user, logoutUser, setUser } = useAuthContext();
   const { notifications, unreadCount, readAll, readOne } = useNotificationContext();
+  const { users } = useUsersContext();
+  
   const [openProfile, setOpenProfile] = useState(false);
+  
+  // 360 Search States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [openSearchProfile, setOpenSearchProfile] = useState(false);
+  const [searchedUser, setSearchedUser] = useState<any>(null);
+
+  const searchOptions = useMemo(() => {
+        if (!searchTerm) return [];
+        const lowerSearch = searchTerm.toLowerCase();
+        return users
+            .filter(u => u.name.toLowerCase().includes(lowerSearch) || String(u.user_id).toLowerCase().includes(lowerSearch) || u.employee_code?.toLowerCase().includes(lowerSearch))
+            .slice(0, 8)
+            .map(u => ({
+                value: String(u.user_id),
+                label: (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontWeight: 600, color: '#1890ff', fontSize: 14 }}>{u.name}</span>
+                                <span style={{ fontSize: 12, color: '#888' }}>Mã NV: {u.employee_code || u.user_id} - PB: {u.department?.name || 'Không có'}</span>
+                            </div>
+                        </div>
+                        <Tag color={u.status === 'ACTIVE' ? 'success' : 'error'} style={{ margin: 0 }}>{u.status}</Tag>
+                    </div>
+                ),
+                user: u
+            }));
+  }, [users, searchTerm]);
+
+  const handleSelectUser = (value: string, option: any) => {
+        setSearchTerm('');
+        setSearchedUser(option.user);
+        setOpenSearchProfile(true);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'Enter' && searchOptions.length > 0) {
+            // AutoSelect cái kết quả hợp lý nhất (người đầu tiên)
+            handleSelectUser(searchOptions[0].value, searchOptions[0]);
+            // Làm mất focus của ô input (đóng list xổ xuống)
+            (document.activeElement as HTMLElement)?.blur?.();
+        }
+  };
+
   const location = useLocation();
 
   // Path translation map
@@ -55,7 +103,13 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
       'quan_ly_vat_tu': 'QUẢN LÝ VẬT TƯ',
       'lich_su': 'LỊCH SỬ HỆ THỐNG',
       'login': 'ĐĂNG NHẬP',
-      'profile': 'HỒ SƠ CÁ NHÂN'
+      'profile': 'HỒ SƠ CÁ NHÂN',
+      // HR Module
+      'hr-dashboard': 'TỔNG QUAN NHÂN SỰ',
+      'phe_duyet_ho_so': 'PHÊ DUYỆT HỒ SƠ',
+      'training-programs': 'QUẢN LÝ CTĐT / CCCM',
+      'quan_ly_phep': 'QUẢN LÝ PHÉP NĂM',
+      'lay_vat_tu': 'XUẤT VẬT TƯ',
   };
 
   // Generate breadcrumbs from path
@@ -147,12 +201,25 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
             </Space>
 
             <Space size={24}>
-                {/* Search Input */}
-                <Input.Search 
-                    placeholder="Tìm kiếm..." 
-                    allowClear 
-                    style={{ width: 200 }} 
-                />
+                {/* 360 Search Input */}
+                <div style={{ lineHeight: 'normal', display: 'flex', alignItems: 'center' }}>
+                    <AutoComplete
+                        style={{ width: 300 }}
+                        dropdownMatchSelectWidth={350}
+                        options={searchOptions}
+                        onSelect={handleSelectUser}
+                        onSearch={setSearchTerm}
+                        value={searchTerm}
+                        allowClear
+                    >
+                        <Input 
+                            placeholder="Tìm kiếm NV (Tên / Mã)..." 
+                            suffix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                            style={{ borderRadius: 6 }}
+                            onKeyDown={handleKeyDown}
+                        />
+                    </AutoComplete>
+                </div>
 
                 {/* Notification */}
                 <Dropdown 
@@ -264,6 +331,14 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
                     });
                 }
             }}
+        />
+
+        {/* 360 Search Profile Modal */}
+        <ProfileModal 
+            open={openSearchProfile} 
+            onCancel={() => setOpenSearchProfile(false)} 
+            user={searchedUser} 
+            onUpdateSuccess={() => {}}
         />
     </>
   );

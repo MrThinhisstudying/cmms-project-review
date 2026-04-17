@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, Input, Select, Switch, Upload, Button, message } from 'antd';
+import { Modal, Form, Input, Select, Switch, Upload, Button, message, DatePicker } from 'antd';
 import { UploadOutlined } from '@ant-design/icons';
 import { ICreateUser, IDepartment, IUser } from '../../../types/user.types';
 import { IDeviceGroup } from '../../../apis/device-groups';
 import { uploadSignature } from '../../../apis/users';
 import { getToken } from '../../../utils/auth';
+import dayjs from 'dayjs';
 
 interface UserModalProps {
     open: boolean;
@@ -26,11 +27,12 @@ const UserModal: React.FC<UserModalProps> = ({ open, onCancel, onOk, initialValu
             form.setFieldsValue({
                 ...initialValues,
                 dept_id: initialValues.department?.dept_id,
-                // Check if user has a group assignment
                 group_id: initialValues.user_device_groups?.[0]?.group_id,
                 is_group_lead: initialValues.user_device_groups?.[0]?.is_group_lead,
-                password: '', // Don't fill password on edit
+                password: '',
                 confirmPassword: '',
+                date_of_birth: initialValues.date_of_birth ? dayjs(initialValues.date_of_birth) : null,
+                cccd_issue_date: initialValues.cccd_issue_date ? dayjs(initialValues.cccd_issue_date) : null,
             });
         } else {
             form.resetFields();
@@ -41,7 +43,13 @@ const UserModal: React.FC<UserModalProps> = ({ open, onCancel, onOk, initialValu
     const handleSubmit = async () => {
         try {
             const values = await form.validateFields();
-            onOk(values);
+            // Format date fields
+            const formatted = {
+                ...values,
+                date_of_birth: values.date_of_birth ? dayjs(values.date_of_birth).format('YYYY-MM-DD') : null,
+                cccd_issue_date: values.cccd_issue_date ? dayjs(values.cccd_issue_date).format('YYYY-MM-DD') : null,
+            };
+            onOk(formatted);
         } catch (error) {
             // Validation failed
         }
@@ -75,13 +83,17 @@ const UserModal: React.FC<UserModalProps> = ({ open, onCancel, onOk, initialValu
                 )}
 
                 <div style={{ display: 'flex', gap: 16 }}>
-                     <Form.Item name="position" label="Chức vụ" style={{ flex: 1 }} rules={[{ required: true }]}>
+                    <Form.Item name="employee_code" label="Mã số NV" style={{ flex: 1 }}>
+                        <Input placeholder="Ví dụ: NV001" />
+                    </Form.Item>
+                    <Form.Item name="citizen_identification_card" label="CCCD" style={{ flex: 1 }} rules={[{ required: true }]}>
                         <Input />
-                     </Form.Item>
-                     <Form.Item name="citizen_identification_card" label="CCCD" style={{ flex: 1 }} rules={[{ required: true }]}>
-                        <Input />
-                     </Form.Item>
+                    </Form.Item>
                 </div>
+
+                <Form.Item name="position" label="Chức vụ" rules={[{ required: true }]}>
+                    <Input />
+                </Form.Item>
 
                 <div style={{ display: 'flex', gap: 16 }}>
                     <Form.Item name="role" label="Vai trò" style={{ flex: 1 }} rules={[{ required: true }]}>
@@ -123,6 +135,36 @@ const UserModal: React.FC<UserModalProps> = ({ open, onCancel, onOk, initialValu
                         <Select.Option value="active">Hoạt động</Select.Option>
                         <Select.Option value="deactive">Ngừng hoạt động</Select.Option>
                      </Select>
+                </Form.Item>
+
+                {/* --- THÔNG TIN CÁ NHÂN BỔ SUNG --- */}
+                <div style={{ borderTop: '1px solid #f0f0f0', marginTop: 8, paddingTop: 16, marginBottom: 8 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14, color: '#1890ff' }}>📝 Thông tin cá nhân</span>
+                </div>
+                <div style={{ display: 'flex', gap: 16 }}>
+                    <Form.Item name="phone_number" label="Số điện thoại" style={{ flex: 1 }}>
+                        <Input placeholder="0901234567" />
+                    </Form.Item>
+                    <Form.Item name="date_of_birth" label="Ngày sinh" style={{ flex: 1 }}>
+                        <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày" />
+                    </Form.Item>
+                    <Form.Item name="place_of_birth" label="Nơi sinh" style={{ flex: 1 }}>
+                        <Input placeholder="Ví dụ: Thanh Hóa" />
+                    </Form.Item>
+                </div>
+                <div style={{ display: 'flex', gap: 16 }}>
+                    <Form.Item name="cccd_issue_date" label="Ngày cấp CCCD" style={{ flex: 1 }}>
+                        <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày" />
+                    </Form.Item>
+                    <Form.Item name="hometown" label="Quê quán" style={{ flex: 2 }}>
+                        <Input placeholder="TP. Hồ Chí Minh" />
+                    </Form.Item>
+                </div>
+                <Form.Item name="permanent_address" label="Nơi thường trú">
+                    <Input placeholder="Địa chỉ thường trú" />
+                </Form.Item>
+                <Form.Item name="temporary_address" label="Nơi tạm trú">
+                    <Input placeholder="Địa chỉ tạm trú (nếu có)" />
                 </Form.Item>
 
                 {(isEdit || readOnly) && (

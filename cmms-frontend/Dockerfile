@@ -9,6 +9,9 @@ COPY . .
 ARG REACT_APP_BASE_URL
 ENV REACT_APP_BASE_URL=${REACT_APP_BASE_URL}
 
+# ⚡ TỐI ƯU: Khóa giới hạn RAM ở mức 512MB để ngăn chặn Out Of Memory (OOM Killer) làm sập Server khi build
+ENV NODE_OPTIONS="--max_old_space_size=512"
+
 RUN yarn build
 
 

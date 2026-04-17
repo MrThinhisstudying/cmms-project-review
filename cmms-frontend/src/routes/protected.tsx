@@ -14,6 +14,12 @@ import MaintenanceProcedurePage from "../pages/MaintenanceProcedure";
 import MaintenanceHistoryPage from "../pages/MaintenanceHistory";
 import Profile from "../pages/Profile/Profile";
 import HRDashboard from "../pages/HRDashboard";
+import TrainingPrograms from "../pages/TrainingPrograms";
+import ProfileRequests from "../pages/ProfileRequests";
+import LeaveManagement from "../pages/LeaveManagement";
+import Employees from "../pages/Employees";
+import LaborContracts from "../pages/LaborContracts";
+import RewardDisciplines from "../pages/RewardDisciplines";
 
 export const protectedRoutes = (userRole: string) => {
   if (['admin', 'ADMIN', 'HR_MANAGER'].includes(userRole)) {
@@ -29,7 +35,14 @@ export const protectedRoutes = (userRole: string) => {
           { path: "/trang_chu/*", element: <Dashboard /> },
           { path: "/profile", element: <Profile /> },
           { path: "/quan_ly_nguoi_dung/*", element: <Users /> },
+          { path: "/quan_ly_nhan_vien/*", element: <Employees /> },
+          { path: "/phe_duyet_ho_so/*", element: <ProfileRequests /> },
+          { path: "/hop-dong-lao-dong/*", element: <LaborContracts /> },
+          { path: "/khen-thuong-ky-luat/*", element: <RewardDisciplines /> },
           { path: "/hr-dashboard/*", element: <HRDashboard /> },
+          { path: "/training-programs/*", element: <TrainingPrograms /> },
+
+          { path: "/quan_ly_phep/*", element: <LeaveManagement /> },
           { path: "/quan_ly_ttb_pt/*", element: <DevicesManagement /> },
           { path: "/quan_ly_sua_chua/*", element: <RepairsManagement /> },
           { path: "/quan_ly_bao_duong/*", element: <MaintenanceManagement /> },
