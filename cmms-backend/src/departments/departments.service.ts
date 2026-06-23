@@ -5,12 +5,15 @@ import {Cache} from 'cache-manager';
 import {CreateDepartmentDto} from './dto/create-department.dto';
 import {Department} from './department.entity';
 import {UpdateDepartmentDto} from './dto/update-department.dto';
+import {UserDepartment} from './entities/user-department.entity';
 
 @Injectable()
 export class DepartmentService {
     constructor(
         @InjectRepository(Department)
         private readonly departmentRepository: Repository<Department>,
+        @InjectRepository(UserDepartment)
+        private readonly userDeptRepo: Repository<UserDepartment>,
         @Inject(CACHE_MANAGER) private cacheManager: Cache,
     ) {}
 
@@ -79,6 +82,56 @@ export class DepartmentService {
             throw new NotFoundException('Xoá phòng ban thất bại');
         }
         await this.cacheManager.del('departments_all');
+        await this.cacheManager.del('departments_tree');
+    }
+
+    /**
+     * Trả về danh sách department dạng cây (nested)
+     * Mỗi node kèm member_count từ user_department
+     */
+    async findTree(): Promise<any[]> {
+        const cacheKey = 'departments_tree';
+        const cached = await this.cacheManager.get<any[]>(cacheKey);
+        if (cached) return cached;
+
+        const allDepts = await this.departmentRepository.find({
+            relations: ['manager', 'parent'],
+            order: { name: 'ASC' },
+        });
+
+        // Count members per department
+        const memberCounts = await this.userDeptRepo
+            .createQueryBuilder('ud')
+            .select('ud.dept_id', 'dept_id')
+            .addSelect('COUNT(*)', 'count')
+            .groupBy('ud.dept_id')
+            .getRawMany();
+
+        const countMap = new Map<number, number>();
+        memberCounts.forEach(r => countMap.set(Number(r.dept_id), Number(r.count)));
+
+        // Build tree: root nodes (no parent) + attach children
+        const deptMap = new Map<number, any>();
+        allDepts.forEach(d => {
+            deptMap.set(d.dept_id, {
+                ...d,
+                member_count: countMap.get(d.dept_id) || 0,
+                children: [],
+            });
+        });
+
+        const roots: any[] = [];
+        allDepts.forEach(d => {
+            const node = deptMap.get(d.dept_id);
+            if (d.parent_id && deptMap.has(d.parent_id)) {
+                deptMap.get(d.parent_id).children.push(node);
+            } else {
+                roots.push(node);
+            }
+        });
+
+        await this.cacheManager.set(cacheKey, roots);
+        return roots;
     }
 }
 

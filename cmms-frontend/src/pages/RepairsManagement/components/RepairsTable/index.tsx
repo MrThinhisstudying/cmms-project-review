@@ -253,28 +253,24 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
         const canEdit = canUpdate && !locked && (record.status_request === "WAITING_TECH" || record.status_request === "REJECTED_B03");
 
         // Approval Logic
-        // This variable 'canApproveReq' was unused in previous code or I missed it.
-        // It's just for logic. 
-        
-        /* 
-           STRICT PERMISSION LOGIS IS NOW IN BACKEND.
-           Frontend just shows buttons.
-        */
-
-        // Only TECHNICIAN (or ADMIN) in 'Tổ kỹ thuật' can create/start Inspection and Acceptance
+        // TECHNICIAN (hoặc ADMIN) có quyền tạo kiểm nghiệm/nghiệm thu
+        // Backend PermissionsGuard kiểm tra quyền chi tiết qua department.permissions
         const role = userRole?.toLowerCase() || '';
-        const isTechnician = role === "technician" || role === "admin" || role === "kỹ thuật";
-        const deptName = currentUser?.department?.name?.toLowerCase() || "";
-        const isTechnicalDepartment = deptName === 'tổ kỹ thuật' || role === "admin";
+        const isTechnician = role === 'technician' || role === 'admin';
+        
+        // Kiểm tra user thuộc "Tổ kỹ thuật" (primary dept hoặc user_departments)
+        const primaryDeptName = (currentUser?.department?.name || '').toLowerCase();
+        const secondaryDeptNames: string[] = (currentUser?.user_departments || [])
+          .map((ud: any) => (ud?.department?.name || '').toLowerCase());
+        const allDepts = [primaryDeptName, ...secondaryDeptNames];
+        const isInToKyThuat = role === 'admin' || allDepts.some((d: string) => d === 'tổ kỹ thuật');
 
-        const canCreateInsp = !locked && isTechnician && isTechnicalDepartment && record.status_request === "COMPLETED" && record.status_inspection === "inspection_pending";
-        // Only show if NOT finished inspection?
-        // Actually, "Create B04" means "Start Inspection" or "Edit Inspection".
-        // If inspection_pending, we show "Inspection Form".
+        const canCreateInsp = !locked && isTechnician && isInToKyThuat && record.status_request === "COMPLETED" && record.status_inspection === "inspection_pending";
 
-        const canCreateAcc = !locked && isTechnician && isTechnicalDepartment && record.status_inspection === "inspection_admin_approved" && record.status_acceptance === "acceptance_pending";
+        const canCreateAcc = !locked && isTechnician && isInToKyThuat && record.status_inspection === "inspection_admin_approved" && record.status_acceptance === "acceptance_pending";
 
-        const showDelete = canDelete && hasPermission("DELETE_REPAIR") && (!record.approved_by_manager_request && !record.approved_by_admin_request);
+        const isAdminRole = userRole === 'ADMIN';
+        const showDelete = isAdminRole;
         const isCompleted = record.status_acceptance === 'acceptance_admin_approved';
 
         return (

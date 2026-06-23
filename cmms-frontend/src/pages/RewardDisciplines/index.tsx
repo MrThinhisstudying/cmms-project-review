@@ -5,16 +5,21 @@ import dayjs from 'dayjs';
 import { getRewardDisciplines, createRewardDiscipline, updateRewardDiscipline, deleteRewardDiscipline, IRewardDiscipline } from '../../apis/rewardDisciplines';
 import { getAllUsers } from '../../apis/users';
 import { getToken } from '../../utils/auth';
+import { useAuthContext } from '../../context/AuthContext/AuthContext';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
 
 const RewardDisciplines: React.FC = () => {
+    const { user: currentAuthUser } = useAuthContext();
+    const canWrite = ['ADMIN', 'HR_MANAGER'].includes(currentAuthUser?.role || '');
+
     const [records, setRecords] = useState<IRewardDiscipline[]>([]);
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [searchText, setSearchText] = useState('');
+    const [typeFilter, setTypeFilter] = useState<string | null>(null);
     
     // Modal
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -113,10 +118,12 @@ const RewardDisciplines: React.FC = () => {
         }
     };
 
-    const filtered = records.filter(c => 
-        c.user?.name?.toLowerCase().includes(searchText.toLowerCase()) || 
-        c.decision_number.toLowerCase().includes(searchText.toLowerCase())
-    );
+    const filtered = records.filter(c => {
+        const matchSearch = c.user?.name?.toLowerCase().includes(searchText.toLowerCase()) || 
+                            c.decision_number.toLowerCase().includes(searchText.toLowerCase());
+        const matchType = typeFilter ? c.record_type === typeFilter : true;
+        return matchSearch && matchType;
+    });
 
     const columns = [
         {
@@ -161,7 +168,7 @@ const RewardDisciplines: React.FC = () => {
                 <span style={{ fontWeight: 500 }}>{dayjs(record.effective_date).format('DD/MM/YYYY')}</span>
             )
         },
-        {
+        ...(canWrite ? [{
             title: 'Thao tác',
             key: 'action',
             width: 100,
@@ -176,7 +183,7 @@ const RewardDisciplines: React.FC = () => {
                     </Tooltip>
                 </Space>
             )
-        }
+        }] : [])
     ];
 
     return (
@@ -188,23 +195,37 @@ const RewardDisciplines: React.FC = () => {
                         <Text type="secondary">Theo dõi các quyết định thi đua khen thưởng và kỷ luật nhân sự</Text>
                     </Col>
                     <Col>
-                        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd} size="large">
-                            Thêm Bản ghi
-                        </Button>
+                        {canWrite && (
+                            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd} size="large">
+                                Thêm Bản ghi
+                            </Button>
+                        )}
                     </Col>
                 </Row>
             </Card>
 
             <Card variant="borderless" style={{ borderRadius: 8, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
                 <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-                    <Input
-                        placeholder="Tìm kiếm theo Tên NV hoặc Số quyết định"
-                        prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-                        value={searchText}
-                        onChange={(e) => setSearchText(e.target.value)}
-                        style={{ width: 350 }}
-                        allowClear
-                    />
+                    <Space>
+                        <Input
+                            placeholder="Tìm kiếm theo Tên NV hoặc Số quyết định"
+                            prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                            value={searchText}
+                            onChange={(e) => setSearchText(e.target.value)}
+                            style={{ width: 350 }}
+                            allowClear
+                        />
+                        <Select
+                            placeholder="Lọc theo Phân loại"
+                            allowClear
+                            style={{ width: 200 }}
+                            value={typeFilter}
+                            onChange={(val) => setTypeFilter(val)}
+                        >
+                            <Option value="REWARD">Khen thưởng</Option>
+                            <Option value="DISCIPLINE">Kỷ luật</Option>
+                        </Select>
+                    </Space>
                 </div>
 
                 <Table 
@@ -222,15 +243,16 @@ const RewardDisciplines: React.FC = () => {
                 onOk={handleModalOk}
                 onCancel={() => setIsModalOpen(false)}
                 confirmLoading={modalLoading}
-                width={650}
+                width={850}
                 destroyOnClose
             >
                 <Form form={form} layout="vertical" style={{ marginTop: 20 }}>
                     <Row gutter={16}>
-                        <Col span={12}>
+                        <Col span={16}>
                             <Form.Item name="user_id" label="Nhân viên" rules={[{ required: true, message: 'Vui lòng chọn nhân viên' }]}>
                                 <Select
                                     showSearch
+                                    popupMatchSelectWidth={false}
                                     placeholder="Chọn nhân viên"
                                     optionFilterProp="children"
                                     filterOption={(input, option: any) =>
@@ -238,12 +260,14 @@ const RewardDisciplines: React.FC = () => {
                                     }
                                 >
                                     {users.map(u => (
-                                        <Option key={u.user_id} value={u.user_id}>{u.name}</Option>
+                                        <Option key={u.user_id} value={u.user_id}>
+                                            {u.name} - {u.employee_code || 'N/A'} - {u.position || 'N/A'}
+                                        </Option>
                                     ))}
                                 </Select>
                             </Form.Item>
                         </Col>
-                        <Col span={12}>
+                        <Col span={8}>
                             <Form.Item name="record_type" label="Phân loại" rules={[{ required: true }]}>
                                 <Select>
                                     <Option value="REWARD">Khen thưởng</Option>

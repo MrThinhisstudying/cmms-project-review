@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Card, Col, Row, Statistic, Table, Typography, Tag, Tabs, Input, Select, Button, Avatar, Tooltip, Badge, Spin, Empty } from 'antd';
+import { Card, Col, Row, Table, Typography, Tag, Tabs, Input, Select, Button, Avatar, Tooltip, Badge } from 'antd';
 import { WarningOutlined, TeamOutlined, SafetyCertificateOutlined, BookOutlined, CarOutlined, AlertOutlined, SearchOutlined, UserOutlined, EyeOutlined } from '@ant-design/icons';
 import certificatesApi from '../../apis/certificates';
 import { getAllUsers } from '../../apis/users';
@@ -8,6 +8,9 @@ import { IUser } from '../../types/user.types';
 import dayjs from 'dayjs';
 import ProfileModal from '../Users/components/ProfileModal';
 import { getToken } from '../../utils/auth';
+import { getLaborContracts, ILaborContract } from '../../apis/laborContracts';
+import { FileTextOutlined } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
 
 const { Title } = Typography;
 
@@ -73,6 +76,8 @@ const BarChart: React.FC<{ data: Record<string, number>; color: string }> = ({ d
 };
 
 const HRDashboard: React.FC = () => {
+    const navigate = useNavigate();
+    
     const [stats, setStats] = useState({
         totalUsers: 0,
         activeUsers: 0,
@@ -80,10 +85,10 @@ const HRDashboard: React.FC = () => {
     });
     
     const [expiringCerts, setExpiringCerts] = useState<IEmployeeCertificate[]>([]);
+    const [expiringContracts, setExpiringContracts] = useState<ILaborContract[]>([]);
     const [qualStats, setQualStats] = useState<any>(null);
     const [loading, setLoading] = useState(false);
     const [allUsers, setAllUsers] = useState<IUser[]>([]);
-    const [searchTerm, setSearchTerm] = useState('');
 
     // Profile Drawer states
     const [profileOpen, setProfileOpen] = useState(false);
@@ -131,8 +136,21 @@ const HRDashboard: React.FC = () => {
                 const total = usersList.length;
                 const active = usersList.filter((u: any) => u.status === 'ACTIVE').length;
 
-                const certs = await certificatesApi.getExpiringCertificates(90);
-                const qStats = await certificatesApi.getQualificationStats();
+                const [certs, qStats, cData] = await Promise.all([
+                    certificatesApi.getExpiringCertificates(90),
+                    certificatesApi.getQualificationStats(),
+                    getLaborContracts()
+                ]);
+
+                // Filter expiring contracts
+                const now = dayjs();
+                const expCtrcts = cData.filter(c => {
+                    if (c.status === 'TERMINATED') return false;
+                    if (!c.end_date) return false;
+                    const end = dayjs(c.end_date);
+                    return end.isBefore(now) || end.diff(now, 'day') <= 30;
+                });
+                setExpiringContracts(expCtrcts);
 
                 setStats({
                     totalUsers: total,
@@ -168,6 +186,14 @@ const HRDashboard: React.FC = () => {
         return d.isBefore(dayjs()) || d.diff(dayjs(), 'month', true) <= 3;
     };
 
+    // Chi tiết cảnh báo cho từng chứng chỉ
+    interface CertWarningDetail {
+        certName: string;
+        certType: string; // 'CCCM' | 'GPLX' | 'HĐ LĐ'
+        expiryDate: string;
+        daysLeft: number;
+    }
+
     interface UserCertSummary {
         user: IUser;
         cccmCount: number;
@@ -179,6 +205,9 @@ const HRDashboard: React.FC = () => {
         expiringCccm: number;
         expiringGplx: number;
         pendingReqs: number;
+        // ✨ Chi tiết cảnh báo
+        warningDetails: CertWarningDetail[];
+        worstDaysLeft: number; // Cảnh báo nghiêm trọng nhất (số ngày nhỏ nhất)
     }
 
     const userSummaries: UserCertSummary[] = useMemo(() => {
@@ -189,6 +218,43 @@ const HRDashboard: React.FC = () => {
             const cccm = certs.filter(c => c.type === 'CCCM');
             const degrees = certs.filter(c => c.qualification_type === 'BANG_CAP' || (!c.qualification_type && !c.license_class && c.type === 'BANG_CAP'));
             const gplx = certs.filter(c => c.qualification_type === 'GIAY_PHEP_LAI_XE' || (!c.qualification_type && c.license_class));
+
+            // Collect warning details
+            const warningDetails: CertWarningDetail[] = [];
+
+            cccm.forEach(c => {
+                const checkDate = c.expiry_date || c.next_training_date;
+                if (!checkDate) return;
+                const d = dayjs(checkDate);
+                const daysLeft = d.diff(dayjs(), 'day');
+                if (daysLeft <= 90) {
+                    warningDetails.push({
+                        certName: c.program?.name || c.certificate_number || 'CCCM',
+                        certType: 'CCCM',
+                        expiryDate: d.format('DD/MM/YYYY'),
+                        daysLeft,
+                    });
+                }
+            });
+
+            gplx.forEach(c => {
+                if (c.is_permanent) return;
+                if (!c.expiry_date) return;
+                const d = dayjs(c.expiry_date);
+                const daysLeft = d.diff(dayjs(), 'day');
+                if (daysLeft <= 90) {
+                    warningDetails.push({
+                        certName: `Hạng ${c.license_class || '?'}`,
+                        certType: 'GPLX',
+                        expiryDate: d.format('DD/MM/YYYY'),
+                        daysLeft,
+                    });
+                }
+            });
+
+            // Sort: nghiêm trọng nhất trước
+            warningDetails.sort((a, b) => a.daysLeft - b.daysLeft);
+
             return {
                 user: u,
                 cccmCount: cccm.length,
@@ -205,6 +271,8 @@ const HRDashboard: React.FC = () => {
                     return d.isBefore(dayjs()) || d.diff(dayjs(), 'month', true) <= 3;
                 }).length,
                 pendingReqs: reqs.filter(r => r.status === 'PENDING').length,
+                warningDetails,
+                worstDaysLeft: warningDetails.length > 0 ? warningDetails[0].daysLeft : Infinity,
             };
         });
     }, [allUsers, certData]);
@@ -226,54 +294,90 @@ const HRDashboard: React.FC = () => {
     }, [userSummaries, certSearchText, certFilterDept, certActiveTab]);
 
     const totalWarning = userSummaries.filter(s => s.expiringCccm > 0 || s.expiringGplx > 0).length;
-    const totalTraining = userSummaries.filter(s => s.pendingReqs > 0).length;
+
+    // Helper hiển thị tag cảnh báo — compact
+    const getWarningTag = (daysLeft: number) => {
+        if (daysLeft <= 0) return <span style={{ fontSize: 11, color: '#ff4d4f', fontWeight: 600 }}>Quá hạn {Math.abs(daysLeft)}d</span>;
+        if (daysLeft <= 30) return <span style={{ fontSize: 11, color: '#ff4d4f', fontWeight: 500 }}>Còn {daysLeft}d</span>;
+        if (daysLeft <= 90) return <span style={{ fontSize: 11, color: '#faad14', fontWeight: 500 }}>Còn {daysLeft}d</span>;
+        return null;
+    };
 
     const certColumns = [
-        { title: 'STT', key: 'stt', width: 50, align: 'center' as const, render: (_: any, __: any, i: number) => i + 1 },
         {
-            title: 'Nhân viên', key: 'name', width: 200,
-            render: (_: any, record: UserCertSummary) => (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Avatar size={32} icon={<UserOutlined />} src={record.user.avatar} />
-                    <div>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{record.user.name}</div>
-                        <div style={{ fontSize: 11, color: '#999' }}>{record.user.position || 'Chưa cập nhật'}</div>
+            title: 'Nhân viên', key: 'name', width: 200, fixed: 'left' as const,
+            render: (_: any, record: UserCertSummary) => {
+                const hasWarning = record.warningDetails.length > 0;
+                return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <Avatar size={34} icon={<UserOutlined />} src={record.user.avatar}
+                            style={{ backgroundColor: hasWarning ? '#fff2f0' : '#f0f5ff', color: hasWarning ? '#ff4d4f' : '#597ef7', flexShrink: 0 }} />
+                        <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 13, color: '#262626' }}>{record.user.name}</div>
+                            <div style={{ fontSize: 11, color: '#999', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {record.user.position || record.user.department?.name || '---'}
+                            </div>
+                        </div>
                     </div>
-                </div>
-            ),
+                );
+            },
         },
         {
-            title: <Tooltip title="Chứng chỉ chuyên môn"><span><SafetyCertificateOutlined /> CCCM</span></Tooltip>,
-            key: 'cccm', width: 140,
-            render: (_: any, record: UserCertSummary) => (
-                <div style={{ fontSize: 12 }}>
-                    {record.cccmNames || <span style={{ color: '#bfbfbf' }}>-</span>}
-                    {record.expiringCccm > 0 && <Badge count={record.expiringCccm} size="small" style={{ backgroundColor: '#ff4d4f', marginLeft: 4 }} />}
-                </div>
-            ),
+            title: 'CCCM', key: 'cccm', width: 120, align: 'center' as const,
+            render: (_: any, record: UserCertSummary) => {
+                if (record.cccmCount === 0) return <span style={{ color: '#d9d9d9' }}>—</span>;
+                return (
+                    <div>
+                        <span style={{ fontSize: 12 }}>{record.cccmCount}</span>
+                        {record.expiringCccm > 0 && <Badge count={record.expiringCccm} size="small" style={{ backgroundColor: '#ff4d4f', marginLeft: 6 }} />}
+                    </div>
+                );
+            },
         },
         {
-            title: <Tooltip title="Bằng cấp học vấn"><span><BookOutlined /> Bằng cấp</span></Tooltip>,
-            key: 'degree', width: 140,
-            render: (_: any, record: UserCertSummary) => (
-                <div style={{ fontSize: 12 }}>{record.degreeNames || <span style={{ color: '#bfbfbf' }}>-</span>}</div>
-            ),
+            title: 'Bằng cấp', key: 'degree', width: 110, align: 'center' as const,
+            render: (_: any, record: UserCertSummary) => {
+                if (record.degreeCount === 0) return <span style={{ color: '#d9d9d9' }}>—</span>;
+                return <span style={{ fontSize: 12 }}>{record.degreeNames || record.degreeCount}</span>;
+            },
         },
         {
-            title: <Tooltip title="Giấy phép lái xe"><span><CarOutlined /> GPLX</span></Tooltip>,
-            key: 'gplx', width: 140,
-            render: (_: any, record: UserCertSummary) => (
-                <div style={{ fontSize: 12 }}>
-                    {record.gplxNames ? record.gplxNames.split(', ').map(n => `Hạng ${n}`).join(', ') : <span style={{ color: '#bfbfbf' }}>-</span>}
-                    {record.expiringGplx > 0 && <Badge count={record.expiringGplx} size="small" style={{ backgroundColor: '#faad14', marginLeft: 4 }} />}
-                </div>
-            ),
+            title: 'GPLX', key: 'gplx', width: 110, align: 'center' as const,
+            render: (_: any, record: UserCertSummary) => {
+                if (record.gplxCount === 0) return <span style={{ color: '#d9d9d9' }}>—</span>;
+                return (
+                    <div>
+                        <span style={{ fontSize: 12 }}>{record.gplxNames ? record.gplxNames.split(', ').map(n => n).join(', ') : record.gplxCount}</span>
+                        {record.expiringGplx > 0 && <Badge count={record.expiringGplx} size="small" style={{ backgroundColor: '#faad14', marginLeft: 6 }} />}
+                    </div>
+                );
+            },
         },
         {
-            title: '', key: 'action', width: 50,
-            render: (_: any, record: UserCertSummary) => (
-                <Button type="text" size="small" icon={<EyeOutlined style={{ color: '#1890ff' }} />} onClick={(e) => { e.stopPropagation(); handleViewUser(record.user); }} />
-            ),
+            title: 'Tình trạng', key: 'warnings', width: 240,
+            sorter: (a: UserCertSummary, b: UserCertSummary) => a.worstDaysLeft - b.worstDaysLeft,
+            defaultSortOrder: 'ascend' as const,
+            render: (_: any, record: UserCertSummary) => {
+                if (record.warningDetails.length === 0) {
+                    return <span style={{ color: '#bfbfbf', fontSize: 12 }}>Bình thường</span>;
+                }
+                return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {record.warningDetails.slice(0, 2).map((w, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5 }}>
+                                <Tag style={{ fontSize: 10, lineHeight: '16px', margin: 0, padding: '0 5px', borderRadius: 3, border: 'none', background: w.certType === 'CCCM' ? '#e6f7ff' : '#f9f0ff', color: w.certType === 'CCCM' ? '#1890ff' : '#722ed1' }}>
+                                    {w.certType}
+                                </Tag>
+                                <span style={{ color: '#595959', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.certName}</span>
+                                {getWarningTag(w.daysLeft)}
+                            </div>
+                        ))}
+                        {record.warningDetails.length > 2 && (
+                            <span style={{ fontSize: 10, color: '#8c8c8c', paddingLeft: 2 }}>+{record.warningDetails.length - 2} khác</span>
+                        )}
+                    </div>
+                );
+            },
         },
     ];
 
@@ -284,7 +388,7 @@ const HRDashboard: React.FC = () => {
         { 
             title: 'Học viên', dataIndex: ['user', 'name'],
             render: (text: string, record: IEmployeeCertificate) => (
-                <a onClick={() => record.user && handleViewUser(record.user)}>{text}</a>
+                <Button type="link" style={{ padding: 0, height: 'auto' }} onClick={() => record.user && handleViewUser(record.user)}>{text}</Button>
             )
         },
         { title: 'Loại', dataIndex: 'type', render: (t: string) => <Tag color="blue">{t}</Tag> },
@@ -304,6 +408,17 @@ const HRDashboard: React.FC = () => {
                     </span>
                 );
             }
+        },
+        {
+            title: 'Khắc phục', key: 'action', width: 100, align: 'center' as const,
+            render: (_: any, record: IEmployeeCertificate) => (
+                <Button 
+                    type="primary" size="small" 
+                    onClick={(e) => { e.stopPropagation(); record.user && handleViewUser(record.user); }}
+                >
+                    Cập nhật
+                </Button>
+            ),
         },
     ];
 
@@ -328,6 +443,75 @@ const HRDashboard: React.FC = () => {
                     </span>
                 );
             }
+        },
+        {
+            title: 'Khắc phục', key: 'action', width: 100, align: 'center' as const,
+            render: (_: any, record: any) => (
+                <Button 
+                    type="primary" size="small" 
+                    onClick={(e) => { 
+                        e.stopPropagation(); 
+                        const tgt = allUsers.find(u => u.user_id === record.user_id) || allUsers.find(u => u.name === record.user_name);
+                        if (tgt) handleViewUser(tgt);
+                    }}
+                >
+                    Cập nhật
+                </Button>
+            ),
+        },
+    ];
+
+    // Contract expiring columns
+    const contractColumns = [
+        { title: 'STT', render: (_: any, __: any, i: number) => i + 1, width: 50 },
+        { 
+            title: 'Nhân viên', dataIndex: ['user', 'name'],
+            render: (text: string, record: ILaborContract) => (
+                <Button type="link" style={{ padding: 0, height: 'auto' }} onClick={() => record.user && handleViewUser(record.user as any)}>{text}</Button>
+            )
+        },
+        { 
+            title: 'Loại HĐ', 
+            dataIndex: 'contract_type', 
+            render: (t: string) => {
+                const types: Record<string, string> = { 
+                    '1_MONTH': '1 Tháng', 
+                    'APPRENTICESHIP': 'Học việc',
+                    'PROBATION': 'Thử việc', 
+                    '12_MONTHS': '12 tháng', 
+                    '24_MONTHS': '2 Năm', 
+                    '36_MONTHS': '36 tháng', 
+                    'INDEFINITE': 'Vô thời hạn' 
+                };
+                return <Tag color="orange">{types[t] || t}</Tag>;
+            } 
+        },
+        { title: 'Số HĐ', dataIndex: 'contract_number' },
+        { 
+            title: 'Ngày hết hạn', dataIndex: 'end_date',
+            render: (d: string) => {
+                if (!d) return '-';
+                const date = dayjs(d);
+                const daysLeft = date.diff(dayjs(), 'day');
+                const color = daysLeft <= 0 ? '#ff4d4f' : '#faad14';
+                return (
+                    <span style={{ color, fontWeight: 'bold' }}>
+                        {date.format('DD/MM/YYYY')}
+                        {daysLeft <= 0 ? ' (Quá hạn)' : ` (${daysLeft} ngày)`}
+                    </span>
+                );
+            }
+        },
+        {
+            title: 'Khắc phục', key: 'action', width: 100, align: 'center' as const,
+            render: (_: any, record: ILaborContract) => (
+                <Button 
+                    type="primary" size="small" 
+                    onClick={(e) => { e.stopPropagation(); navigate('/hop-dong-lao-dong', { state: { action: 'renew', userId: record.user?.user_id } }); }}
+                >
+                    Gia hạn
+                </Button>
+            ),
         },
     ];
 
@@ -365,173 +549,107 @@ const HRDashboard: React.FC = () => {
                 />
             )
         },
+        {
+            key: 'contract',
+            label: <span><FileTextOutlined /> Hợp đồng LĐ ({expiringContracts.length})</span>,
+            children: (
+                <Table
+                    columns={contractColumns}
+                    dataSource={expiringContracts}
+                    rowKey="id"
+                    loading={loading}
+                    pagination={{ pageSize: 10 }}
+                    size="small"
+                    bordered
+                    locale={{ emptyText: 'Không có Hợp đồng LĐ nào sắp hết hạn' }}
+                />
+            )
+        },
     ];
 
     const degreeColors = ['#1890ff', '#52c41a', '#faad14', '#722ed1', '#eb2f96', '#13c2c2'];
 
+    const totalWarnings = stats.expiringCerts + totalExpiringLicenses + expiringContracts.length;
+
     return (
-        <div style={{ padding: 24, background: '#f0f2f5', minHeight: 'calc(100vh - 64px)' }}>
-            <Title level={3} style={{ marginBottom: 24 }}>Dashboard Nhân Sự</Title>
-            
-            {/* Stats Row */}
-            <Row gutter={16} style={{ marginBottom: 24 }}>
-                <Col span={5}>
-                    <Card bordered={false}>
-                        <Statistic
-                            title="Tổng số nhân sự"
-                            value={stats.totalUsers}
-                            prefix={<TeamOutlined style={{ color: '#1890ff' }} />}
-                        />
-                    </Card>
-                </Col>
-                <Col span={5}>
-                    <Card bordered={false}>
-                        <Statistic
-                            title="Đang hoạt động"
-                            value={stats.activeUsers}
-                            valueStyle={{ color: '#3f8600' }}
-                            prefix={<SafetyCertificateOutlined />}
-                        />
-                    </Card>
-                </Col>
-                <Col span={5}>
-                    <Card bordered={false}>
-                        <Statistic
-                            title="CCCM sắp hết hạn"
-                            value={stats.expiringCerts}
-                            valueStyle={{ color: stats.expiringCerts > 0 ? '#cf1322' : '#3f8600' }}
-                            prefix={<WarningOutlined />}
-                        />
-                    </Card>
-                </Col>
-                <Col span={5}>
-                    <Card bordered={false}>
-                        <Statistic
-                            title="GPLX sắp hết hạn"
-                            value={totalExpiringLicenses}
-                            valueStyle={{ color: totalExpiringLicenses > 0 ? '#cf1322' : '#3f8600' }}
-                            prefix={<CarOutlined />}
-                        />
-                    </Card>
-                </Col>
-                <Col span={4}>
-                    <Card bordered={false}>
-                        <Statistic
-                            title="Tổng bằng cấp"
-                            value={qualStats?.totalDegrees || 0}
-                            prefix={<BookOutlined style={{ color: '#722ed1' }} />}
-                        />
-                    </Card>
-                </Col>
-            </Row>
+        <div style={{ padding: 24, background: '#f5f5f5', minHeight: 'calc(100vh - 64px)' }}>
+            <div style={{ maxWidth: 1400, margin: '0 auto' }}>
 
-            {/* Charts Row */}
-            <Row gutter={16} style={{ marginBottom: 24 }}>
-                <Col span={12}>
-                    <Card title="🎓 Phân bổ bằng cấp" bordered={false} size="small">
-                        <PieChart 
-                            data={qualStats?.degreeDistribution || {}} 
-                            colors={degreeColors} 
-                        />
-                    </Card>
-                </Col>
-                <Col span={12}>
-                    <Card title="🚗 Phân bổ giấy phép lái xe" bordered={false} size="small">
-                        <BarChart 
-                            data={qualStats?.licenseDistribution || {}} 
-                            color="#1890ff" 
-                        />
-                    </Card>
-                </Col>
-            </Row>
-
-            {/* Warning Tables */}
-            <Card 
-                title={<span><AlertOutlined style={{ color: '#ff4d4f', marginRight: 8 }} />Cảnh báo: Bằng cấp / Chứng chỉ sắp hoặc đã quá hạn</span>} 
-                bordered={false}
-            >
-                <Tabs items={warningTabs} defaultActiveKey="cccm" />
-            </Card>
-
-            {/* Merged: Certificate Overview Table (from HRCertificates) */}
-            <Card 
-                bordered={false} 
-                style={{ marginTop: 24 }}
-                title={<span><SafetyCertificateOutlined style={{ color: '#1890ff', marginRight: 8 }} />Tổng quan Chứng chỉ & Bằng cấp nhân viên</span>}
-            >
-                {/* Search + Filter */}
-                <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                    <Input
-                        placeholder="Tìm theo tên, email..."
-                        prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-                        value={certSearchText}
-                        onChange={e => setCertSearchText(e.target.value)}
-                        allowClear
-                        style={{ width: 280 }}
-                    />
-                    <Select
-                        placeholder="Lọc phòng ban"
-                        value={certFilterDept}
-                        onChange={setCertFilterDept}
-                        allowClear
-                        style={{ width: 200 }}
-                    >
-                        {departments.map(d => <Select.Option key={d} value={d}>{d}</Select.Option>)}
-                    </Select>
-                    <span style={{ color: '#999', fontSize: 12, lineHeight: '32px', marginLeft: 'auto' }}>
-                        {filteredCerts.length} / {allUsers.length} nhân viên
-                    </span>
+                {/* HEADER — inline stats */}
+                <div style={{ marginBottom: 20 }}>
+                    <Title level={3} style={{ margin: 0, fontWeight: 600, letterSpacing: '-0.02em' }}>Tổng quan Nhân sự</Title>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                        <Tag icon={<TeamOutlined />} style={{ border: 'none', background: '#e6f7ff', color: '#1890ff', borderRadius: 4 }}>{stats.totalUsers} nhân sự</Tag>
+                        {totalWarnings > 0 && <Tag icon={<AlertOutlined />} color="error" style={{ borderRadius: 4 }}>{totalWarnings} cảnh báo</Tag>}
+                        {stats.expiringCerts > 0 && <Tag style={{ border: 'none', background: '#fff2e8', color: '#d4380d', borderRadius: 4 }}>CCCM: {stats.expiringCerts}</Tag>}
+                        {totalExpiringLicenses > 0 && <Tag icon={<CarOutlined />} style={{ border: 'none', background: '#fff0f6', color: '#c41d7f', borderRadius: 4 }}>GPLX: {totalExpiringLicenses}</Tag>}
+                        <Tag icon={<BookOutlined />} style={{ border: 'none', background: '#f9f0ff', color: '#722ed1', borderRadius: 4 }}>{qualStats?.totalDegrees || 0} bằng cấp</Tag>
+                    </div>
                 </div>
 
-                <Tabs
-                    activeKey={certActiveTab}
-                    onChange={setCertActiveTab}
-                    size="small"
-                    items={[
-                        {
-                            key: 'all',
-                            label: <span>📋 Tất cả ({userSummaries.length})</span>,
-                            children: (
-                                <Table
-                                    columns={certColumns}
-                                    dataSource={filteredCerts}
-                                    rowKey={(r) => r.user.user_id}
-                                    loading={loading || certLoading}
-                                    size="small"
-                                    bordered
-                                    scroll={{ x: 'max-content' }}
-                                    pagination={{ defaultPageSize: 15, showSizeChanger: true, pageSizeOptions: ['10', '15', '30', '50'] }}
-                                    onRow={(record) => ({ onClick: () => handleViewUser(record.user), style: { cursor: 'pointer' } })}
-                                />
-                            ),
-                        },
-                        {
-                            key: 'warning',
-                            label: <span>⚠️ Cảnh báo ({totalWarning})</span>,
-                            children: (
-                                <Table
-                                    columns={certColumns}
-                                    dataSource={filteredCerts}
-                                    rowKey={(r) => r.user.user_id}
-                                    loading={loading || certLoading}
-                                    size="small"
-                                    bordered
-                                    scroll={{ x: 'max-content' }}
-                                    pagination={{ defaultPageSize: 15, showSizeChanger: true }}
-                                    onRow={(record) => ({ onClick: () => handleViewUser(record.user), style: { cursor: 'pointer' } })}
-                                />
-                            ),
-                        },
-                    ]}
-                />
-            </Card>
+                {/* CHARTS — compact */}
+                <Row gutter={16} style={{ marginBottom: 16 }}>
+                    <Col span={12}>
+                        <Card variant="borderless" styles={{ body: { padding: 16 } }} style={{ borderRadius: 10, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: '#262626' }}>🎓 Phân bổ bằng cấp</div>
+                            <PieChart data={qualStats?.degreeDistribution || {}} colors={degreeColors} />
+                        </Card>
+                    </Col>
+                    <Col span={12}>
+                        <Card variant="borderless" styles={{ body: { padding: 16 } }} style={{ borderRadius: 10, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12, color: '#262626' }}>🚗 Phân bổ giấy phép lái xe</div>
+                            <BarChart data={qualStats?.licenseDistribution || {}} color="#1890ff" />
+                        </Card>
+                    </Col>
+                </Row>
 
-            <ProfileModal
-                open={profileOpen}
-                user={selectedUser}
-                onCancel={() => setProfileOpen(false)}
-                onUpdateSuccess={() => {}}
-            />
+                {/* WARNING TABLES */}
+                <Card variant="borderless" styles={{ body: { padding: '12px 16px' } }} style={{ borderRadius: 10, marginBottom: 16, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#262626' }}>
+                        <AlertOutlined style={{ color: '#ff4d4f', marginRight: 6 }} />Cảnh báo sắp hết hạn
+                    </div>
+                    <Tabs items={warningTabs} defaultActiveKey="cccm" size="small" />
+                </Card>
+
+                {/* CERT OVERVIEW TABLE */}
+                <Card variant="borderless" styles={{ body: { padding: 0 } }} style={{ borderRadius: 10, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                    <div style={{ padding: '12px 16px', borderBottom: '1px solid #f0f0f0' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#262626', marginBottom: 10 }}>
+                            <SafetyCertificateOutlined style={{ color: '#1890ff', marginRight: 6 }} />Tổng quan Chứng chỉ & Bằng cấp
+                        </div>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                            <Input placeholder="Tìm theo tên, email..." prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />} value={certSearchText} onChange={e => setCertSearchText(e.target.value)} allowClear style={{ width: 280 }} size="middle" />
+                            <Select placeholder="Lọc phòng ban" value={certFilterDept} onChange={setCertFilterDept} allowClear style={{ width: 200 }} size="middle">
+                                {departments.map(d => <Select.Option key={d} value={d}>{d}</Select.Option>)}
+                            </Select>
+                            <span style={{ color: '#999', fontSize: 12, marginLeft: 'auto' }}>{filteredCerts.length} / {allUsers.length} nhân viên</span>
+                        </div>
+                    </div>
+
+                    <Tabs activeKey={certActiveTab} onChange={setCertActiveTab} size="small" style={{ padding: '0 16px' }}
+                        items={[
+                            { key: 'all', label: <span>Tất cả ({userSummaries.length})</span>, children: (
+                                <Table columns={certColumns} dataSource={filteredCerts} rowKey={(r) => r.user.user_id} loading={loading || certLoading} size="small" scroll={{ x: 'max-content' }} pagination={{ defaultPageSize: 15, showSizeChanger: true, pageSizeOptions: ['10', '15', '30', '50'], showTotal: (t) => <span style={{ fontSize: 12, color: '#999' }}>Tổng {t}</span> }} onRow={(record) => ({ onClick: () => handleViewUser(record.user), style: { cursor: 'pointer' } })} rowClassName={(record) => record.warningDetails.length > 0 ? 'hr-row-warning' : 'hr-row-safe'} />
+                            )},
+                            { key: 'warning', label: <span>⚠️ Cảnh báo ({totalWarning})</span>, children: (
+                                <Table columns={certColumns} dataSource={filteredCerts} rowKey={(r) => r.user.user_id} loading={loading || certLoading} size="small" scroll={{ x: 'max-content' }} pagination={{ defaultPageSize: 15, showSizeChanger: true }} onRow={(record) => ({ onClick: () => handleViewUser(record.user), style: { cursor: 'pointer' } })} />
+                            )},
+                        ]}
+                    />
+                </Card>
+
+                <ProfileModal open={profileOpen} user={selectedUser} onCancel={() => setProfileOpen(false)} onUpdateSuccess={() => {}} />
+
+                <style>{`
+                    .ant-table-tbody > tr:hover > td { background: #fafafa !important; }
+                    .ant-table-tbody > tr { transition: all 0.15s ease; }
+                    .ant-table-tbody > tr.hr-row-safe > td { opacity: 0.6; }
+                    .ant-table-tbody > tr.hr-row-safe:hover > td { opacity: 1; }
+                    .ant-table-tbody > tr.hr-row-warning > td { background: #fffbe6 !important; }
+                    .ant-table-tbody > tr.hr-row-warning > td:first-child { border-left: 3px solid #ff4d4f; }
+                    .ant-table-tbody > tr.hr-row-warning:hover > td { background: #fff7e6 !important; }
+                `}</style>
+            </div>
         </div>
     );
 };

@@ -5,12 +5,14 @@ import { ProfileRequestService } from './profile-request.service';
 import { ProfileRequestController } from './profile-request.controller';
 import { UserModule } from '../user/user.module';
 import { CertificatesModule } from '../certificates/certificates.module';
+import { NotificationModule } from '../notification/notification.module';
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([ProfileUpdateRequest]),
         UserModule,
-        CertificatesModule
+        CertificatesModule,
+        NotificationModule
     ],
     providers: [ProfileRequestService],
     controllers: [ProfileRequestController],

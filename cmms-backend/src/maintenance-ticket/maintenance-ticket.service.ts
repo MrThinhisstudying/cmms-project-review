@@ -42,10 +42,11 @@ export class MaintenanceTicketService {
 
     // --- HÀM TẠO PHIẾU TỪ APP (ĐÃ FIX NGÀY) ---
     async createFromApp(data: any, user: any) {
-        if (user && user.role === 'TECHNICIAN') {
-            const isValid = await this.certificatesService.validateUserHasValidCertificate(user.user_id, CertificateType.CCCM);
-            if (!isValid) throw new ForbiddenException(`Nhân viên ${user.name || 'thực hiện'} không có chứng chỉ CCCM hợp lệ hoặc đã hết hạn.`);
-        }
+        // Đã bỏ validation chứng chỉ CCCM theo yêu cầu
+        // if (user && user.role === 'TECHNICIAN') {
+        //     const isValid = await this.certificatesService.validateUserHasValidCertificate(user.user_id, CertificateType.CCCM);
+        //     if (!isValid) throw new ForbiddenException(`Nhân viên ${user.name || 'thực hiện'} không có chứng chỉ CCCM hợp lệ hoặc đã hết hạn.`);
+        // }
 
         const plans = await this.maintenanceService.findByDevice(data.device_id);
         const activePlan = plans.find((p) => p.status === 'active' || p.status === 'warning' || p.status === 'overdue');

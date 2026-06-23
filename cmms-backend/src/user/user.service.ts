@@ -61,15 +61,8 @@ export class UserService {
                  if (allowedUserIds.length === 0) return { result: [] };
             }
 
-            // If user is TEAM_LEAD, only show users in the same department
-            if (currentUser && currentUser.role === UserRole.TEAM_LEAD) {
-                 const fullUser = await this.userRepository.findOne({ where: { user_id: currentUser.user_id }, relations: ['department'] });
-                 if (fullUser && fullUser.department) {
-                     whereClause.department = { dept_id: fullUser.department.dept_id };
-                 } else {
-                     return { result: [] }; // No department, see nothing
-                 }
-            }
+            // TEAM_LEAD: Giờ có quyền HR, không cần filter theo department nữa
+            // (Trước đây: chỉ thấy user cùng department)
 
             if (allowedUserIds !== null) {
                 whereClause.user_id = In(allowedUserIds);
@@ -80,10 +73,21 @@ export class UserService {
                 order: {
                     updated_at: 'DESC',
                 },
-                relations: ['department', 'user_device_groups', 'user_device_groups.device_group']
+                relations: ['department', 'user_device_groups', 'user_device_groups.device_group', 'user_departments', 'user_departments.department']
             });
+            const isHrAllowed = currentUser && [UserRole.ADMIN, UserRole.HR_MANAGER, UserRole.DIRECTOR, UserRole.UNIT_HEAD].includes(currentUser.role);
             const listUsers = users.map((user) => {
                 const {password, ...rest} = user;
+                if (!isHrAllowed && rest.user_id !== currentUser?.user_id) {
+                    delete rest.citizen_identification_card;
+                    delete rest.date_of_birth;
+                    delete rest.place_of_birth;
+                    delete rest.permanent_address;
+                    delete rest.temporary_address;
+                    delete rest.hometown;
+                    delete rest.phone_number;
+                    delete rest.signature_url;
+                }
                 return rest as User;
             });
             return {result: listUsers};
@@ -96,14 +100,20 @@ export class UserService {
     async getProfile(userId: number): Promise<User> {
         const user = await this.userRepository.findOne({
             where: { user_id: userId },
-            relations: ['department', 'user_device_groups', 'user_device_groups.device_group']
+            relations: ['department', 'user_device_groups', 'user_device_groups.device_group', 'user_departments', 'user_departments.department']
         });
         if (!user) throw new NotFoundException('User not found');
         const { password, ...rest } = user;
         return rest as User;
     }
 
-    async updateProfile(userId: number, data: Partial<User> & { password?: string }): Promise<User> {
+    async findByRoles(roles: UserRole[]): Promise<User[]> {
+        return this.userRepository.find({
+            where: roles.map(role => ({ role })),
+        });
+    }
+
+    async updateProfile(userId: number, data: Partial<User> & { password?: string, _old_values?: any }): Promise<User> {
          const user = await this.userRepository.findOne({ where: { user_id: userId } });
          if (!user) throw new NotFoundException('User not found');
 
@@ -114,20 +124,16 @@ export class UserService {
          if (data.citizen_identification_card !== undefined) user.citizen_identification_card = data.citizen_identification_card;
          if (data.employee_code !== undefined) user.employee_code = data.employee_code;
          if (data.position !== undefined) user.position = data.position;
+         if (data.date_of_birth !== undefined) user.date_of_birth = data.date_of_birth;
+         if (data.place_of_birth !== undefined) user.place_of_birth = data.place_of_birth;
+         if (data.gender !== undefined) user.gender = data.gender;
+         if (data.ethnicity !== undefined) user.ethnicity = data.ethnicity;
+         if (data.cccd_issue_date !== undefined) user.cccd_issue_date = data.cccd_issue_date;
+         if (data.permanent_address !== undefined) user.permanent_address = data.permanent_address;
+         if (data.temporary_address !== undefined) user.temporary_address = data.temporary_address;
+         if (data.hometown !== undefined) user.hometown = data.hometown;
          
-         // Logic to help update password
          if (data.password) {
-             // Let's assume Entity listener handles hashing (Usually @BeforeInsert/@BeforeUpdate)
-             // But checking User Entity... I should verify if it has @BeforeUpdate.
-             // If not, I must hash it here.
-             // Since I can't check Entity easily right now without another tool call, 
-             // and legacy `create` method doesn't manually hash (it just saves), 
-             // it implies Entity likely has BeforeInsert/Update hooks OR it stores plaintext (bad).
-             // Wait, `createAdmin` sets password '12345678'.
-             // Let's check `User` entity to be safe. 
-             // But for now, I will assign it. If it needs hashing and entity doesn't do it, 
-             // it will be plaintext. 
-             // Let's check `User` entity in next step to be sure.
              user.password = data.password;
          }
          
@@ -272,6 +278,7 @@ export class UserService {
             citizen_identification_card: '',
             status: 'active',
             avatar: '',
+            must_change_password: false,
         });
 
         const saved = await this.userRepository.save(admin);

@@ -152,16 +152,16 @@ const Profile: React.FC = () => {
         }
     };
 
-    const handleQualModalOk = async (values: any, file?: File | null) => {
+    const handleQualModalOk = async (values: any, files?: File[]) => {
         if (!user) return;
         setQualModalLoading(true);
         try {
             if (selectedQual) {
-                const res = await certificatesApi.updateCertificate(selectedQual.id, values, file || undefined);
+                const res = await certificatesApi.updateCertificate(selectedQual.id, values, files);
                 setQualifications(prev => prev.map(q => q.id === selectedQual.id ? res : q));
                 message.success('Cập nhật thành công');
             } else {
-                const res = await certificatesApi.createCertificate(user.user_id, values, file || undefined);
+                const res = await certificatesApi.createCertificate(user.user_id, values, files);
                 setQualifications(prev => [...prev, res]);
                 message.success('Thêm mới thành công');
             }

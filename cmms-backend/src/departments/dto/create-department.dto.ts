@@ -1,5 +1,5 @@
 import {ApiProperty} from '@nestjs/swagger';
-import {IsArray, IsIn, IsNotEmpty, IsOptional, IsString, IsNumber} from 'class-validator';
+import {IsArray, IsIn, IsNotEmpty, IsOptional, IsString, IsNumber, IsBoolean} from 'class-validator';
 import {DEPARTMENT_PERMISSION_CODES} from '../constant/department-permissions.constant';
 
 export class CreateDepartmentDto {
@@ -40,4 +40,15 @@ export class CreateDepartmentDto {
         message: 'Quyền không hợp lệ, vui lòng chọn đúng trong danh sách cho phép.',
     })
     permissions?: string[];
+
+    @ApiProperty({ enum: ['PHONG_BAN', 'DOI', 'TO'], default: 'TO', required: false })
+    @IsOptional()
+    @IsString()
+    @IsIn(['PHONG_BAN', 'DOI', 'TO'])
+    level?: 'PHONG_BAN' | 'DOI' | 'TO';
+
+    @ApiProperty({ description: 'Đánh dấu thuộc hệ thống kỹ thuật', default: false, required: false })
+    @IsOptional()
+    @IsBoolean()
+    is_technical?: boolean;
 }

@@ -5,6 +5,7 @@ import {
   useEffect,
   useState,
   useCallback,
+  useMemo,
 } from "react";
 import { useAuthContext } from "../AuthContext/AuthContext";
 import {
@@ -14,6 +15,8 @@ import {
 import { getAllDevices, getDevicesReport } from "../../apis/devices";
 import { getToken } from "../../utils/auth";
 import { ReportData } from "../../types/index.types";
+import { useRefreshOnFocus } from "../../hooks/useRefreshOnFocus";
+import { useSocket } from "../../hooks/useSocket";
 
 const DevicesContext = createContext<DevicesContextValue>({
   devices: [],
@@ -67,6 +70,24 @@ const DevicesProvider = ({ children }: { children: ReactNode }) => {
     fetchDevices();
     fetchReport();
   }, [fetchDevices, fetchReport]);
+
+  // Phase A: Tự refetch khi user quay lại tab
+  useRefreshOnFocus(
+    useCallback(() => {
+      fetchDevices();
+      fetchReport();
+    }, [fetchDevices, fetchReport])
+  );
+
+  // Phase B: WebSocket - nhận event device_updated từ backend
+  const socketListeners = useMemo(() => ({
+    device_updated: () => {
+      fetchDevices();
+      fetchReport();
+    },
+  }), [fetchDevices, fetchReport]);
+
+  useSocket(user?.user_id, socketListeners);
 
   return (
     <DevicesContext.Provider

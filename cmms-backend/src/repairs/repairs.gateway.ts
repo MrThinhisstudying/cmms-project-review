@@ -36,17 +36,46 @@ export class RepairsGateway implements OnGatewayInit, OnGatewayConnection, OnGat
     }
   }
 
-  // Method to broadcast changes (General reload)
+  // ==================== REPAIRS ====================
+  /** Broadcast: danh sách phiếu sửa chữa đã thay đổi */
   notifyRepairUpdate() {
     this.server.emit('repair_updated', { timestamp: new Date() });
   }
 
-  // Method to send specific notification to a user
+  // ==================== DEVICES ====================
+  /** Broadcast: danh sách thiết bị đã thay đổi (thêm/sửa/xoá) */
+  notifyDeviceUpdate() {
+    this.server.emit('device_updated', { timestamp: new Date() });
+  }
+
+  // ==================== USERS / PROFILE ====================
+  /** Broadcast: thông tin user đã thay đổi (profile, department) */
+  notifyUserUpdate(targetUserId?: number) {
+    if (targetUserId) {
+      // Gửi riêng cho user cụ thể
+      this.sendToUser(targetUserId, 'Thông tin cá nhân đã được cập nhật');
+    }
+    this.server.emit('user_updated', { timestamp: new Date(), targetUserId });
+  }
+
+  // ==================== DASHBOARD ====================
+  /** Broadcast: dữ liệu dashboard cần refresh */
+  notifyDashboardRefresh() {
+    this.server.emit('dashboard_refresh', { timestamp: new Date() });
+  }
+
+  // ==================== PROFILE REQUESTS ====================
+  /** Broadcast: có yêu cầu cập nhật profile mới */
+  notifyProfileRequestUpdate() {
+    this.server.emit('profile_request_updated', { timestamp: new Date() });
+  }
+
+  // ==================== NOTIFICATION ====================
+  /** Gửi thông báo riêng cho 1 user */
   sendToUser(userId: number, message: string) {
       const socketId = this.activeUsers.get(String(userId));
       if (socketId) {
           this.server.to(socketId).emit('notification', { message });
-          // this.logger.log(`Sent notification to User ${userId}`);
       }
   }
 }

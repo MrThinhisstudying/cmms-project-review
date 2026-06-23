@@ -4,7 +4,9 @@ import { Repository } from 'typeorm';
 import { CreateAnnualLeaveDto } from './dto/create-annual-leave.dto';
 import { UpdateAnnualLeaveDto } from './dto/update-annual-leave.dto';
 import { AnnualLeave } from './entities/annual-leave.entity';
+import { LeaveHistory } from './entities/leave-history.entity';
 import { User } from '../user/user.entity';
+import { RecordLeaveDto } from './dto/record-leave.dto';
 
 @Injectable()
 export class AnnualLeavesService {
@@ -13,6 +15,8 @@ export class AnnualLeavesService {
     private annualLeaveRepo: Repository<AnnualLeave>,
     @InjectRepository(User)
     private userRepo: Repository<User>,
+    @InjectRepository(LeaveHistory)
+    private leaveHistoryRepo: Repository<LeaveHistory>,
   ) {}
 
   async create(createDto: CreateAnnualLeaveDto) {
@@ -42,6 +46,17 @@ export class AnnualLeavesService {
     }
 
     return query.orderBy('leave.year', 'DESC').getMany();
+  }
+
+  async findLeaveHistoriesByUser(userId: number, year?: number) {
+    const query = this.leaveHistoryRepo.createQueryBuilder('history')
+      .where('history.user_id = :userId', { userId });
+      
+    if (year) {
+      query.andWhere('history.year = :year', { year });
+    }
+
+    return query.orderBy('history.created_at', 'DESC').getMany();
   }
 
   async findOne(id: number) {
@@ -135,5 +150,38 @@ export class AnnualLeavesService {
     }
 
     return { success: successCount, errors };
+  }
+
+  async recordLeave(dto: RecordLeaveDto) {
+    const { user_id, year, applied_month, days_taken, from_date, to_date, reason, location, attachments } = dto;
+    
+    // Tìm hoặc tạo mới AnnualLeave record cho user trong năm
+    let annualLeave = await this.annualLeaveRepo.findOne({ where: { user_id, year } });
+    if (!annualLeave) {
+        annualLeave = this.annualLeaveRepo.create({ user_id, year });
+        await this.annualLeaveRepo.save(annualLeave);
+    }
+
+    // Cộng dồn phép vào tháng tương ứng
+    const monthKey = `m${applied_month}_taken`;
+    (annualLeave as any)[monthKey] = ((annualLeave as any)[monthKey] || 0) + days_taken;
+    await this.annualLeaveRepo.save(annualLeave);
+
+    // Lưu vào leave_histories
+    const history = this.leaveHistoryRepo.create({
+        user_id,
+        annual_leave_id: annualLeave.id,
+        from_date: new Date(from_date),
+        to_date: new Date(to_date),
+        days_taken,
+        applied_month,
+        year,
+        reason,
+        location,
+        attachments
+    });
+    await this.leaveHistoryRepo.save(history);
+
+    return history;
   }
 }

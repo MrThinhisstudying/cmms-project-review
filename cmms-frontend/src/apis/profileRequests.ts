@@ -23,15 +23,15 @@ export interface IProfileRequest {
     };
 }
 
-export const createProfileRequest = async (data: { request_type: string, data_payload: any }, file?: File): Promise<IProfileRequest> => {
+export const createProfileRequest = async (data: { request_type: string, data_payload: any }, files?: File[]): Promise<IProfileRequest> => {
     let body: any;
     let headers: any = { 'Authorization': `Bearer ${getToken()}` };
 
-    if (file) {
+    if (files && files.length > 0) {
         body = new FormData();
         body.append('request_type', data.request_type);
         body.append('data_payload', JSON.stringify(data.data_payload));
-        body.append('file', file);
+        files.forEach(f => body.append('files', f));
     } else {
         body = JSON.stringify(data);
         headers['Content-Type'] = 'application/json';

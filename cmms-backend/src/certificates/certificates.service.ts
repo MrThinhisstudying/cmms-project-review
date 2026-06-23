@@ -142,14 +142,40 @@ export class CertificatesService {
         const targetDate = new Date();
         targetDate.setDate(targetDate.getDate() + days);
 
-        // Find certificates where next_training_date is between now and targetDate, or already expired
-        return this.userCertificateRepository.find({
+        // Fetch all active certificates (typically CCCM or those with next_training_date)
+        const allCerts = await this.userCertificateRepository.find({
             where: {
-                next_training_date: LessThanOrEqual(targetDate),
                 status: CertificateStatus.ACTIVE
             },
             relations: ['user', 'program']
         });
+
+        // Group by user_id and program_id to find the LATEST next_training_date
+        const latestCertsMap = new Map<string, UserCertificate>();
+        allCerts.forEach(cert => {
+            if (!cert.user) return;
+            // If it's a CCCM with a program, deduplicate by program. Otherwise fallback to ID to keep it in the map
+            const key = cert.program ? `${cert.user.user_id}_${cert.program.id}` : `cert_${cert.id}`;
+            const existing = latestCertsMap.get(key);
+            
+            if (!existing) {
+                latestCertsMap.set(key, cert);
+            } else if (cert.next_training_date && existing.next_training_date) {
+                if (new Date(cert.next_training_date) > new Date(existing.next_training_date)) {
+                    latestCertsMap.set(key, cert);
+                }
+            } else if (cert.next_training_date && !existing.next_training_date) {
+                latestCertsMap.set(key, cert);
+            }
+        });
+
+        // Loop over the deduplicated latest certificates. If the LATEST one is expiring, then we warn.
+        const expiringCerts = Array.from(latestCertsMap.values()).filter(cert => {
+            if (!cert.next_training_date) return false; // Ignore if no training date
+            return new Date(cert.next_training_date) <= targetDate;
+        });
+
+        return expiringCerts;
     }
 
     // --- Validation Logic ---

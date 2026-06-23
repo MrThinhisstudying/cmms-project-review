@@ -1,4 +1,5 @@
 import React from "react";
+import { IUserDepartment } from "../types/user.types";
 import {
     HomeOutlined,
     TeamOutlined,
@@ -26,6 +27,8 @@ export interface SidebarMenuItem {
     // Group support
     groupKey?: string;
     children?: SidebarMenuItem[];
+    // Filter dựa trên department (user_departments)
+    departmentFilter?: (userDepts: IUserDepartment[]) => boolean;
 }
 
 // Grouped sidebar structure
@@ -46,7 +49,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
         color: "#FFC900",
         path: "/hr-training-group",
         groupKey: "hr-training",
-        roles: ["ADMIN", "HR_MANAGER"],
+        roles: ["ADMIN", "HR_MANAGER", "DIRECTOR", "UNIT_HEAD"],
         children: [
             {
                 name: "Tổng quan Nhân sự",
@@ -54,7 +57,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
                 textColor: "#fff",
                 color: "#FFC900",
                 path: "/hr-dashboard",
-                roles: ["ADMIN", "HR_MANAGER"],
+                roles: ["ADMIN", "HR_MANAGER", "DIRECTOR", "UNIT_HEAD"],
             },
             {
                 name: "Quản lý nhân viên",
@@ -62,7 +65,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
                 textColor: "#fff",
                 color: "#FFC900",
                 path: "/quan_ly_nhan_vien",
-                roles: ["ADMIN", "HR_MANAGER"],
+                roles: ["ADMIN", "HR_MANAGER", "DIRECTOR", "UNIT_HEAD"],
             },
             {
                 name: "Quản lý tài khoản (Admin IT)",
@@ -70,7 +73,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
                 textColor: "#fff",
                 color: "#FFC900",
                 path: "/quan_ly_nguoi_dung",
-                roles: ["ADMIN", "HR_MANAGER"],
+                roles: ["ADMIN"],
             },
             {
                 name: "Phê duyệt hồ sơ",
@@ -86,7 +89,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
                 textColor: "#fff",
                 color: "#FFC900",
                 path: "/hop-dong-lao-dong",
-                roles: ["ADMIN", "HR_MANAGER"],
+                roles: ["ADMIN", "HR_MANAGER", "DIRECTOR", "UNIT_HEAD"],
             },
             {
                 name: "Khen thưởng / Kỷ luật",
@@ -94,7 +97,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
                 textColor: "#fff",
                 color: "#FFC900",
                 path: "/khen-thuong-ky-luat",
-                roles: ["ADMIN", "HR_MANAGER"],
+                roles: ["ADMIN", "HR_MANAGER", "DIRECTOR", "UNIT_HEAD"],
             },
             {
                 name: "Quản lý CTĐT / CCCM",
@@ -102,7 +105,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
                 textColor: "#fff",
                 color: "#FFC900",
                 path: "/training-programs",
-                roles: ["ADMIN", "HR_MANAGER"],
+                roles: ["ADMIN", "HR_MANAGER", "DIRECTOR", "UNIT_HEAD"],
             },
             {
                 name: "Quản lý phép năm",
@@ -110,7 +113,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
                 textColor: "#fff",
                 color: "#FFC900",
                 path: "/quan_ly_phep",
-                roles: ["ADMIN", "HR_MANAGER"],
+                roles: ["ADMIN", "HR_MANAGER", "DIRECTOR", "UNIT_HEAD"],
             },
         ],
     },
@@ -158,7 +161,9 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
         color: "#FFC900",
         path: "/repair-group",
         groupKey: "repairs",
-        roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR"],
+        roles: ["ADMIN", "DIRECTOR"],
+        // Chỉ hiện cho user thuộc Đội kỹ thuật (is_technical) hoặc ADMIN/DIRECTOR
+        departmentFilter: (userDepts) => userDepts?.some(ud => ud.department?.is_technical) || false,
         children: [
             {
                 name: "Quản lý sửa chữa",

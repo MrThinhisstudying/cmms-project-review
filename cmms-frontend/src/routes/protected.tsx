@@ -22,79 +22,63 @@ import LaborContracts from "../pages/LaborContracts";
 import RewardDisciplines from "../pages/RewardDisciplines";
 
 export const protectedRoutes = (userRole: string) => {
-  if (['admin', 'ADMIN', 'HR_MANAGER'].includes(userRole)) {
-    return [
-      {
-        path: "/",
-        element: <Navigate to="/trang_chu" />,
-      },
-      {
-        path: "/",
-        element: <MainLayout />,
-        children: [
-          { path: "/trang_chu/*", element: <Dashboard /> },
-          { path: "/profile", element: <Profile /> },
-          { path: "/quan_ly_nguoi_dung/*", element: <Users /> },
-          { path: "/quan_ly_nhan_vien/*", element: <Employees /> },
-          { path: "/phe_duyet_ho_so/*", element: <ProfileRequests /> },
-          { path: "/hop-dong-lao-dong/*", element: <LaborContracts /> },
-          { path: "/khen-thuong-ky-luat/*", element: <RewardDisciplines /> },
-          { path: "/hr-dashboard/*", element: <HRDashboard /> },
-          { path: "/training-programs/*", element: <TrainingPrograms /> },
+  const isFullAccess = ['admin', 'ADMIN', 'HR_MANAGER', 'DIRECTOR', 'UNIT_HEAD', 'TEAM_LEAD'].includes(userRole);
+  const isHrAccessible = ['admin', 'ADMIN', 'HR_MANAGER', 'DIRECTOR', 'UNIT_HEAD'].includes(userRole);
+  const isAdmin = ['admin', 'ADMIN'].includes(userRole);
+  const isHrAdmin = ['admin', 'ADMIN', 'HR_MANAGER'].includes(userRole);
 
-          { path: "/quan_ly_phep/*", element: <LeaveManagement /> },
-          { path: "/quan_ly_ttb_pt/*", element: <DevicesManagement /> },
-          { path: "/quan_ly_sua_chua/*", element: <RepairsManagement /> },
-          { path: "/quan_ly_bao_duong/*", element: <MaintenanceManagement /> },
-          { path: "/quy_trinh_bao_duong/*", element: <MaintenanceTasksPage /> },
-          {
-            path: "/maintenance-procedures/*",
-            element: <MaintenanceProcedurePage />,
-          },
-          {
-            path: "/maintenance-history/*",
-            element: <MaintenanceHistoryPage />,
-          },
-          { path: "/quan_ly_vat_tu/*", element: <InventoryManagementPage /> },
-          { path: "/lay_vat_tu/*", element: <StockOutsPage /> },
-          { path: "/bao_cao_thong_ke/*", element: <DevicesReport /> },
-          { path: "/lich_su/*", element: <AuditPage /> },
-          { path: "*", element: <Navigate to="trang_chu" /> },
-        ],
-      },
+  if (isFullAccess) {
+    const children: any[] = [
+      { path: "/trang_chu/*", element: <Dashboard /> },
+      { path: "/profile", element: <Profile /> },
+      // Thiết bị & Vật tư
+      { path: "/quan_ly_ttb_pt/*", element: <DevicesManagement /> },
+      { path: "/quan_ly_vat_tu/*", element: <InventoryManagementPage /> },
+      { path: "/lay_vat_tu/*", element: <StockOutsPage /> },
+      // Sửa chữa & Bảo dưỡng
+      { path: "/quan_ly_sua_chua/*", element: <RepairsManagement /> },
+      { path: "/quan_ly_bao_duong/*", element: <MaintenanceManagement /> },
+      { path: "/quy_trinh_bao_duong/*", element: <MaintenanceTasksPage /> },
+      { path: "/maintenance-procedures/*", element: <MaintenanceProcedurePage /> },
+      { path: "/maintenance-history/*", element: <MaintenanceHistoryPage /> },
+      // Báo cáo
+      { path: "/bao_cao_thong_ke/*", element: <DevicesReport /> },
     ];
-  } else if (['manager', 'UNIT_HEAD', 'DIRECTOR'].includes(userRole)) {
+
+    if (isHrAccessible) {
+      children.push(
+        { path: "/quan_ly_nhan_vien/*", element: <Employees /> },
+        { path: "/hr-dashboard/*", element: <HRDashboard /> },
+        { path: "/training-programs/*", element: <TrainingPrograms /> },
+        { path: "/hop-dong-lao-dong/*", element: <LaborContracts /> },
+        { path: "/khen-thuong-ky-luat/*", element: <RewardDisciplines /> },
+        { path: "/quan_ly_phep/*", element: <LeaveManagement /> },
+      );
+    }
+
+    // Chỉ ADMIN / HR_MANAGER mới có phê duyệt hồ sơ
+    if (isHrAdmin) {
+      children.push(
+        { path: "/phe_duyet_ho_so/*", element: <ProfileRequests /> },
+      );
+    }
+
+    // Chỉ ADMIN mới có quản lý tài khoản IT và lịch sử hệ thống
+    if (isAdmin) {
+      children.push(
+        { path: "/quan_ly_nguoi_dung/*", element: <Users /> },
+        { path: "/lich_su/*", element: <AuditPage /> },
+      );
+    }
+
+    children.push({ path: "*", element: <Navigate to="trang_chu" /> });
+
     return [
-      {
-        path: "/",
-        element: <Navigate to="/trang_chu" />,
-      },
-      {
-        path: "/",
-        element: <MainLayout />,
-        children: [
-          { path: "/trang_chu/*", element: <Dashboard /> },
-          { path: "/profile", element: <Profile /> },
-          { path: "/quan_ly_ttb_pt/*", element: <DevicesManagement /> },
-          { path: "/quan_ly_sua_chua/*", element: <RepairsManagement /> },
-          { path: "/quan_ly_bao_duong/*", element: <MaintenanceManagement /> },
-          { path: "/quy_trinh_bao_duong/*", element: <MaintenanceTasksPage /> },
-          {
-            path: "/maintenance-procedures/*",
-            element: <MaintenanceProcedurePage />,
-          },
-          {
-            path: "/maintenance-history/*",
-            element: <MaintenanceHistoryPage />,
-          },
-          { path: "/quan_ly_vat_tu/*", element: <InventoryManagementPage /> },
-          { path: "/lay_vat_tu/*", element: <StockOutsPage /> },
-          { path: "/bao_cao_thong_ke/*", element: <DevicesReport /> },
-          { path: "*", element: <Navigate to="trang_chu" /> },
-        ],
-      },
+      { path: "/", element: <Navigate to="/trang_chu" /> },
+      { path: "/", element: <MainLayout />, children },
     ];
   } else {
+    // OPERATOR, TECHNICIAN - quyền cơ bản
     return [
       {
         path: "/",
@@ -111,14 +95,8 @@ export const protectedRoutes = (userRole: string) => {
           { path: "/quan_ly_bao_duong/*", element: <MaintenanceManagement /> },
           { path: "/quy_trinh_bao_duong/*", element: <MaintenanceTasksPage /> },
           { path: "/quan_ly_vat_tu/*", element: <InventoryManagementPage /> },
-          {
-            path: "/maintenance-procedures/*",
-            element: <MaintenanceProcedurePage />,
-          },
-          {
-            path: "/maintenance-history/*",
-            element: <MaintenanceHistoryPage />,
-          },
+          { path: "/maintenance-procedures/*", element: <MaintenanceProcedurePage /> },
+          { path: "/maintenance-history/*", element: <MaintenanceHistoryPage /> },
           { path: "*", element: <Navigate to="trang_chu" /> },
         ],
       },

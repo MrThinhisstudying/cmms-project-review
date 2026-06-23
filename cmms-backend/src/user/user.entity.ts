@@ -20,6 +20,7 @@ import {
 
 import { UserRole } from './user-role.enum';
 import { UserDeviceGroup } from '../device-groups/entities/user-device-group.entity';
+import { UserDepartment } from '../departments/entities/user-department.entity';
 
 @Entity()
 export class User {
@@ -85,6 +86,14 @@ export class User {
     @Column({ nullable: true })
     place_of_birth?: string;
 
+    @ApiProperty({ description: 'Giới tính' })
+    @Column({ nullable: true })
+    gender?: string;
+
+    @ApiProperty({ description: 'Dân tộc' })
+    @Column({ nullable: true })
+    ethnicity?: string;
+
     @ApiProperty({ description: 'Ngày cấp CCCD' })
     @Column({ type: 'date', nullable: true })
     cccd_issue_date?: Date;
@@ -122,11 +131,19 @@ export class User {
     @JoinColumn({name: 'dept_id'})
     department?: Department;
 
+    // Quan hệ nhiều-nhiều mới: 1 user thuộc nhiều Tổ/Đội
+    @OneToMany(() => UserDepartment, (ud) => ud.user)
+    user_departments?: UserDepartment[];
+
     @Column({nullable: true})
     reset_token?: string;
 
     @Column({type: 'timestamp', nullable: true})
     reset_token_expiry?: Date;
+
+    @ApiProperty()
+    @Column({ default: true })
+    must_change_password: boolean;
 
     constructor(data: Partial<User> = {}) {
         Object.assign(this, data);

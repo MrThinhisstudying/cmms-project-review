@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, Input, Select, Switch, Upload, Button, message, DatePicker } from 'antd';
-import { UploadOutlined } from '@ant-design/icons';
+import { UploadOutlined, MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import { ICreateUser, IDepartment, IUser } from '../../../types/user.types';
 import { IDeviceGroup } from '../../../apis/device-groups';
 import { uploadSignature } from '../../../apis/users';
@@ -24,6 +24,13 @@ const UserModal: React.FC<UserModalProps> = ({ open, onCancel, onOk, initialValu
 
     useEffect(() => {
         if (open && initialValues) {
+            // Map user_departments sang format cho Form.List
+            const deptAssignments = initialValues.user_departments?.map(ud => ({
+                dept_id: ud.dept_id,
+                role_in_dept: ud.role_in_dept || 'MEMBER',
+                is_primary: ud.is_primary || false,
+            })) || [];
+
             form.setFieldsValue({
                 ...initialValues,
                 dept_id: initialValues.department?.dept_id,
@@ -33,10 +40,11 @@ const UserModal: React.FC<UserModalProps> = ({ open, onCancel, onOk, initialValu
                 confirmPassword: '',
                 date_of_birth: initialValues.date_of_birth ? dayjs(initialValues.date_of_birth) : null,
                 cccd_issue_date: initialValues.cccd_issue_date ? dayjs(initialValues.cccd_issue_date) : null,
+                dept_assignments: deptAssignments.length > 0 ? deptAssignments : [{ dept_id: initialValues.department?.dept_id, role_in_dept: 'MEMBER', is_primary: true }],
             });
         } else {
             form.resetFields();
-            form.setFieldsValue({ status: 'active', role: 'OPERATOR', is_group_lead: false });
+            form.setFieldsValue({ status: 'active', role: 'OPERATOR', is_group_lead: false, dept_assignments: [] });
         }
     }, [open, initialValues, form]);
 
@@ -95,27 +103,78 @@ const UserModal: React.FC<UserModalProps> = ({ open, onCancel, onOk, initialValu
                     <Input />
                 </Form.Item>
 
-                <div style={{ display: 'flex', gap: 16 }}>
-                    <Form.Item name="role" label="Vai trò" style={{ flex: 1 }} rules={[{ required: true }]}>
-                        <Select>
-                            <Select.Option value="OPERATOR">Vận hành</Select.Option>
-                            <Select.Option value="TECHNICIAN">Kỹ thuật</Select.Option>
-                            <Select.Option value="TEAM_LEAD">Tổ trưởng</Select.Option>
-                            <Select.Option value="UNIT_HEAD">Cán bộ đội</Select.Option>
-                            <Select.Option value="DIRECTOR">Ban giám đốc</Select.Option>
-                            <Select.Option value="HR_MANAGER">Quản lý nhân sự</Select.Option>
-                            <Select.Option value="ADMIN">Quản trị viên</Select.Option>
-                        </Select>
-                    </Form.Item>
-                    
-                    <Form.Item name="dept_id" label="Phòng ban" style={{ flex: 1 }} rules={[{ required: true }]}>
-                        <Select showSearch optionFilterProp='children'>
-                            {departments.map(d => (
-                                <Select.Option key={d.dept_id} value={d.dept_id}>{d.name}</Select.Option>
-                            ))}
-                        </Select>
-                    </Form.Item>
+                <Form.Item name="role" label="Vai trò hệ thống" rules={[{ required: true }]}>
+                    <Select>
+                        <Select.Option value="OPERATOR">Vận hành</Select.Option>
+                        <Select.Option value="TECHNICIAN">Kỹ thuật</Select.Option>
+                        <Select.Option value="TEAM_LEAD">Tổ trưởng</Select.Option>
+                        <Select.Option value="UNIT_HEAD">Cán bộ đội</Select.Option>
+                        <Select.Option value="DIRECTOR">Ban giám đốc</Select.Option>
+                        <Select.Option value="HR_MANAGER">Quản lý nhân sự</Select.Option>
+                        <Select.Option value="ADMIN">Quản trị viên</Select.Option>
+                    </Select>
+                </Form.Item>
+
+                {/* --- ĐƠN VỊ TỔ CHỨC (MỚI) --- */}
+                <div style={{ borderTop: '1px solid #f0f0f0', marginTop: 8, paddingTop: 16, marginBottom: 8 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14, color: '#722ed1' }}>🏛️ Đơn vị tổ chức</span>
+                    <span style={{ fontSize: 12, color: '#999', marginLeft: 8 }}>(Phòng ban / Đội / Tổ mà nhân viên thuộc)</span>
                 </div>
+                <Form.List name="dept_assignments">
+                    {(fields, { add, remove }) => (
+                        <>
+                            {fields.map(({ key, name, ...restField }) => (
+                                <div key={key} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                                    <Form.Item
+                                        {...restField}
+                                        name={[name, 'dept_id']}
+                                        rules={[{ required: true, message: 'Chọn đơn vị' }]}
+                                        style={{ flex: 2, marginBottom: 0 }}
+                                    >
+                                        <Select showSearch optionFilterProp='children' placeholder="Chọn đơn vị">
+                                            {departments.map(d => (
+                                                <Select.Option key={d.dept_id} value={d.dept_id}>
+                                                    {d.name}{d.level ? ` (${d.level === 'PHONG_BAN' ? 'PB' : d.level === 'DOI' ? 'Đội' : 'Tổ'})` : ''}
+                                                </Select.Option>
+                                            ))}
+                                        </Select>
+                                    </Form.Item>
+                                    <Form.Item
+                                        {...restField}
+                                        name={[name, 'role_in_dept']}
+                                        style={{ flex: 1, marginBottom: 0 }}
+                                        initialValue="MEMBER"
+                                    >
+                                        <Select>
+                                            <Select.Option value="MEMBER">Thành viên</Select.Option>
+                                            <Select.Option value="DEPUTY_LEAD">Phó</Select.Option>
+                                            <Select.Option value="LEAD">Trưởng</Select.Option>
+                                        </Select>
+                                    </Form.Item>
+                                    <Form.Item
+                                        {...restField}
+                                        name={[name, 'is_primary']}
+                                        valuePropName="checked"
+                                        style={{ marginBottom: 0 }}
+                                    >
+                                        <Switch checkedChildren="Chính" unCheckedChildren="Phụ" size="small" />
+                                    </Form.Item>
+                                    {!readOnly && (
+                                        <MinusCircleOutlined
+                                            onClick={() => remove(name)}
+                                            style={{ color: '#ff4d4f', fontSize: 18, cursor: 'pointer' }}
+                                        />
+                                    )}
+                                </div>
+                            ))}
+                            {!readOnly && (
+                                <Button type="dashed" onClick={() => add({ role_in_dept: 'MEMBER', is_primary: false })} block icon={<PlusOutlined />}>
+                                    Thêm đơn vị
+                                </Button>
+                            )}
+                        </>
+                    )}
+                </Form.List>
 
                 <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
                     <Form.Item name="group_id" label="Nhóm thiết bị (Device Group)" style={{ flex: 1 }}>

@@ -1,21 +1,51 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Card, Button, Input, Space, Row, Col, Typography, InputNumber, Tooltip, message, Upload, Empty } from 'antd';
-import { SearchOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Table, Card, Button, Input, Space, Row, Col, Typography, InputNumber, message, Upload, Empty, Modal, Form, Select, DatePicker, Descriptions } from 'antd';
+import { SearchOutlined, UploadOutlined, DownloadOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
-import { getAnnualLeaves, updateAnnualLeave, importAnnualLeaves, IAnnualLeave } from '../../apis/annualLeaves';
+import { getAnnualLeaves, updateAnnualLeave, importAnnualLeaves, recordLeave, uploadLeaveAttachments, IAnnualLeave } from '../../apis/annualLeaves';
+import { getAllUsers } from '../../apis/users';
+import { getToken } from '../../utils/auth';
 import dayjs from 'dayjs';
+import ProfileModal from '../Users/components/ProfileModal';
+import { useAuthContext } from '../../context/AuthContext/AuthContext';
 
 const { Title, Text } = Typography;
+const { Option } = Select;
 
 const LeaveManagement: React.FC = () => {
+    const { user: currentAuthUser } = useAuthContext();
+    const canWrite = ['ADMIN', 'HR_MANAGER'].includes(currentAuthUser?.role || '');
+
     const [records, setRecords] = useState<IAnnualLeave[]>([]);
     const [loading, setLoading] = useState(false);
     const [searchText, setSearchText] = useState('');
     const [selectedYear, setSelectedYear] = useState<number>(dayjs().year());
     
+    // Modal states
+    const [users, setUsers] = useState<any[]>([]);
+    const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
+    const [recordForm] = Form.useForm();
+    const [recordLoading, setRecordLoading] = useState(false);
+    const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+    const [selectedProfileUser, setSelectedProfileUser] = useState<any>(null);
+    
     useEffect(() => {
         fetchRecords();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [selectedYear]);
+
+    useEffect(() => {
+        fetchUsers();
+    }, []);
+
+    const fetchUsers = async () => {
+        try {
+            const data = await getAllUsers(getToken());
+            setUsers(data);
+        } catch (error) {
+            message.error('Lỗi tải danh sách nhân viên');
+        }
+    };
 
     const fetchRecords = async () => {
         setLoading(true);
@@ -26,6 +56,47 @@ const LeaveManagement: React.FC = () => {
             message.error(error.message || 'Lỗi tải danh sách phép');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const [fileList, setFileList] = useState<any[]>([]);
+
+    const handleOpenRecordModal = () => {
+        recordForm.resetFields();
+        setFileList([]);
+        setSelectedUserId(null);
+        setIsRecordModalOpen(true);
+    };
+
+    const handleRecordSubmit = async () => {
+        try {
+            const values = await recordForm.validateFields();
+            setRecordLoading(true);
+
+            let attachments: string[] = [];
+            if (fileList.length > 0) {
+                const uploadFiles = fileList.map(f => (f.originFileObj || f) as File);
+                attachments = await uploadLeaveAttachments(uploadFiles);
+            }
+
+            const fromDate = dayjs(values.from_date);
+
+            const payload = {
+                ...values,
+                applied_month: fromDate.month() + 1,
+                year: fromDate.year(),
+                from_date: values.from_date.toISOString(),
+                to_date: values.to_date.toISOString(),
+                attachments
+            };
+            await recordLeave(payload);
+            message.success('Ghi nhận nghỉ phép thành công');
+            setIsRecordModalOpen(false);
+            fetchRecords();
+        } catch (error: any) {
+            if (error.message) message.error(error.message);
+        } finally {
+            setRecordLoading(false);
         }
     };
 
@@ -114,15 +185,68 @@ const LeaveManagement: React.FC = () => {
         XLSX.writeFile(workbook, `Template_Phep_${selectedYear}.xlsx`);
     };
 
-    const EditableCell = ({ value, recordId, dataKey, width = 60 }: any) => (
-        <InputNumber 
-            value={value} 
-            onChange={(val) => handleCellChange(recordId, dataKey, val)} 
-            style={{ width }} 
-            controls={false}
-            size="small"
-        />
-    );
+    const EditableCell = ({ value, recordId, dataKey, width = 60 }: any) => {
+        const [editing, setEditing] = useState(false);
+        const [tempVal, setTempVal] = useState(value);
+
+        const toggleEdit = () => {
+            if (!canWrite) return;
+            setEditing(true);
+            setTempVal(value);
+        };
+
+        const save = () => {
+            if (tempVal !== value) {
+                handleCellChange(recordId, dataKey, tempVal);
+            }
+            setEditing(false);
+        };
+
+        if (!canWrite) {
+            return (
+                <div style={{ width, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {value === 0 ? <span style={{color: '#d9d9d9'}}>0</span> : <span style={{fontWeight: 500}}>{value}</span>}
+                </div>
+            );
+        }
+
+        if (editing) {
+            return (
+                <InputNumber 
+                    autoFocus
+                    value={tempVal} 
+                    onChange={(val) => setTempVal(val)} 
+                    onBlur={save}
+                    onPressEnter={save}
+                    style={{ width }} 
+                    controls={false}
+                    size="small"
+                />
+            );
+        }
+
+        return (
+            <div 
+                onClick={toggleEdit} 
+                style={{ 
+                    width, 
+                    minHeight: 24, 
+                    cursor: 'pointer', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    padding: '0 4px',
+                    borderRadius: 4,
+                    transition: 'background 0.2s',
+                    justifyContent: 'center'
+                }}
+                className="editable-cell-hover"
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+            >
+                {value === 0 ? <span style={{color: '#d9d9d9'}}>0</span> : <span style={{fontWeight: 500}}>{value}</span>}
+            </div>
+        );
+    };
 
     const filtered = records.filter(c => 
         c.user?.name?.toLowerCase().includes(searchText.toLowerCase()) || 
@@ -144,7 +268,20 @@ const LeaveManagement: React.FC = () => {
             title: 'Họ và tên',
             width: 150,
             fixed: 'left',
-            render: (_: any, r: IAnnualLeave) => r.user?.name
+            render: (_: any, r: IAnnualLeave) => (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span>{r.user?.name}</span>
+                    {r.user && (
+                        <Button 
+                            type="text" 
+                            size="small" 
+                            icon={<EyeOutlined style={{ color: '#1890ff' }} />} 
+                            onClick={() => setSelectedProfileUser(r.user)} 
+                            title="Xem lịch sử nghỉ phép"
+                        />
+                    )}
+                </div>
+            )
         },
         {
             title: 'Khởi tạo',
@@ -179,6 +316,76 @@ const LeaveManagement: React.FC = () => {
         }
     ];
 
+    const selectedUserInfo = users.find(u => u.user_id === selectedUserId);
+    const selectedUserLeave = records.find(r => r.user?.user_id === selectedUserId);
+
+    const handleDateChange = () => {
+        const fromDate = recordForm.getFieldValue('from_date');
+        const toDate = recordForm.getFieldValue('to_date');
+        
+        if (fromDate && toDate) {
+            // Simple difference in days + 1 (includes start and end date)
+            const diffDays = dayjs(toDate).startOf('day').diff(dayjs(fromDate).startOf('day'), 'day') + 1;
+            if (diffDays > 0) {
+                recordForm.setFieldsValue({ days_taken: diffDays });
+            } else {
+                recordForm.setFieldsValue({ days_taken: 0 });
+            }
+        }
+    };
+
+    const uploadProps = {
+        onRemove: (file: any) => {
+            const index = fileList.indexOf(file);
+            const newFileList = fileList.slice();
+            newFileList.splice(index, 1);
+            setFileList(newFileList);
+        },
+        beforeUpload: (file: File) => {
+            const isPdf = file.type === 'application/pdf';
+            const isImage = file.type.startsWith('image/');
+            
+            if (!isPdf && !isImage) {
+                message.error('Chỉ được tải lên file PDF hoặc Ảnh!');
+                return Upload.LIST_IGNORE;
+            }
+
+            const isLt5M = file.size / 1024 / 1024 < 5;
+            if (!isLt5M) {
+                message.error('File phải nhỏ hơn 5MB!');
+                return Upload.LIST_IGNORE;
+            }
+
+            const pdfCount = fileList.filter(f => f.type === 'application/pdf').length;
+            if (isPdf && pdfCount > 0) {
+                message.error('Chỉ được tải lên 1 file PDF duy nhất!');
+                return Upload.LIST_IGNORE;
+            }
+            if (isPdf && fileList.length > 0) {
+                message.error('Nếu tải PDF thì không được kèm thêm file khác!');
+                return Upload.LIST_IGNORE;
+            }
+
+            if (!isPdf && fileList.length >= 3) {
+                message.error('Chỉ được tải lên tối đa 3 ảnh!');
+                return Upload.LIST_IGNORE;
+            }
+
+            const uploadFile = {
+                uid: (file as any).uid || Math.random().toString(),
+                name: file.name,
+                status: 'done',
+                originFileObj: file,
+                type: file.type,
+                size: file.size
+            };
+            setFileList(prev => [...prev, uploadFile]);
+            return false;
+        },
+        fileList,
+        multiple: true
+    };
+
     return (
         <div style={{ padding: 24, minHeight: '100%', background: '#f0f2f5' }}>
             <Card variant="borderless" style={{ marginBottom: 24, borderRadius: 8 }} styles={{ body: { padding: '16px 24px' } }}>
@@ -189,14 +396,23 @@ const LeaveManagement: React.FC = () => {
                     </Col>
                     <Col>
                         <Space>
-                            <Button icon={<DownloadOutlined />} onClick={downloadTemplate}>
-                                File Mẫu Excel
-                            </Button>
-                            <Upload beforeUpload={handleImportExcel} showUploadList={false}>
-                                <Button type="primary" icon={<UploadOutlined />}>
-                                    Import Dữ liệu
+                            {canWrite && (
+                                <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenRecordModal}>
+                                    Ghi nhận nghỉ phép
                                 </Button>
-                            </Upload>
+                            )}
+                            {canWrite && (
+                                <Button icon={<DownloadOutlined />} onClick={downloadTemplate}>
+                                    File Mẫu Excel
+                                </Button>
+                            )}
+                            {canWrite && (
+                                <Upload beforeUpload={handleImportExcel} showUploadList={false}>
+                                    <Button type="primary" icon={<UploadOutlined />}>
+                                        Import Dữ liệu
+                                    </Button>
+                                </Upload>
+                            )}
                         </Space>
                     </Col>
                 </Row>
@@ -242,6 +458,135 @@ const LeaveManagement: React.FC = () => {
                     }}
                 />
             </Card>
+
+            <Modal
+                title="Ghi nhận nghỉ phép trực tiếp"
+                open={isRecordModalOpen}
+                onOk={handleRecordSubmit}
+                onCancel={() => setIsRecordModalOpen(false)}
+                confirmLoading={recordLoading}
+                width={700}
+                destroyOnClose
+            >
+                <Form form={recordForm} layout="vertical" style={{ marginTop: 20 }}>
+                    <Row gutter={16}>
+                        <Col span={24}>
+                            <Form.Item name="user_id" label="Nhân viên" rules={[{ required: true, message: 'Vui lòng chọn nhân viên' }]}>
+                                <Select
+                                    showSearch
+                                    placeholder="Chọn nhân viên"
+                                    optionFilterProp="children"
+                                    onChange={(val) => setSelectedUserId(val)}
+                                    filterOption={(input, option: any) =>
+                                        (option?.children as unknown as string).toLowerCase().includes(input.toLowerCase())
+                                    }
+                                >
+                                    {users.map(u => (
+                                        <Option key={u.user_id} value={u.user_id}>
+                                            {u.name} - {u.employee_code || 'N/A'} - {u.position || 'N/A'}
+                                        </Option>
+                                    ))}
+                                </Select>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    
+                    {selectedUserInfo && (
+                        <Card size="small" style={{ marginBottom: 16, background: '#fafafa', border: '1px solid #d9d9d9' }}>
+                            <Descriptions size="small" column={2}>
+                                <Descriptions.Item label="Họ và tên"><b>{selectedUserInfo.name}</b></Descriptions.Item>
+                                <Descriptions.Item label="Mã nhân viên">{selectedUserInfo.employee_code || 'N/A'}</Descriptions.Item>
+                                <Descriptions.Item label="Bộ phận công tác">{selectedUserInfo.department?.name || 'N/A'}</Descriptions.Item>
+                                <Descriptions.Item label="Chức vụ/công việc">{selectedUserInfo.position || 'N/A'}</Descriptions.Item>
+                            </Descriptions>
+                            
+                            <div style={{ marginTop: 12 }}>
+                                <Text strong>Số ngày nghỉ tiêu chuẩn:</Text>
+                                {selectedUserLeave ? (
+                                    <Table 
+                                        size="small" 
+                                        pagination={false} 
+                                        bordered
+                                        showHeader={false}
+                                        columns={[
+                                            { dataIndex: 'label', width: '75%' },
+                                            { dataIndex: 'value', align: 'right', render: (val) => <b>{val} ngày</b> }
+                                        ]}
+                                        dataSource={[
+                                            { key: '1', label: `1. Tổng số ngày được nghỉ (Năm ${selectedYear})`, value: calcTotal(selectedUserLeave) },
+                                            { key: '2', label: '2. Số ngày đã nghỉ', value: calcTaken(selectedUserLeave) },
+                                            { key: '3', label: '3. Số ngày còn lại', value: calcRemain(selectedUserLeave) }
+                                        ]}
+                                        style={{ marginTop: 8 }}
+                                    />
+                                ) : (
+                                    <div style={{ marginTop: 4 }}>
+                                        <Text type="warning">Nhân viên này chưa có dữ liệu quỹ phép năm {selectedYear}.</Text>
+                                    </div>
+                                )}
+                            </div>
+                        </Card>
+                    )}
+                    
+                    <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 16 }}>Đề nghị được nghỉ phép:</Text>
+
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item name="from_date" label="Từ ngày" rules={[{ required: true }]}>
+                                <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} onChange={handleDateChange} />
+                            </Form.Item>
+                        </Col>
+                        <Col span={12}>
+                            <Form.Item name="to_date" label="Đến ngày" rules={[{ required: true }]}>
+                                <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} onChange={handleDateChange} />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Row gutter={16}>
+                        <Col span={12}>
+                            <Form.Item name="days_taken" label="Số ngày tính phép" rules={[{ required: true, message: 'Nhập số ngày bị trừ' }]}>
+                                <InputNumber min={0.5} step={0.5} style={{ width: '100%' }} placeholder="VD: 0.5, 1, 1.5" />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Row gutter={16}>
+                        <Col span={24}>
+                            <Form.Item name="location" label="Địa điểm">
+                                <Input placeholder="VD: TP. Cần Thơ..." />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Row gutter={16}>
+                        <Col span={24}>
+                            <Form.Item name="reason" label="Lý do nghỉ" rules={[{ required: true }]}>
+                                <Input.TextArea rows={3} placeholder="VD: Giải quyết việc cá nhân..." />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                    <Row gutter={16}>
+                        <Col span={24}>
+                            <Form.Item label="Đính kèm (Đơn xin nghỉ)">
+                                <Upload {...uploadProps}>
+                                    <Button icon={<UploadOutlined />}>Chọn file Ảnh hoặc PDF</Button>
+                                </Upload>
+                                <Text type="secondary" style={{ display: 'block', marginTop: 4, fontSize: 12 }}>Tối đa 3 ảnh, hoặc 1 file PDF duy nhất. (Tối đa 5MB/file)</Text>
+                            </Form.Item>
+                        </Col>
+                    </Row>
+                </Form>
+            </Modal>
+
+            {/* Profile Modal for viewing Leave History */}
+            <ProfileModal
+                open={!!selectedProfileUser}
+                onCancel={() => setSelectedProfileUser(null)}
+                user={selectedProfileUser}
+                onUpdateSuccess={() => {}}
+                initialSection="leaves"
+            />
         </div>
     );
 };

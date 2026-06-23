@@ -13,12 +13,13 @@ import { ExportDocxService } from './export-docx.service';
 import { RepairsGateway } from './repairs.gateway';
 import { UserDeviceGroup } from 'src/device-groups/entities/user-device-group.entity';
 import { Department } from 'src/departments/department.entity';
+import { UserDepartment } from 'src/departments/entities/user-department.entity';
 import { CertificatesModule } from 'src/certificates/certificates.module';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Repair, Device, User, StockOut, Item, Notification, UserDeviceGroup, Department]), CertificatesModule],
+    imports: [TypeOrmModule.forFeature([Repair, Device, User, StockOut, Item, Notification, UserDeviceGroup, Department, UserDepartment]), CertificatesModule],
     controllers: [RepairsController],
     providers: [RepairsService, NotificationService, ExportDocxService, RepairsGateway],
-    exports: [ExportDocxService],
+    exports: [ExportDocxService, RepairsGateway],
 })
 export class RepairsModule {}

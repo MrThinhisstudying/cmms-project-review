@@ -6,8 +6,10 @@ import { CreateProfileRequestDto } from './dto/create-profile-request.dto';
 import { ReviewProfileRequestDto } from './dto/review-profile-request.dto';
 import { UserService } from '../user/user.service';
 import { CertificatesService } from '../certificates/certificates.service';
+import { NotificationService } from '../notification/notification.service';
 import { RequestStatus } from './enums/request-status.enum';
 import { RequestType } from './enums/request-type.enum';
+import { UserRole } from '../user/user-role.enum';
 
 @Injectable()
 export class ProfileRequestService {
@@ -15,7 +17,8 @@ export class ProfileRequestService {
         @InjectRepository(ProfileUpdateRequest)
         private readonly profileRequestRepo: Repository<ProfileUpdateRequest>,
         private readonly userService: UserService,
-        private readonly certificatesService: CertificatesService
+        private readonly certificatesService: CertificatesService,
+        private readonly notificationService: NotificationService
     ) {}
 
     async createRequest(userId: number, dto: CreateProfileRequestDto): Promise<ProfileUpdateRequest> {
@@ -32,7 +35,19 @@ export class ProfileRequestService {
             status: RequestStatus.PENDING
         });
 
-        return await this.profileRequestRepo.save(request);
+        const saved = await this.profileRequestRepo.save(request);
+
+        // Gửi thông báo cho tất cả HR_MANAGER
+        const typeLabel = dto.request_type === 'UPDATE_INFO' ? 'cập nhật thông tin cá nhân' : 'thêm bằng cấp/chứng chỉ';
+        const hrUsers = await this.userService.findByRoles([UserRole.HR_MANAGER, UserRole.ADMIN]);
+        for (const hr of hrUsers) {
+            await this.notificationService.createForUser(
+                hr,
+                `${user.name} đã gửi yêu cầu ${typeLabel}. Vui lòng xem xét và phê duyệt.`
+            );
+        }
+
+        return saved;
     }
 
     async getPendingRequests(): Promise<ProfileUpdateRequest[]> {
@@ -79,10 +94,8 @@ export class ProfileRequestService {
         // Processing Approval
         if (dto.status === RequestStatus.APPROVED) {
             if (request.request_type === RequestType.UPDATE_INFO) {
-                const payload = request.data_payload;
-                await this.userService.updateProfile(request.user.user_id, {
-                    ...payload
-                });
+                const { _old_values, ...cleanPayload } = request.data_payload;
+                await this.userService.updateProfile(request.user.user_id, cleanPayload);
             } else if (request.request_type === RequestType.NEW_CERTIFICATE) {
                 const payload = request.data_payload;
                 await this.certificatesService.createCertificate(request.user.user_id, {
@@ -113,6 +126,24 @@ export class ProfileRequestService {
         request.reviewer = reviewer;
         request.notes = dto.notes;
 
-        return await this.profileRequestRepo.save(request);
+        const saved = await this.profileRequestRepo.save(request);
+
+        // Gửi thông báo cho nhân viên
+        if (dto.status === RequestStatus.APPROVED) {
+            const typeLabel = request.request_type === RequestType.UPDATE_INFO ? 'thay đổi thông tin cá nhân' : 'thêm bằng cấp/chứng chỉ';
+            await this.notificationService.createForUser(
+                request.user,
+                `Yêu cầu ${typeLabel} của bạn đã được ${reviewer.name} phê duyệt.`
+            );
+        } else if (dto.status === RequestStatus.REJECTED) {
+            const typeLabel = request.request_type === RequestType.UPDATE_INFO ? 'thay đổi thông tin cá nhân' : 'thêm bằng cấp/chứng chỉ';
+            const reason = dto.notes ? ` Lý do: ${dto.notes}` : '';
+            await this.notificationService.createForUser(
+                request.user,
+                `Yêu cầu ${typeLabel} của bạn đã bị ${reviewer.name} từ chối.${reason}`
+            );
+        }
+
+        return saved;
     }
 }

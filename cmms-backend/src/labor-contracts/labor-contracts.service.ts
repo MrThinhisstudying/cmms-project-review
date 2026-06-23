@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CreateLaborContractDto } from './dto/create-labor-contract.dto';
@@ -14,6 +14,13 @@ export class LaborContractsService {
   ) {}
 
   async create(createLaborContractDto: CreateLaborContractDto): Promise<LaborContract> {
+    const existing = await this.laborContractRepo.findOne({
+      where: { contract_number: createLaborContractDto.contract_number }
+    });
+    if (existing) {
+      throw new BadRequestException('Số hợp đồng này đã tồn tại');
+    }
+
     const contract = this.laborContractRepo.create({
         ...createLaborContractDto,
         user: { user_id: createLaborContractDto.user_id } as User
@@ -48,6 +55,14 @@ export class LaborContractsService {
 
   async update(id: number, updateLaborContractDto: UpdateLaborContractDto): Promise<LaborContract> {
     const contract = await this.findOne(id);
+    if (updateLaborContractDto.contract_number && updateLaborContractDto.contract_number !== contract.contract_number) {
+      const existing = await this.laborContractRepo.findOne({
+        where: { contract_number: updateLaborContractDto.contract_number }
+      });
+      if (existing && existing.id !== id) {
+        throw new BadRequestException('Số hợp đồng này đã tồn tại');
+      }
+    }
     const updated = Object.assign(contract, updateLaborContractDto);
     return await this.laborContractRepo.save(updated);
   }

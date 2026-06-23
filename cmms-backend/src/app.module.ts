@@ -33,6 +33,7 @@ import {ProfileRequestModule} from './profile-requests/profile-request.module';
 import { LaborContractsModule } from './labor-contracts/labor-contracts.module';
 import { RewardDisciplinesModule } from './reward-disciplines/reward-disciplines.module';
 import { AnnualLeavesModule } from './annual-leaves/annual-leaves.module';
+import { ActivityLogModule } from './common/modules/activity-log.module';
 
 @Module({
     imports: [
@@ -88,6 +89,7 @@ import { AnnualLeavesModule } from './annual-leaves/annual-leaves.module';
         LaborContractsModule,
         RewardDisciplinesModule,
         AnnualLeavesModule,
+        ActivityLogModule,
     ],
     controllers: [AppController],
     providers: [

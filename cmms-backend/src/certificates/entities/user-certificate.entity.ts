@@ -32,8 +32,8 @@ export class UserCertificate {
     @Column({ type: 'enum', enum: CertificateType, default: CertificateType.CCCM })
     type: CertificateType;
 
-    @Column({ nullable: true })
-    file_url: string; // Link tải file scan
+    @Column({ type: 'text', nullable: true })
+    file_url: string; // Lưu trữ JSON.stringify của mảng các file scan (max 5 urls)
 
     @Column({ type: 'date', nullable: true })
     start_date: Date; // Ngày bắt đầu khóa học
@@ -83,6 +83,16 @@ export class UserCertificate {
 
     @Column({ nullable: true })
     study_mode: string; // Hình thức đào tạo: Chính quy, Tại chức, Từ xa
+
+    // === Bằng THPT fields ===
+    @Column({ type: 'date', nullable: true })
+    exam_session: Date; // Khoá thi
+
+    @Column({ nullable: true })
+    exam_council: string; // Hội đồng thi
+
+    @Column({ nullable: true })
+    registry_number: string; // Số vào sổ cấp bằng
 
     // === Giấy phép lái xe (Driver License) fields ===
     @Column({ nullable: true })

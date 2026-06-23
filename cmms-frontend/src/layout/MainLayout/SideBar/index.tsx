@@ -15,8 +15,16 @@ interface SidebarProps {
   isMobile?: boolean; 
 }
 
-const hasRoleAccess = (item: SidebarMenuItem, role: string): boolean => {
-    return item.roles?.includes(role) || role === 'ADMIN';
+const hasRoleAccess = (item: SidebarMenuItem, role: string, userDepts?: any[]): boolean => {
+    // ADMIN luôn thấy tất cả
+    if (role === 'ADMIN') return true;
+    // Kiểm tra role trước
+    const roleMatch = item.roles?.includes(role);
+    // Nếu có departmentFilter, phải thỏa cả 2 điều kiện (role HOẶC departmentFilter)
+    if (item.departmentFilter) {
+        return roleMatch || item.departmentFilter(userDepts || []);
+    }
+    return roleMatch;
 };
 
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, isMobile = false }) => {
@@ -48,14 +56,15 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, isMobile = fal
 
   const { pendingCount } = useRepairsContext() || {};
   const userRole = user?.role ?? "";
+  const userDepts = user?.user_departments;
 
   const buildMenuItems = () => {
     return SIDEBAR_MENU
-      .filter(item => !item.logout && hasRoleAccess(item, userRole))
+      .filter(item => !item.logout && hasRoleAccess(item, userRole, userDepts))
       .map(item => {
         if (item.children && item.children.length > 0) {
           // Filter children by role
-          const visibleChildren = item.children.filter(child => hasRoleAccess(child, userRole));
+          const visibleChildren = item.children.filter(child => hasRoleAccess(child, userRole, userDepts));
           if (visibleChildren.length === 0) return null;
 
           return {

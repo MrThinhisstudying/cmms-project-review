@@ -24,6 +24,7 @@ import { getToken } from "../../utils/auth";
 import { uploadInventory } from "../../apis/inventory";
 import { exportInventoryToExcel } from "../../utils";
 import { IInventoryTab, IItem } from "../../types/inventory.types";
+import { useRefreshOnFocus } from "../../hooks/useRefreshOnFocus";
 
 const { Content } = Layout;
 const { Title } = Typography;
@@ -31,6 +32,9 @@ const { Title } = Typography;
 export function InventoryManagementPage() {
   const { categories, items, loading, refreshAll, tabs } = useInventoryContext();
   const { user } = useAuthContext();
+
+  // Phase A: Tự refetch khi user quay lại tab
+  useRefreshOnFocus(refreshAll);
   
   // Tabs active key (string)
   const [activeKey, setActiveKey] = useState<string>("0"); // Default to first tab (id=0 normally 'All')

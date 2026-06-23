@@ -27,7 +27,7 @@ export class ProfileUpdateRequest {
     data_payload: Record<string, any>;
 
     @ApiProperty({ description: 'Optional uploaded file for proof, e.g. a certificate PDF/image' })
-    @Column({ nullable: true })
+    @Column({ type: 'text', nullable: true })
     file_url?: string;
 
     @ApiProperty({ enum: RequestStatus })

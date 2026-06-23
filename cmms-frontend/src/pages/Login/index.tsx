@@ -88,8 +88,8 @@ const Login = () => {
           type: "success",
         });
 
-        updateUser(token);
         setToken(token, data.remember || false);
+        updateUser(token);
         navigate("/trang_chu");
       } else {
         showToast({

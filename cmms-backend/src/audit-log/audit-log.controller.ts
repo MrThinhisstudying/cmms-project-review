@@ -31,11 +31,14 @@ export class AuditController {
         @Query('actor_user_id') actorUserId?: string,
         @Query('entity') entity?: string,
         @Query('entity_id') entityId?: string,
+        @Query('action') action?: string,
+        @Query('date_from') dateFrom?: string,
+        @Query('date_to') dateTo?: string,
         @Query('page') page: any = 1,
-        @Query('limit') limit: any = 20,
+        @Query('limit') limit: any = 50,
     ) {
         if (user.role !== UserRole.ADMIN) throw new ForbiddenException('Chỉ admin mới xem full log');
-        return this.auditService.getAllLogs({actorUserId, entity, entityId}, Number(page), Number(limit));
+        return this.auditService.getAllLogs({actorUserId, entity, entityId, action, dateFrom, dateTo}, Number(page), Number(limit));
     }
 
     @Get('log/:logId')

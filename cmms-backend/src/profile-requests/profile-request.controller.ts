@@ -1,10 +1,10 @@
-import { Controller, Get, Post, Put, Body, Param, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, UseGuards, Request, UseInterceptors, UploadedFile, UploadedFiles, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JWTAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { ProfileRequestService } from './profile-request.service';
 import { CreateProfileRequestDto } from './dto/create-profile-request.dto';
 import { ReviewProfileRequestDto } from './dto/review-profile-request.dto';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { join, extname, basename } from 'path';
 import { compressImage } from '../common/utils/image-compression.util';
@@ -18,7 +18,7 @@ export class ProfileRequestController {
 
     @Post()
     @ApiOperation({ summary: 'Submit a new profile update request' })
-    @UseInterceptors(FileInterceptor('file', {
+    @UseInterceptors(FilesInterceptor('files', 5, {
         storage: diskStorage({
             destination: './uploads/certificates',
             filename: (req, file, cb) => {
@@ -30,14 +30,27 @@ export class ProfileRequestController {
     async createRequest(
         @Request() req, 
         @Body() body: any,
-        @UploadedFile() file: any
+        @UploadedFile() oldFile?: any,
+        @UploadedFiles() files?: any[]
     ) {
         let fileUrl: string | undefined;
-        if (file) {
-            const filePath = join(process.cwd(), 'uploads', 'certificates', file.filename);
-            const result = await compressImage(filePath);
-            const finalFilename = basename(result.outputPath);
-            fileUrl = `/uploads/certificates/${finalFilename}`;
+        let fileList = files || [];
+        if (!files && oldFile) fileList = [oldFile]; // backward compatible
+        
+        if (fileList && fileList.length > 0) {
+            const urls = [];
+            for (const f of fileList) {
+                const filePath = join(process.cwd(), 'uploads', 'certificates', f.filename);
+                try {
+                    const result = await compressImage(filePath);
+                    const finalFilename = basename(result.outputPath);
+                    urls.push(`/uploads/certificates/${finalFilename}`);
+                } catch (e) {
+                    // Fallback to original image if compression fails
+                    urls.push(`/uploads/certificates/${f.filename}`);
+                }
+            }
+            if (urls.length > 0) fileUrl = JSON.stringify(urls);
         }
         
         let dataPayload = body.data_payload;

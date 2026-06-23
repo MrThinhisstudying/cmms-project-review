@@ -11,6 +11,7 @@ import { User } from '../../user/user.entity';
 
 export enum ContractType {
     ONE_MONTH = '1_MONTH',
+    APPRENTICESHIP = 'APPRENTICESHIP',
     PROBATION = 'PROBATION',
     TWELVE_MONTHS = '12_MONTHS',
     TWENTY_FOUR_MONTHS = '24_MONTHS',

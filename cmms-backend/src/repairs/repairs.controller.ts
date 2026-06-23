@@ -188,8 +188,8 @@ export class RepairsController {
     @UseGuards(JWTAuthGuard, PermissionsGuard)
     @RequirePermissions('DELETE_REPAIR')
     @Delete(':id')
-    async remove(@Param('id') id: string) {
-        await this.repairService.remove(+id);
+    async remove(@Param('id') id: string, @Req() req) {
+        await this.repairService.remove(+id, req.user.role);
         return {message: 'Xóa phiếu thành công'};
     }
 }

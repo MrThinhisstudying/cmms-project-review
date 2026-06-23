@@ -43,6 +43,18 @@ export class Department {
     @OneToMany(() => Department, (department) => department.parent)
     children: Department[];
 
+    @ApiProperty({ enum: ['PHONG_BAN', 'DOI', 'TO'], default: 'TO' })
+    @Column({
+        type: 'enum',
+        enum: ['PHONG_BAN', 'DOI', 'TO'],
+        default: 'TO',
+    })
+    level: 'PHONG_BAN' | 'DOI' | 'TO';
+
+    @ApiProperty({ description: 'Đánh dấu thuộc hệ thống kỹ thuật', default: false })
+    @Column({ default: false })
+    is_technical: boolean;
+
     @ApiProperty({ enum: ['PERSONAL', 'GROUP', 'DEPARTMENT', 'ALL'], default: 'DEPARTMENT' })
     @Column({
         type: 'enum',

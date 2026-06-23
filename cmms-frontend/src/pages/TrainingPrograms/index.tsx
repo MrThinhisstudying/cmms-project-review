@@ -5,10 +5,14 @@ import { ITrainingProgram } from '../../types/certificates.types';
 import certificatesApi from '../../apis/certificates';
 import TrainingProgramModal from '../Users/components/TrainingProgramModal';
 import * as XLSX from 'xlsx';
+import { useAuthContext } from '../../context/AuthContext/AuthContext';
 
 const { Title } = Typography;
 
 const TrainingPrograms = () => {
+    const { user: currentAuthUser } = useAuthContext();
+    const canWrite = ['ADMIN', 'HR_MANAGER'].includes(currentAuthUser?.role || '');
+
     const [programs, setPrograms] = useState<ITrainingProgram[]>([]);
     const [loading, setLoading] = useState(false);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -158,7 +162,7 @@ const TrainingPrograms = () => {
             title: 'Thời hạn định kỳ (Tháng)', dataIndex: 'validity_months', key: 'validity_months',
             width: 250, align: 'center' as const,
         },
-        {
+        ...(canWrite ? [{
             title: 'Hành động', key: 'action', width: 150, align: 'center' as const,
             render: (_: any, record: ITrainingProgram) => (
                 <Space size="small">
@@ -172,26 +176,28 @@ const TrainingPrograms = () => {
                     </Popconfirm>
                 </Space>
             ),
-        },
+        }] : [])
     ];
 
     return (
         <Card>
             <div style={{ display: 'flex', justifyItems: 'center', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <Title level={4} style={{ margin: 0 }}>Quản lý Chương trình đào tạo / CCCM</Title>
-                <Space>
-                    <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
-                        Tải file mẫu
-                    </Button>
-                    <Upload beforeUpload={handleImportExcel} showUploadList={false} accept=".xlsx, .xls">
-                        <Button style={{ background: '#52c41a', color: '#fff', border: 'none' }} icon={<UploadOutlined />}>
-                            Import Excel
+                {canWrite && (
+                    <Space>
+                        <Button icon={<DownloadOutlined />} onClick={handleDownloadTemplate}>
+                            Tải file mẫu
                         </Button>
-                    </Upload>
-                    <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-                        Thêm thủ công
-                    </Button>
-                </Space>
+                        <Upload beforeUpload={handleImportExcel} showUploadList={false} accept=".xlsx, .xls">
+                            <Button style={{ background: '#52c41a', color: '#fff', border: 'none' }} icon={<UploadOutlined />}>
+                                Import Excel
+                            </Button>
+                        </Upload>
+                        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+                            Thêm thủ công
+                        </Button>
+                    </Space>
+                )}
             </div>
 
             <Row gutter={12} style={{ marginBottom: 16 }}>

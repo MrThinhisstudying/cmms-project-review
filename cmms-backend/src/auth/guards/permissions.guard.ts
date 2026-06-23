@@ -16,8 +16,14 @@ export class PermissionsGuard implements CanActivate {
 
         if (user.role === 'admin' || user.role === 'ADMIN') return true;
 
-        const userPermissions: string[] = user?.department?.permissions || [];
-        const hasPermission = requiredPermissions.some((p) => userPermissions.includes(p));
+        // Tổng hợp permissions từ department chính (legacy) + tất cả user_departments (mới)
+        const primaryPermissions: string[] = user?.department?.permissions || [];
+        const multiDeptPermissions: string[] = (user?.user_departments || []).flatMap(
+            (ud: any) => ud?.department?.permissions || []
+        );
+        const allPermissions = [...new Set([...primaryPermissions, ...multiDeptPermissions])];
+
+        const hasPermission = requiredPermissions.some((p) => allPermissions.includes(p));
         if (!hasPermission) throw new ForbiddenException('Bạn không có quyền thực hiện hành động này.');
 
         return true;

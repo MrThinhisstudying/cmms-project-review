@@ -5,10 +5,11 @@ import {
     SafetyCertificateOutlined, BookOutlined, CarOutlined, EditOutlined,
     PhoneOutlined, DeleteOutlined, CloseOutlined, FileTextOutlined,
     TrophyOutlined, CalendarOutlined, IdcardOutlined, MailOutlined,
-    TeamOutlined, ToolOutlined, GlobalOutlined, DesktopOutlined
+    TeamOutlined, ToolOutlined, GlobalOutlined, DesktopOutlined, EyeOutlined
 } from '@ant-design/icons';
 import { IUser } from '../../../../types/user.types';
-import { uploadSignature, updateUser } from '../../../../apis/users';
+import { uploadSignature, updateUser, uploadAvatar } from '../../../../apis/users';
+import { optimizeImageBeforeUpload } from '../../../../utils/imageOptimizer';
 import { getToken } from '../../../../utils/auth';
 import { getBackendImageUrl } from '../../../../utils/imageUrl';
 import QualificationModal from '../QualificationModal';
@@ -18,6 +19,9 @@ import { IEmployeeCertificate } from '../../../../types/certificates.types';
 import dayjs from 'dayjs';
 import { useAuthContext } from '../../../../context/AuthContext/AuthContext';
 import { createProfileRequest, getMyRequests, IProfileRequest } from '../../../../apis/profileRequests';
+import { createLaborContract } from '../../../../apis/laborContracts';
+import { createRewardDiscipline } from '../../../../apis/rewardDisciplines';
+import { Select } from 'antd';
 
 // ─────────────────────────── Types ───────────────────────────
 interface ProfileModalProps {
@@ -25,6 +29,7 @@ interface ProfileModalProps {
     onCancel: () => void;
     user: IUser | null;
     onUpdateSuccess: (updatedUser: IUser) => void;
+    initialSection?: SectionKey;
 }
 
 // ─────────────────────────── Helpers ─────────────────────────
@@ -58,8 +63,9 @@ const NAV_ITEMS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
 ];
 
 // ─────────────────────── Main Component ──────────────────────
-const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpdateSuccess }) => {
+const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpdateSuccess, initialSection }) => {
     const { user: currentUser } = useAuthContext();
+
     const [infoForm] = Form.useForm();
     const [passForm] = Form.useForm();
     const [loading, setLoading] = useState(false);
@@ -84,6 +90,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
     const [laborContracts, setLaborContracts] = useState<any[]>([]);
     const [rewardDisciplines, setRewardDisciplines] = useState<any[]>([]);
     const [annualLeaves, setAnnualLeaves] = useState<any[]>([]);
+    const [leaveHistories, setLeaveHistories] = useState<any[]>([]);
     const [historyLoading, setHistoryLoading] = useState(false);
 
     const [trainingPrograms, setTrainingPrograms] = useState<any[]>([]);
@@ -95,6 +102,13 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
     const [myRequests, setMyRequests] = useState<IProfileRequest[]>([]);
 
     const [loadedTabs, setLoadedTabs] = useState<Record<string, boolean>>({});
+
+    // ── Add Modal States ──
+    const [addContractOpen, setAddContractOpen] = useState(false);
+    const [addRewardOpen, setAddRewardOpen] = useState(false);
+    const [addModalLoading, setAddModalLoading] = useState(false);
+    const [contractForm] = Form.useForm();
+    const [rewardForm] = Form.useForm();
 
     // ── Data Loading ──
     useEffect(() => {
@@ -116,6 +130,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                 position: user.position,
                 date_of_birth: user.date_of_birth ? dayjs(user.date_of_birth) : null,
                 place_of_birth: user.place_of_birth,
+                gender: user.gender,
+                ethnicity: user.ethnicity,
                 cccd_issue_date: user.cccd_issue_date ? dayjs(user.cccd_issue_date) : null,
                 permanent_address: user.permanent_address,
                 temporary_address: user.temporary_address,
@@ -123,13 +139,13 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
             });
             setSignatureUrl(user.signature_url);
             passForm.resetFields();
-            setActiveSection('info');
+            setActiveSection(initialSection || 'info');
             setLoadedTabs({});
             fetchQuals();
             fetchCccmCerts();
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, user]);
+    }, [open, user, initialSection]);
 
     // Lazy-load data per section
     useEffect(() => {
@@ -156,9 +172,13 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
             if (activeSection === 'leaves' && !loadedTabs.leaves) {
                 setHistoryLoading(true);
                 try {
-                    const { getAnnualLeavesByUser } = await import('../../../../apis/annualLeaves');
-                    const data = await getAnnualLeavesByUser(user.user_id).catch(() => []);
-                    setAnnualLeaves(data);
+                    const { getAnnualLeavesByUser, getLeaveHistoriesByUser } = await import('../../../../apis/annualLeaves');
+                    const [leavesData, historiesData] = await Promise.all([
+                        getAnnualLeavesByUser(user.user_id).catch(() => []),
+                        getLeaveHistoriesByUser(user.user_id).catch(() => [])
+                    ]);
+                    setAnnualLeaves(leavesData);
+                    setLeaveHistories(historiesData);
                     setLoadedTabs(prev => ({ ...prev, leaves: true }));
                 } finally { setHistoryLoading(false); }
             }
@@ -203,20 +223,69 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
     };
 
     // ── Handlers ──
-    const handleUploadSignature = async (file: File) => {
-        if (file.size / 1024 / 1024 >= 5) {
-            message.error('Ảnh tải lên phải nhỏ hơn 5MB!');
-            return false;
-        }
+
+    // Refresh contract data
+    const refreshContracts = async () => {
+        if (!user) return;
         try {
-            const token = getToken();
-            const res = await uploadSignature(user!.user_id, file, token);
-            setSignatureUrl(res.signature_url);
-            onUpdateSuccess({ ...user!, signature_url: res.signature_url });
-            message.success('Cập nhật chữ ký thành công');
-        } catch (error: any) { message.error(error.message || 'Lỗi tải ảnh'); }
-        return false;
+            const { getLaborContractsByUser } = await import('../../../../apis/laborContracts');
+            const data = await getLaborContractsByUser(user.user_id).catch(() => []);
+            setLaborContracts(data);
+        } catch { /* silent */ }
     };
+
+    // Refresh reward/discipline data
+    const refreshRewards = async () => {
+        if (!user) return;
+        try {
+            const { getRewardDisciplinesByUser } = await import('../../../../apis/rewardDisciplines');
+            const data = await getRewardDisciplinesByUser(user.user_id).catch(() => []);
+            setRewardDisciplines(data);
+        } catch { /* silent */ }
+    };
+
+    const handleAddContract = async (values: any) => {
+        if (!user) return;
+        setAddModalLoading(true);
+        try {
+            await createLaborContract({
+                ...values,
+                user: user.user_id,
+                start_date: values.start_date?.format('YYYY-MM-DD'),
+                end_date: values.end_date?.format('YYYY-MM-DD'),
+            });
+            message.success('Th\u00eam h\u1ee3p \u0111\u1ed3ng th\u00e0nh c\u00f4ng');
+            setAddContractOpen(false);
+            contractForm.resetFields();
+            refreshContracts();
+            onUpdateSuccess(user);
+        } catch (err: any) {
+            message.error(err.message || 'L\u1ed7i th\u00eam h\u1ee3p \u0111\u1ed3ng');
+        } finally {
+            setAddModalLoading(false);
+        }
+    };
+
+    const handleAddReward = async (values: any) => {
+        if (!user) return;
+        setAddModalLoading(true);
+        try {
+            await createRewardDiscipline({
+                ...values,
+                user: user.user_id,
+                effective_date: values.effective_date?.format('YYYY-MM-DD'),
+            });
+            message.success('Th\u00eam quy\u1ebft \u0111\u1ecbnh th\u00e0nh c\u00f4ng');
+            setAddRewardOpen(false);
+            rewardForm.resetFields();
+            refreshRewards();
+        } catch (err: any) {
+            message.error(err.message || 'L\u1ed7i th\u00eam quy\u1ebft \u0111\u1ecbnh');
+        } finally {
+            setAddModalLoading(false);
+        }
+    };
+
 
     const handleChangePassword = async (values: any) => {
         if (!user) return;
@@ -232,10 +301,18 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
     };
 
     const handleAddQual = () => { setSelectedQual(null); setQualModalOpen(true); };
+    const handleEditQual = (cert: IEmployeeCertificate) => { setSelectedQual(cert); setQualModalOpen(true); };
+    const handleDeleteQual = async (id: number) => {
+        try {
+            await certificatesApi.deleteCertificate(id);
+            message.success('Đã xóa');
+            setQualifications(prev => prev.filter(q => q.id !== id));
+        } catch (error: any) { message.error(error.message || 'Lỗi khi xóa'); }
+    };
 
-    const handleQualModalOk = async (values: any, file?: File | null) => {
+    const handleQualModalOk = async (values: any, files?: File[]) => {
         if (!user || !currentUser) return;
-        if (file && file.size / 1024 / 1024 >= 5) {
+        if (files && files.some(f => f.size / 1024 / 1024 >= 5)) {
             message.error('File đính kèm phải nhỏ hơn 5MB!');
             return;
         }
@@ -243,16 +320,16 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
         try {
             if (isAdminOrHR) {
                 if (selectedQual) {
-                    const res = await certificatesApi.updateCertificate(selectedQual.id, values, file || undefined);
+                    const res = await certificatesApi.updateCertificate(selectedQual.id, values, files);
                     setQualifications(prev => prev.map(q => q.id === selectedQual.id ? res : q));
                     message.success('Cập nhật thành công');
                 } else {
-                    const res = await certificatesApi.createCertificate(user.user_id, values, file || undefined);
+                    const res = await certificatesApi.createCertificate(user.user_id, values, files);
                     setQualifications(prev => [...prev, res]);
                     message.success('Thêm mới thành công');
                 }
             } else {
-                await createProfileRequest({ request_type: 'NEW_CERTIFICATE', data_payload: values }, file || undefined);
+                await createProfileRequest({ request_type: 'NEW_CERTIFICATE', data_payload: values }, files);
                 message.success('Yêu cầu đã được gửi. Vui lòng chờ HR phê duyệt.');
             }
             setQualModalOpen(false);
@@ -272,25 +349,25 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
         } catch (error: any) { message.error(error.message || 'Lỗi khi xóa chứng chỉ'); }
     };
 
-    const handleCertModalOk = async (values: any, file?: File | null) => {
+    const handleCertModalOk = async (values: any, files?: File[]) => {
         if (!user) return;
-        if (file && file.size / 1024 / 1024 >= 5) {
-            message.error('File đính kèm phải nhỏ hơn 5MB!');
+        if (files && files.some(f => f.size / 1024 / 1024 >= 5)) {
+            message.error('Các file đính kèm phải nhỏ hơn 5MB!');
             return;
         }
         setModalLoading(true);
         try {
             if (selectedCert) {
-                const res = await certificatesApi.updateCertificate(selectedCert.id, values, file || undefined);
+                const res = await certificatesApi.updateCertificate(selectedCert.id, values, files);
                 setEditCertificates(prev => prev.map(c => c.id === selectedCert.id ? res : c));
                 message.success('Cập nhật thành công');
             } else {
                 if (isAdminOrHR) {
-                    const res = await certificatesApi.createCertificate(user.user_id, values, file || undefined);
+                    const res = await certificatesApi.createCertificate(user.user_id, values, files);
                     setEditCertificates(prev => [...prev, res]);
                     message.success('Thêm mới thành công');
                 } else {
-                    await createProfileRequest({ request_type: 'NEW_CERTIFICATE', data_payload: values }, file || undefined);
+                    await createProfileRequest({ request_type: 'NEW_CERTIFICATE', data_payload: values }, files);
                     message.success('Yêu cầu đã được gửi. Vui lòng chờ HR phê duyệt.');
                 }
             }
@@ -322,6 +399,14 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
     if (!user) return null;
 
     const groupNames = user.user_device_groups?.map(g => g.device_group?.name).filter(Boolean).join(', ') || 'Chưa vào nhóm';
+    // Đơn vị tổ chức từ user_departments
+    const primaryDept = user.user_departments?.find(ud => ud.is_primary);
+    const primaryDeptName = primaryDept?.department?.name || user.department?.name || '-';
+    const otherDepts = user.user_departments
+        ?.filter(ud => !ud.is_primary)
+        ?.map(ud => ud.department?.name)
+        .filter(Boolean)
+        .join(', ') || '-';
     const degrees = qualifications.filter(c => c.qualification_type === 'BANG_CAP' || (!c.qualification_type && !c.license_class));
     const licenses = qualifications.filter(c => c.qualification_type === 'GIAY_PHEP_LAI_XE' || (!c.qualification_type && c.license_class));
     const englishCerts = qualifications.filter(c => c.qualification_type === 'CHUNG_CHI_NGOAI_NGU');
@@ -343,7 +428,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                 <UserOutlined className="pf-section-icon" />
                 <span>Thông tin cá nhân</span>
             </div>
-            <Form form={infoForm} layout="vertical" onFinish={async (vals) => {
+            <Form form={infoForm} layout="vertical" disabled={!isOwnProfile && !isAdminOrHR} onFinish={async (vals) => {
                 setLoading(true);
                 try {
                     const formatted = {
@@ -357,37 +442,61 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                         onUpdateSuccess({ ...user!, ...formatted });
                         message.success('Cập nhật thông tin thành công');
                     } else {
-                        const token = getToken();
-                        const autoApproveFields = {
-                            phone_number: formatted.phone_number,
-                            temporary_address: formatted.temporary_address
-                        };
-                        const mustApproveFields = {
+                        // Tất cả thông tin đều phải gửi phê duyệt (trừ ADMIN/HR)
+                        const allFields: Record<string, any> = {
                             name: formatted.name,
+                            phone_number: formatted.phone_number,
                             date_of_birth: formatted.date_of_birth,
                             place_of_birth: formatted.place_of_birth,
+                            gender: formatted.gender,
+                            ethnicity: formatted.ethnicity,
                             citizen_identification_card: formatted.citizen_identification_card,
                             cccd_issue_date: formatted.cccd_issue_date,
+                            position: formatted.position,
                             permanent_address: formatted.permanent_address,
+                            temporary_address: formatted.temporary_address,
                             hometown: formatted.hometown
                         };
-                        
-                        await updateUser(user.user_id, autoApproveFields as any, token);
-                        onUpdateSuccess({ ...user!, ...autoApproveFields });
-                        
-                        // Clean empty fields from mustApproveFields to prevent redundant requests
-                        const changedMustApprove = Object.keys(mustApproveFields).reduce((acc: any, key) => {
-                            if (mustApproveFields[key as keyof typeof mustApproveFields] !== undefined) {
-                                acc[key] = mustApproveFields[key as keyof typeof mustApproveFields];
-                            }
-                            return acc;
-                        }, {});
 
-                        if (Object.keys(changedMustApprove).length > 0) {
-                            await createProfileRequest({ request_type: 'UPDATE_INFO', data_payload: changedMustApprove });
-                            message.success('Cập nhật SĐT/Tạm trú. Các thông tin khác đã gửi chờ phê duyệt.');
+                        // Giá trị hiện tại để so sánh
+                        const oldValues: Record<string, any> = {
+                            name: user.name || '',
+                            phone_number: user.phone_number || '',
+                            date_of_birth: user.date_of_birth ? dayjs(user.date_of_birth).format('YYYY-MM-DD') : '',
+                            place_of_birth: user.place_of_birth || '',
+                            gender: user.gender || '',
+                            ethnicity: user.ethnicity || '',
+                            citizen_identification_card: user.citizen_identification_card || '',
+                            cccd_issue_date: user.cccd_issue_date ? dayjs(user.cccd_issue_date).format('YYYY-MM-DD') : '',
+                            position: user.position || '',
+                            permanent_address: user.permanent_address || '',
+                            temporary_address: user.temporary_address || '',
+                            hometown: user.hometown || '',
+                        };
+
+                        const changedFields: Record<string, any> = {};
+                        const changedOldValues: Record<string, any> = {};
+
+                        Object.keys(allFields).forEach((key) => {
+                            const normalizedNew = allFields[key] || '';
+                            const normalizedOld = oldValues[key] || '';
+                            if (normalizedNew !== normalizedOld) {
+                                changedFields[key] = allFields[key];
+                                changedOldValues[key] = oldValues[key] || null;
+                            }
+                        });
+
+                        if (Object.keys(changedFields).length > 0) {
+                            await createProfileRequest({
+                                request_type: 'UPDATE_INFO',
+                                data_payload: {
+                                    ...changedFields,
+                                    _old_values: changedOldValues,
+                                }
+                            });
+                            message.success('Yêu cầu thay đổi đã được gửi cho Quản lý nhân sự phê duyệt.');
                         } else {
-                            message.success('Cập nhật thông tin thành công');
+                            message.info('Không có thông tin nào thay đổi.');
                         }
                     }
                 } catch (e: any) { message.error(e.message || 'Lỗi cập nhật'); }
@@ -412,7 +521,16 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                         <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày" />
                     </Form.Item>
                     <Form.Item name="place_of_birth" label="Nơi sinh">
-                        <Input placeholder="Ví dụ: Thanh Hóa" />
+                        <Input placeholder="Ví dụ: TP. Hồ Chí Minh" />
+                    </Form.Item>
+                    <Form.Item name="gender" label="Giới tính">
+                        <Select placeholder="-- Chọn --" allowClear>
+                            <Select.Option value="Nam">Nam</Select.Option>
+                            <Select.Option value="Nữ">Nữ</Select.Option>
+                        </Select>
+                    </Form.Item>
+                    <Form.Item name="ethnicity" label="Dân tộc">
+                        <Input placeholder="Ví dụ: Kinh" />
                     </Form.Item>
                     <Form.Item name="citizen_identification_card" label="Số CCCD" rules={[{ pattern: /^[0-9]{12}$/, message: 'CCCD phải có 12 số' }]}>
                         <Input />
@@ -430,12 +548,50 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                 <Form.Item name="hometown" label="Quê quán">
                     <Input placeholder="Ví dụ: TP. Hồ Chí Minh" />
                 </Form.Item>
-                <Button type="primary" htmlType="submit" loading={loading} className="pf-submit-btn">
-                    Lưu thông tin cá nhân
-                </Button>
+                {(isOwnProfile || isAdminOrHR) && (
+                    <Button type="primary" htmlType="submit" loading={loading} className="pf-submit-btn">
+                        Lưu thông tin cá nhân
+                    </Button>
+                )}
             </Form>
         </div>
     );
+
+    const renderCertFileLinks = (file_url?: string) => {
+        if (!file_url) return null;
+        let urls: string[] = [];
+        try {
+            const parsed = JSON.parse(file_url);
+            if (Array.isArray(parsed)) urls = parsed;
+            else urls = [file_url];
+        } catch {
+            urls = [file_url];
+        }
+        if (!urls.length || urls[0] === null) return null;
+        
+        return (
+            <div style={{ marginTop: 12, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: '#8c8c8c' }}><FileTextOutlined style={{ marginRight: 4 }}/> Đính kèm: </span>
+                {urls.map((u, i) => (
+                    <Button key={i} size="small" type="dashed" href={getBackendImageUrl(u)} target="_blank" icon={<EyeOutlined />}>
+                        File {urls.length > 1 ? i + 1 : ''}
+                    </Button>
+                ))}
+            </div>
+        );
+    };
+
+    const renderActionButtons = (cert: IEmployeeCertificate) => {
+        if (!isAdminOrHR) return null;
+        return (
+            <div style={{ marginTop: 12, borderTop: '1px solid #f0f0f0', paddingTop: 8, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <Button size="small" type="text" icon={<EditOutlined style={{ color: '#1890ff' }}/>} onClick={() => handleEditQual(cert)}>Sửa</Button>
+                <Popconfirm title="Xóa chứng chỉ này?" onConfirm={() => handleDeleteQual(cert.id)} okText="Xóa" cancelText="Hủy" okButtonProps={{ danger: true }}>
+                    <Button size="small" type="text" danger icon={<DeleteOutlined />}>Xóa</Button>
+                </Popconfirm>
+            </div>
+        );
+    };
 
     // ── SECTION 2: Bằng cấp & GPLX ──
     const renderCertificatesSection = () => {
@@ -446,7 +602,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     <SafetyCertificateOutlined className="pf-section-icon" />
                     <span>Bằng cấp & Giấy phép lái xe</span>
                     {expiringCount > 0 && <Badge count={expiringCount} style={{ backgroundColor: '#faad14', marginLeft: 8 }} />}
-                    {!isPublicView && <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleAddQual} style={{ marginLeft: 'auto' }}>Thêm mới</Button>}
+                    {(isOwnProfile || isAdminOrHR) && <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleAddQual} style={{ marginLeft: 'auto' }}>Thêm mới</Button>}
                 </div>
 
                 {/* Bằng cấp */}
@@ -455,45 +611,75 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     {degrees.length === 0 ? (
                         <Empty description="Chưa có bằng cấp" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                     ) : (
-                        <div className="pf-card-list">
-                            {degrees.map(cert => (
-                                <div key={cert.id} className="pf-card">
-                                    <div className="pf-card-top">
-                                        <Tag color="blue">{cert.degree_type || 'Bằng cấp'}</Tag>
-                                        {cert.grading && <Tag color="green">{cert.grading}</Tag>}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16 }}>
+                            {degrees.map(cert => {
+                                const isTHPT = cert.degree_type === 'THPT';
+                                return (
+                                <div key={cert.id} style={{ border: '1px solid #e8e8e8', borderRadius: 8, padding: 12, background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                                        <Tag color={isTHPT ? 'gold' : 'blue'} style={{ border: 'none', background: isTHPT ? '#fffbe6' : '#e6f7ff', color: isTHPT ? '#d48806' : '#1890ff', fontWeight: 500 }}>
+                                            {isTHPT ? 'Bằng TN THPT' : cert.degree_type || 'Bằng cấp'}
+                                        </Tag>
+                                        {cert.grading && <Tag color="green" style={{ border: 'none', background: '#f6ffed' }}>{cert.grading}</Tag>}
                                     </div>
-                                    <div className="pf-card-title">{cert.major || '-'}</div>
-                                    <div className="pf-card-sub">
-                                        {cert.school_name || '-'}{cert.graduation_year ? ` • ${cert.graduation_year}` : ''}{cert.study_mode ? ` • ${cert.study_mode}` : ''}
+                                    <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6, color: '#262626' }}>
+                                        {isTHPT ? (cert.school_name || '-') : (cert.major || '-')}
                                     </div>
+                                    <div style={{ fontSize: 13, color: '#595959', flex: 1 }}>
+                                        {isTHPT ? (
+                                            <>
+                                                {cert.exam_session && <div style={{ marginBottom: 4 }}>Khoá thi: <span style={{ fontWeight: 500 }}>{dayjs(cert.exam_session).format('DD/MM/YYYY')}</span></div>}
+                                                {cert.exam_council && <div style={{ marginBottom: 4 }}>Hội đồng thi: <span style={{ fontWeight: 500 }}>{cert.exam_council}</span></div>}
+                                                {cert.certificate_number && <div style={{ marginBottom: 4 }}>Số hiệu: <span style={{ fontWeight: 500 }}>{cert.certificate_number}</span></div>}
+                                                {cert.registry_number && <div style={{ marginBottom: 4 }}>Số vào sổ: <span style={{ fontWeight: 500 }}>{cert.registry_number}</span></div>}
+                                                {cert.graduation_year && <div style={{ marginBottom: 4 }}>Năm TN: <span style={{ fontWeight: 500 }}>{cert.graduation_year}</span></div>}
+                                                {cert.issue_date && <div style={{ marginBottom: 4 }}>Ngày cấp: <span style={{ fontWeight: 500 }}>{dayjs(cert.issue_date).format('DD/MM/YYYY')}</span></div>}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <div style={{ marginBottom: 4 }}>Trường: <span style={{ fontWeight: 500 }}>{cert.school_name || '-'}</span></div>
+                                                {cert.graduation_year && <div style={{ marginBottom: 4 }}>Tốt nghiệp: <span style={{ fontWeight: 500 }}>{cert.graduation_year}</span></div>}
+                                                {cert.study_mode && <div style={{ marginBottom: 4 }}>Hình thức: <span style={{ fontWeight: 500 }}>{cert.study_mode}</span></div>}
+                                            </>
+                                        )}
+                                    </div>
+                                    {renderCertFileLinks(cert.file_url)}
+                                    {renderActionButtons(cert)}
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>
 
                 {/* GPLX */}
-                <div className="pf-subsection">
+                <div className="pf-subsection" style={{ marginTop: 24 }}>
                     <div className="pf-subsection-title"><CarOutlined style={{ color: '#faad14' }} /> Giấy phép lái xe ({licenses.length})</div>
                     {licenses.length === 0 ? (
                         <Empty description="Chưa có GPLX" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                     ) : (
-                        <div className="pf-card-list">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16 }}>
                             {licenses.map(cert => {
                                 const status = getExpiryStatus(cert);
+                                const isWarning = status === 'warning' || status === 'expired';
                                 return (
-                                    <div key={cert.id} className={`pf-card pf-card--${status}`}>
-                                        {(status === 'warning' || status === 'expired') && (
-                                            <div className={`pf-card-badge pf-card-badge--${status}`}>
-                                                <WarningOutlined /> {status === 'expired' ? 'Hết hạn' : `Còn ${dayjs(cert.expiry_date).diff(dayjs(), 'day')} ngày`}
-                                            </div>
-                                        )}
-                                        <div className="pf-card-top">
-                                            <Tag color="blue" style={{ fontSize: 14, fontWeight: 700, padding: '2px 10px' }}>{cert.license_class}</Tag>
-                                            <span className="pf-card-date">
-                                                {cert.is_permanent ? 'Vĩnh viễn' : cert.expiry_date ? dayjs(cert.expiry_date).format('DD/MM/YYYY') : '-'}
-                                            </span>
+                                    <div key={cert.id} style={{ border: isWarning ? '1px solid #ffccc7' : '1px solid #e8e8e8', borderRadius: 8, padding: 12, background: isWarning ? '#fff2f0' : '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                                            <Tag color="orange" style={{ fontSize: 14, fontWeight: 700, padding: '2px 10px', border: 'none' }}>Hạng {cert.license_class}</Tag>
+                                            {isWarning && (
+                                                <Tag color={status === 'expired' ? 'error' : 'warning'} icon={<WarningOutlined />} style={{ border: 'none' }}>
+                                                    {status === 'expired' ? 'Hết hạn' : `Còn ${dayjs(cert.expiry_date).diff(dayjs(), 'day')} ngày`}
+                                                </Tag>
+                                            )}
                                         </div>
+                                        <div style={{ fontSize: 13, color: '#595959', flex: 1 }}>
+                                            <div style={{ marginBottom: 6 }}>Ngày cấp: <span style={{ fontWeight: 500, color: '#262626' }}>{cert.issue_date ? dayjs(cert.issue_date).format('DD/MM/YYYY') : '-'}</span></div>
+                                            <div style={{ marginBottom: 6 }}>Có giá trị đến: <span style={{ fontWeight: 500, color: '#262626' }}>{cert.is_permanent ? 'Vĩnh viễn' : cert.expiry_date ? dayjs(cert.expiry_date).format('DD/MM/YYYY') : '-'}</span></div>
+                                            <div style={{ marginBottom: 6 }}>Nơi cấp: <span style={{ fontWeight: 500, color: '#262626' }}>{cert.issuing_place || '-'}</span></div>
+                                            <div style={{ marginBottom: 6 }}>Số GPLX: <span style={{ fontWeight: 500, color: '#262626' }}>{cert.certificate_number || '-'}</span></div>
+                                        </div>
+                                        {renderCertFileLinks(cert.file_url)}
+                                        {renderActionButtons(cert)}
                                     </div>
                                 );
                             })}
@@ -502,23 +688,25 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                 </div>
 
                 {/* Ngoại ngữ */}
-                <div className="pf-subsection">
+                <div className="pf-subsection" style={{ marginTop: 24 }}>
                     <div className="pf-subsection-title"><GlobalOutlined style={{ color: '#eb2f96' }} /> Chứng chỉ Ngoại ngữ ({englishCerts.length})</div>
                     {englishCerts.length === 0 ? (
                         <Empty description="Chưa có thông tin" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                     ) : (
-                        <div className="pf-card-list">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16 }}>
                             {englishCerts.map(cert => (
-                                <div key={cert.id} className="pf-card">
-                                    <div className="pf-card-top">
-                                        <Tag color="magenta">{cert.degree_type || 'Ngoại ngữ'}</Tag>
-                                        {cert.grading && <Tag color="green">{cert.grading}</Tag>}
+                                <div key={cert.id} style={{ border: '1px solid #e8e8e8', borderRadius: 8, padding: 12, background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                                        <Tag color="magenta" style={{ border: 'none', background: '#fff0f6' }}>{cert.degree_type || 'Ngoại ngữ'}</Tag>
+                                        {cert.grading && <Tag color="green" style={{ border: 'none' }}>{cert.grading}</Tag>}
                                     </div>
-                                    <div className="pf-card-title">{cert.school_name || '-'}</div>
-                                    <div className="pf-card-sub">
-                                        Ngày cấp: {cert.issue_date ? dayjs(cert.issue_date).format('DD/MM/YYYY') : '-'}
-                                        {cert.is_permanent ? ' • Vĩnh viễn' : cert.expiry_date ? ` • Hết hạn: ${dayjs(cert.expiry_date).format('DD/MM/YYYY')}` : ''}
+                                    <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8, color: '#262626' }}>{cert.school_name || '-'}</div>
+                                    <div style={{ fontSize: 13, color: '#595959', flex: 1 }}>
+                                        <div style={{ marginBottom: 4 }}>Ngày cấp: <span style={{ fontWeight: 500 }}>{cert.issue_date ? dayjs(cert.issue_date).format('DD/MM/YYYY') : '-'}</span></div>
+                                        <div style={{ marginBottom: 4 }}>Hết hạn: <span style={{ fontWeight: 500 }}>{cert.is_permanent ? 'Vĩnh viễn' : cert.expiry_date ? dayjs(cert.expiry_date).format('DD/MM/YYYY') : '-'}</span></div>
                                     </div>
+                                    {renderCertFileLinks(cert.file_url)}
+                                    {renderActionButtons(cert)}
                                 </div>
                             ))}
                         </div>
@@ -526,23 +714,25 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                 </div>
 
                 {/* Tin học */}
-                <div className="pf-subsection">
+                <div className="pf-subsection" style={{ marginTop: 24 }}>
                     <div className="pf-subsection-title"><DesktopOutlined style={{ color: '#13c2c2' }} /> Chứng chỉ Tin học ({itCerts.length})</div>
                     {itCerts.length === 0 ? (
                         <Empty description="Chưa có thông tin" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                     ) : (
-                        <div className="pf-card-list">
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16 }}>
                             {itCerts.map(cert => (
-                                <div key={cert.id} className="pf-card">
-                                    <div className="pf-card-top">
-                                        <Tag color="cyan">{cert.degree_type || 'Tin học'}</Tag>
-                                        {cert.grading && <Tag color="green">{cert.grading}</Tag>}
+                                <div key={cert.id} style={{ border: '1px solid #e8e8e8', borderRadius: 8, padding: 12, background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                                        <Tag color="cyan" style={{ border: 'none', background: '#e6fffb' }}>{cert.degree_type || 'Tin học'}</Tag>
+                                        {cert.grading && <Tag color="green" style={{ border: 'none' }}>{cert.grading}</Tag>}
                                     </div>
-                                    <div className="pf-card-title">{cert.school_name || '-'}</div>
-                                    <div className="pf-card-sub">
-                                        Ngày cấp: {cert.issue_date ? dayjs(cert.issue_date).format('DD/MM/YYYY') : '-'}
-                                        {cert.is_permanent ? ' • Vĩnh viễn' : cert.expiry_date ? ` • Hết hạn: ${dayjs(cert.expiry_date).format('DD/MM/YYYY')}` : ''}
+                                    <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8, color: '#262626' }}>{cert.school_name || '-'}</div>
+                                    <div style={{ fontSize: 13, color: '#595959', flex: 1 }}>
+                                        <div style={{ marginBottom: 4 }}>Ngày cấp: <span style={{ fontWeight: 500 }}>{cert.issue_date ? dayjs(cert.issue_date).format('DD/MM/YYYY') : '-'}</span></div>
+                                        <div style={{ marginBottom: 4 }}>Hết hạn: <span style={{ fontWeight: 500 }}>{cert.is_permanent ? 'Vĩnh viễn' : cert.expiry_date ? dayjs(cert.expiry_date).format('DD/MM/YYYY') : '-'}</span></div>
                                     </div>
+                                    {renderCertFileLinks(cert.file_url)}
+                                    {renderActionButtons(cert)}
                                 </div>
                             ))}
                         </div>
@@ -581,6 +771,51 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
 
     const renderCccmSection = () => {
         if (cccmLoading && historyLoading) return <div className="pf-loading"><Spin tip="Đang tải..." /></div>;
+        
+        const now = dayjs();
+        const splitCerts = (certs: IEmployeeCertificate[]) => {
+            const active: IEmployeeCertificate[] = [];
+            const history: IEmployeeCertificate[] = [];
+            certs.forEach(cert => {
+                if (cert.status === 'REVOKED' || cert.status === 'EXPIRED') {
+                    history.push(cert);
+                } else if (cert.next_training_date) {
+                    const daysExpired = now.diff(dayjs(cert.next_training_date), 'day');
+                    if (daysExpired >= 14) {
+                        history.push(cert);
+                    } else {
+                        active.push(cert);
+                    }
+                } else {
+                    active.push(cert);
+                }
+            });
+            return { active, history };
+        };
+
+        const { active: activeReadonly, history: historyReadonly } = splitCerts(cccmCerts);
+        const { active: activeEdit, history: historyEdit } = splitCerts(editCertificates);
+
+        const readonlyColumns = [
+            { title: 'Tên chứng chỉ', render: (_: any, r: IEmployeeCertificate) => (<div><div style={{ fontWeight: 600, fontSize: 13 }}>{r.program?.name || '-'}</div></div>) },
+            { title: 'Ngày ban hành QĐ', width: 120, render: (_: any, r: IEmployeeCertificate) => r.issue_date ? dayjs(r.issue_date).format('DD/MM/YYYY') : '-' },
+            {
+                title: 'Hết hạn định kỳ', width: 120, render: (_: any, r: IEmployeeCertificate) => {
+                    const end = r.end_date || r.expiry_date || r.next_training_date;
+                    if (!end) return <span style={{ color: '#999' }}>Không có</span>;
+                    const st = getCccmExpiryStatus ? getCccmExpiryStatus(r) : 'ok';
+                    const color = st === 'expired' ? '#ff4d4f' : st === 'warning' ? '#faad14' : '#52c41a';
+                    return <span style={{ color, fontWeight: 600 }}>{(st !== 'ok') && <WarningOutlined style={{ marginRight: 4 }} />}{dayjs(end).format('DD/MM/YYYY')}</span>;
+                }
+            },
+            {
+                title: 'T.Thái', width: 90, align: 'center' as const, render: (_: any, r: IEmployeeCertificate) => {
+                    const st = getCccmExpiryStatus ? getCccmExpiryStatus(r) : 'ok';
+                    return <Tag color={st === 'expired' ? 'red' : st === 'warning' ? 'orange' : 'green'}>{st === 'expired' ? 'Hết hạn' : st === 'warning' ? 'Sắp hết' : 'Còn HL'}</Tag>;
+                }
+            },
+        ];
+
         return (
             <div className="pf-section">
                 <div className="pf-section-header">
@@ -592,48 +827,42 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
 
                 {/* CCCM Summary (read-only view) */}
                 {!isAdminOrHR && (
-                    <div className="pf-subsection">
-                        <div className="pf-subsection-title">Chứng chỉ chuyên môn ({cccmCerts.length})</div>
-                        {cccmCerts.length === 0 ? (
-                            <Empty description="Chưa có CCCM" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                        ) : (
-                            <Table
-                                dataSource={cccmCerts} rowKey="id" pagination={false} size="small" bordered
-                                scroll={{ x: 'max-content' }}
-                                columns={[
-                                    { title: 'Tên chứng chỉ', render: (_: any, r: IEmployeeCertificate) => (<div><div style={{ fontWeight: 600, fontSize: 13 }}>{r.program?.name || '-'}</div></div>) },
-                                    { title: 'Ngày ban hành QĐ', width: 120, render: (_: any, r: IEmployeeCertificate) => r.issue_date ? dayjs(r.issue_date).format('DD/MM/YYYY') : '-' },
-                                    {
-                                        title: 'Hết hạn định kỳ', width: 120, render: (_: any, r: IEmployeeCertificate) => {
-                                            const end = r.end_date || r.expiry_date;
-                                            if (!end) return <span style={{ color: '#999' }}>Không có</span>;
-                                            const st = getCccmExpiryStatus(r);
-                                            const color = st === 'expired' ? '#ff4d4f' : st === 'warning' ? '#faad14' : '#52c41a';
-                                            return <span style={{ color, fontWeight: 600 }}>{(st !== 'ok') && <WarningOutlined style={{ marginRight: 4 }} />}{dayjs(end).format('DD/MM/YYYY')}</span>;
-                                        }
-                                    },
-                                    {
-                                        title: 'T.Thái', width: 90, align: 'center' as const, render: (_: any, r: IEmployeeCertificate) => {
-                                            const st = getCccmExpiryStatus(r);
-                                            return <Tag color={st === 'expired' ? 'red' : st === 'warning' ? 'orange' : 'green'}>{st === 'expired' ? 'Hết hạn' : st === 'warning' ? 'Sắp hết' : 'Còn HL'}</Tag>;
-                                        }
-                                    },
-                                ]}
-                            />
+                    <>
+                        <div className="pf-subsection">
+                            <div className="pf-subsection-title">Chứng chỉ chuyên môn ({activeReadonly.length})</div>
+                            {activeReadonly.length === 0 ? (
+                                <Empty description="Chưa có CCCM hiện tại" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                            ) : (
+                                <Table dataSource={activeReadonly} rowKey="id" pagination={false} size="small" bordered scroll={{ x: 'max-content' }} columns={readonlyColumns} />
+                            )}
+                        </div>
+                        {historyReadonly.length > 0 && (
+                            <div className="pf-subsection">
+                                <div className="pf-subsection-title" style={{ color: '#8c8c8c' }}>Lịch sử đào tạo ({historyReadonly.length})</div>
+                                <Table dataSource={historyReadonly} rowKey="id" pagination={{ pageSize: 5 }} size="small" bordered scroll={{ x: 'max-content' }} columns={readonlyColumns} />
+                            </div>
                         )}
-                    </div>
+                    </>
                 )}
 
                 {/* CCCM Editable Table (Admin/HR view) */}
                 {isAdminOrHR && (
-                    <div className="pf-subsection">
-                        <div className="pf-subsection-title">Quản lý CCCM ({editCertificates.length})</div>
-                        <Table
-                            dataSource={editCertificates} columns={cccmColumns} rowKey="id"
-                            loading={historyLoading} scroll={{ x: 'max-content' }}
-                            pagination={false} bordered size="small"
-                        />
-                    </div>
+                    <>
+                        <div className="pf-subsection">
+                            <div className="pf-subsection-title">Quản lý CCCM ({activeEdit.length})</div>
+                            {activeEdit.length === 0 ? (
+                                <Empty description="Chưa có CCCM hiện tại" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                            ) : (
+                                <Table dataSource={activeEdit} columns={cccmColumns} rowKey="id" loading={historyLoading} scroll={{ x: 'max-content' }} pagination={false} bordered size="small" />
+                            )}
+                        </div>
+                        {historyEdit.length > 0 && (
+                            <div className="pf-subsection">
+                                <div className="pf-subsection-title" style={{ color: '#8c8c8c' }}>Lịch sử đào tạo ({historyEdit.length})</div>
+                                <Table dataSource={historyEdit} columns={cccmColumns} rowKey="id" loading={historyLoading} scroll={{ x: 'max-content' }} pagination={{ pageSize: 5 }} bordered size="small" />
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         );
@@ -644,9 +873,24 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
         if (historyLoading && !loadedTabs.contracts) return <div className="pf-loading"><Spin tip="Đang tải..." /></div>;
         return (
             <div className="pf-section">
-                <div className="pf-section-header">
-                    <FileTextOutlined className="pf-section-icon" />
-                    <span>Hợp đồng lao động</span>
+                <div className="pf-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <FileTextOutlined className="pf-section-icon" />
+                        <span>Hợp đồng lao động</span>
+                    </div>
+                    {isAdminOrHR && (
+                        <Button 
+                            type="primary" 
+                            size="small" 
+                            icon={<PlusOutlined />}
+                            onClick={() => {
+                                contractForm.resetFields();
+                                setAddContractOpen(true);
+                            }}
+                        >
+                            Thêm hợp đồng
+                        </Button>
+                    )}
                 </div>
                 {laborContracts.length === 0 ? (
                     <Empty description="Chưa có thông tin hợp đồng" image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -656,13 +900,32 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                             <div key={c.id} className="pf-card">
                                 <div className="pf-card-top">
                                     <span style={{ fontWeight: 600, color: '#1890ff' }}>{c.contract_number}</span>
-                                    <Tag color={c.status === 'ACTIVE' ? 'green' : c.status === 'EXPIRED' ? 'orange' : 'red'}>
-                                        {c.status === 'ACTIVE' ? 'Còn hiệu lực' : c.status === 'EXPIRED' ? 'Hết hạn' : 'Chấm dứt'}
-                                    </Tag>
+                                    {(() => {
+                                        if (c.status === 'TERMINATED') return <Tag color="red">Chấm dứt</Tag>;
+                                        if (c.status === 'EXPIRED') return <Tag color="orange">Đã hết hạn</Tag>;
+                                        if (c.end_date) {
+                                            const end = dayjs(c.end_date);
+                                            const now = dayjs();
+                                            if (end.isBefore(now)) return <Tag color="red">Hết hạn (Chưa cập nhật)</Tag>;
+                                            const daysLeft = end.diff(now, 'day');
+                                            if (daysLeft <= 30) return <Tag color="warning">Sắp hết hạn ({daysLeft} ngày)</Tag>;
+                                        }
+                                        return <Tag color="green">Còn hiệu lực</Tag>;
+                                    })()}
                                 </div>
                                 <Descriptions size="small" column={1} style={{ marginTop: 8 }}>
                                     <Descriptions.Item label="Chức danh">{c.job_title || 'N/A'}</Descriptions.Item>
-                                    <Descriptions.Item label="Loại HĐ">{c.contract_type}</Descriptions.Item>
+                                    <Descriptions.Item label="Loại HĐ">
+                                        {{
+                                            '1_MONTH': '1 Tháng',
+                                            'APPRENTICESHIP': 'Học việc',
+                                            'PROBATION': 'Thử việc',
+                                            '12_MONTHS': '12 tháng',
+                                            '24_MONTHS': '2 Năm',
+                                            '36_MONTHS': '36 tháng',
+                                            'INDEFINITE': 'Vô thời hạn'
+                                        }[c.contract_type as string] || c.contract_type}
+                                    </Descriptions.Item>
                                     <Descriptions.Item label="Thời hạn">
                                         {dayjs(c.start_date).format('DD/MM/YYYY')} → {c.end_date ? dayjs(c.end_date).format('DD/MM/YYYY') : 'Vô thời hạn'}
                                     </Descriptions.Item>
@@ -680,9 +943,25 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
         if (historyLoading && !loadedTabs.history) return <div className="pf-loading"><Spin tip="Đang tải..." /></div>;
         return (
             <div className="pf-section">
-                <div className="pf-section-header">
-                    <TrophyOutlined className="pf-section-icon" />
-                    <span>Khen thưởng & Kỷ luật</span>
+                <div className="pf-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                        <TrophyOutlined className="pf-section-icon" />
+                        <span>Khen thưởng & Kỷ luật</span>
+                    </div>
+                    {isAdminOrHR && (
+                        <Button 
+                            type="primary" 
+                            size="small" 
+                            icon={<PlusOutlined />}
+                            style={{ background: '#722ed1', borderColor: '#722ed1' }}
+                            onClick={() => {
+                                rewardForm.resetFields();
+                                setAddRewardOpen(true);
+                            }}
+                        >
+                            Thêm KT/KL
+                        </Button>
+                    )}
                 </div>
                 {rewardDisciplines.length === 0 ? (
                     <Empty description="Chưa có thông tin khen thưởng / kỷ luật" image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -746,6 +1025,61 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                         })}
                     </div>
                 )}
+
+                <div className="pf-subsection" style={{ marginTop: 24 }}>
+                    <div className="pf-subsection-title">Lịch sử nghỉ phép ({leaveHistories.length})</div>
+                    {leaveHistories.length === 0 ? (
+                        <Empty description="Chưa có lịch sử nghỉ phép" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                    ) : (
+                        <Table 
+                            dataSource={leaveHistories} 
+                            rowKey="id" 
+                            pagination={{ pageSize: 5 }} 
+                            size="small" 
+                            bordered 
+                            scroll={{ x: 800 }}
+                            columns={[
+                                {
+                                    title: 'Thời gian',
+                                    render: (_: any, r: any) => (
+                                        <span>{dayjs(r.from_date).format('DD/MM/YYYY')} - {dayjs(r.to_date).format('DD/MM/YYYY')}</span>
+                                    )
+                                },
+                                {
+                                    title: 'Số ngày',
+                                    dataIndex: 'days_taken',
+                                    render: (val: number) => <span style={{ color: '#ff4d4f', fontWeight: 600 }}>{val}</span>
+                                },
+                                {
+                                    title: 'Lý do',
+                                    dataIndex: 'reason',
+                                    ellipsis: true,
+                                },
+                                {
+                                    title: 'Đính kèm',
+                                    dataIndex: 'attachments',
+                                    render: (attachments: string[]) => {
+                                        if (!attachments || attachments.length === 0) return <span style={{ color: '#999' }}>Không có</span>;
+                                        return (
+                                            <Space direction="vertical" size="small">
+                                                {attachments.map((url, i) => (
+                                                    <a key={i} href={`${process.env.REACT_APP_BASE_URL?.replace('/api', '')}${url}`} target="_blank" rel="noreferrer" style={{ fontSize: 13 }}>
+                                                        <FileTextOutlined /> Xem file {i + 1}
+                                                    </a>
+                                                ))}
+                                            </Space>
+                                        );
+                                    }
+                                },
+                                {
+                                    title: 'Ngày duyệt',
+                                    dataIndex: 'created_at',
+                                    render: (d: string) => <span style={{ color: '#8c8c8c' }}>{dayjs(d).format('DD/MM/YYYY')}</span>
+                                }
+                            ]} 
+                        />
+                    )}
+                </div>
             </div>
         );
     };
@@ -818,9 +1152,36 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     <aside className="pf-sidebar">
                         {/* User card */}
                         <div className="pf-user-card">
-                            <Avatar size={72} src={user.avatar} icon={<UserOutlined />} className="pf-avatar" />
+                            {(isOwnProfile || isAdminOrHR) ? (
+                                <Upload
+                                    showUploadList={false}
+                                    accept="image/*"
+                                    customRequest={async (options) => {
+                                        try {
+                                            const token = getToken();
+                                            const optimizedFile = await optimizeImageBeforeUpload(options.file as File, 800, 0.8);
+                                            const res = await uploadAvatar(user.user_id, optimizedFile, token);
+                                            message.success('Cập nhật ảnh đại diện thành công');
+                                            options.onSuccess?.(res);
+                                            onUpdateSuccess({ ...user, avatar: res.avatar });
+                                        } catch (err: any) {
+                                            message.error(err.message || 'Tải lên thất bại');
+                                            options.onError?.(err);
+                                        }
+                                    }}
+                                >
+                                    <Badge
+                                        count={<div style={{ width: 24, height: 24, background: '#1890ff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '2px solid #001529' }}><EditOutlined style={{ color: '#fff', fontSize: 12 }} /></div>}
+                                        offset={[-10, 60]}
+                                    >
+                                        <Avatar size={72} src={user.avatar ? getBackendImageUrl(user.avatar) : undefined} icon={<UserOutlined />} className="pf-avatar" style={{ cursor: 'pointer' }} />
+                                    </Badge>
+                                </Upload>
+                            ) : (
+                                <Avatar size={72} src={user.avatar ? getBackendImageUrl(user.avatar) : undefined} icon={<UserOutlined />} className="pf-avatar" />
+                            )}
                             <div className="pf-user-name">{user.name}</div>
-                            <Tag color={getRoleColor(user.role)} className="pf-user-role">{getRoleLabel(user.role)}</Tag>
+                            <Tag color={getRoleColor(user.role)} className="pf-user-role">{user.position || getRoleLabel(user.role)}</Tag>
                         </div>
 
                         {/* Quick info */}
@@ -829,17 +1190,44 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                                 { icon: <IdcardOutlined />, label: 'MSNV', value: user.employee_code || '-' },
                                 { icon: <MailOutlined />, label: 'Email', value: user.email },
                                 { icon: <PhoneOutlined />, label: 'SĐT', value: user.phone_number || '-' },
-                                { icon: <TeamOutlined />, label: 'P.Ban', value: user.department?.name || '-' },
-                                { icon: <ToolOutlined />, label: 'Nhóm', value: groupNames },
                             ].map((item, i) => (
                                 <Tooltip key={i} title={`${item.label}: ${item.value}`} placement="right">
                                     <div className="pf-quick-row">
                                         <span className="pf-quick-icon">{item.icon}</span>
+                                        <span className="pf-quick-label">{item.label}:</span>
                                         <span className="pf-quick-value">{item.value}</span>
                                     </div>
                                 </Tooltip>
                             ))}
                         </div>
+
+                        {/* Đơn vị tổ chức */}
+                        {user.user_departments && user.user_departments.length > 0 && (
+                            <div className="pf-dept-section">
+                                <div className="pf-dept-title">
+                                    <TeamOutlined style={{ fontSize: 12 }} />
+                                    <span>Đơn vị tổ chức</span>
+                                </div>
+                                <div className="pf-dept-tags">
+                                    {user.user_departments
+                                        .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
+                                        .map((ud, idx) => {
+                                            const roleLabel = ud.role_in_dept === 'LEAD' ? 'Trưởng' : ud.role_in_dept === 'DEPUTY_LEAD' ? 'Phó' : '';
+                                            const tagColor = ud.role_in_dept === 'LEAD' ? 'gold' : ud.role_in_dept === 'DEPUTY_LEAD' ? 'blue' : 'default';
+                                            const deptName = ud.department?.name || `Dept#${ud.dept_id}`;
+                                            return (
+                                                <Tooltip key={idx} title={`${deptName}${roleLabel ? ' - ' + roleLabel : ''}${ud.is_primary ? ' (Chính)' : ''}`}>
+                                                    <Tag color={tagColor} className="pf-dept-tag">
+                                                        {ud.is_primary && <span style={{ marginRight: 2 }}>★</span>}
+                                                        {deptName}
+                                                        {roleLabel && <span style={{ opacity: 0.7, marginLeft: 3, fontSize: 10 }}>({roleLabel})</span>}
+                                                    </Tag>
+                                                </Tooltip>
+                                            );
+                                        })}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Navigation */}
                         <nav className="pf-nav">
@@ -867,7 +1255,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                                 ) : (
                                     <div className="pf-sig-empty">Chưa có</div>
                                 )}
-                                {!isPublicView && (
+                                {(isOwnProfile || isAdminOrHR) && (
                                     <Upload showUploadList={false} customRequest={async (options) => {
                                         try {
                                             const token = getToken();
@@ -948,12 +1336,25 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     .pf-user-role { margin-top: 6px; font-size: 11px; }
 
                     .pf-quick-info { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+
+                    .pf-dept-section { padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+                    .pf-dept-title {
+                        display: flex; align-items: center; gap: 6px; font-size: 11px;
+                        color: rgba(255,255,255,0.4); margin-bottom: 8px; text-transform: uppercase;
+                        letter-spacing: 0.5px; font-weight: 600;
+                    }
+                    .pf-dept-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+                    .pf-dept-tag {
+                        font-size: 11px !important; border-radius: 4px !important;
+                        margin: 0 !important; line-height: 20px !important; cursor: default;
+                    }
                     .pf-quick-row {
                         display: flex; align-items: center; gap: 8px; padding: 5px 0;
                         font-size: 12px; color: rgba(255,255,255,0.75);
                     }
                     .pf-quick-icon { color: rgba(255,255,255,0.4); font-size: 13px; flex-shrink: 0; width: 16px; text-align: center; }
-                    .pf-quick-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                    .pf-quick-label { width: 65px; flex-shrink: 0; }
+                    .pf-quick-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: #fff; flex: 1; }
 
                     .pf-nav { padding: 8px 8px; flex: 1; }
                     .pf-nav-item {
@@ -984,6 +1385,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     .pf-section-header {
                         display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: #001529;
                         margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #e8e8e8;
+                        padding-right: 30px;
                     }
                     .pf-section-icon { font-size: 20px; color: #1890ff; }
 
@@ -1062,6 +1464,85 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                         <Input.Password prefix={<LockOutlined />} size="large" />
                     </Form.Item>
                     <Button type="primary" htmlType="submit" size="large" loading={loading} block danger style={{ marginTop: 12 }}>Đổi mật khẩu</Button>
+                </Form>
+            </Modal>
+
+            {/* Add Contract Modal */}
+            <Modal
+                title="➕ Thêm hợp đồng lao động"
+                open={addContractOpen}
+                onCancel={() => { setAddContractOpen(false); contractForm.resetFields(); }}
+                onOk={() => contractForm.submit()}
+                confirmLoading={addModalLoading}
+                okText="Lưu hợp đồng"
+                cancelText="Hủy"
+                width={520}
+                destroyOnClose
+            >
+                <Form form={contractForm} layout="vertical" onFinish={handleAddContract} style={{ marginTop: 16 }}>
+                    <Form.Item name="contract_number" label="Số hợp đồng" rules={[{ required: true, message: 'Nhập số hợp đồng' }]}>
+                        <Input placeholder="VD: HĐ-2026-001" />
+                    </Form.Item>
+                    <Form.Item name="contract_type" label="Loại hợp đồng" rules={[{ required: true, message: 'Chọn loại hợp đồng' }]}>
+                        <Select placeholder="Chọn loại hợp đồng">
+                            <Select.Option value="1_MONTH">1 Tháng</Select.Option>
+                            <Select.Option value="APPRENTICESHIP">Học việc</Select.Option>
+                            <Select.Option value="PROBATION">Thử việc</Select.Option>
+                            <Select.Option value="12_MONTHS">12 Tháng</Select.Option>
+                            <Select.Option value="24_MONTHS">24 Tháng</Select.Option>
+                            <Select.Option value="36_MONTHS">36 Tháng</Select.Option>
+                            <Select.Option value="INDEFINITE">Không xác định</Select.Option>
+                        </Select>
+                    </Form.Item>
+                    <Form.Item name="job_title" label="Chức danh">
+                        <Input placeholder="VD: Nhân viên kỹ thuật" />
+                    </Form.Item>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                        <Form.Item name="start_date" label="Ngày bắt đầu" rules={[{ required: true, message: 'Chọn ngày' }]}>
+                            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                        </Form.Item>
+                        <Form.Item name="end_date" label="Ngày kết thúc">
+                            <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                        </Form.Item>
+                    </div>
+                    <Form.Item name="status" label="Trạng thái" initialValue="ACTIVE">
+                        <Select>
+                            <Select.Option value="ACTIVE">Còn hiệu lực</Select.Option>
+                            <Select.Option value="EXPIRED">Hết hạn</Select.Option>
+                            <Select.Option value="TERMINATED">Chấm dứt</Select.Option>
+                        </Select>
+                    </Form.Item>
+                </Form>
+            </Modal>
+
+            {/* Add Reward/Discipline Modal */}
+            <Modal
+                title="➕ Thêm Khen thưởng / Kỷ luật"
+                open={addRewardOpen}
+                onCancel={() => { setAddRewardOpen(false); rewardForm.resetFields(); }}
+                onOk={() => rewardForm.submit()}
+                confirmLoading={addModalLoading}
+                okText="Lưu quyết định"
+                cancelText="Hủy"
+                width={520}
+                destroyOnClose
+            >
+                <Form form={rewardForm} layout="vertical" onFinish={handleAddReward} style={{ marginTop: 16 }}>
+                    <Form.Item name="record_type" label="Loại" rules={[{ required: true, message: 'Chọn loại' }]}>
+                        <Select placeholder="Chọn loại">
+                            <Select.Option value="REWARD">🏆 Khen thưởng</Select.Option>
+                            <Select.Option value="DISCIPLINE">⚠️ Kỷ luật</Select.Option>
+                        </Select>
+                    </Form.Item>
+                    <Form.Item name="decision_number" label="Số quyết định" rules={[{ required: true, message: 'Nhập số quyết định' }]}>
+                        <Input placeholder="VD: QĐ-2026-001" />
+                    </Form.Item>
+                    <Form.Item name="content" label="Nội dung" rules={[{ required: true, message: 'Nhập nội dung' }]}>
+                        <Input.TextArea rows={3} placeholder="Mô tả nội dung khen thưởng / kỷ luật" />
+                    </Form.Item>
+                    <Form.Item name="effective_date" label="Ngày hiệu lực" rules={[{ required: true, message: 'Chọn ngày' }]}>
+                        <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                    </Form.Item>
                 </Form>
             </Modal>
         </>

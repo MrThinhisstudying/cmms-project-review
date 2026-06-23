@@ -33,6 +33,10 @@ export interface IEmployeeCertificate {
     school_name?: string;
     graduation_year?: number;
     study_mode?: string;
+    // THPT fields
+    exam_session?: string;
+    exam_council?: string;
+    registry_number?: string;
     // GPLX fields
     license_class?: string;
     issuing_place?: string;

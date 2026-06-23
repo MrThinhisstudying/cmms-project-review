@@ -14,7 +14,7 @@ import { useNotificationContext } from "../../../context/NotificationContext/Not
 import { useUsersContext } from "../../../context/UsersContext/UsersContext";
 import { Link, useLocation } from "react-router-dom";
 import ProfileModal from "../../../pages/Users/components/ProfileModal";
-
+import { getBackendImageUrl } from "../../../utils/imageUrl";
 
 const { Header } = Layout;
 const { Text } = Typography;
@@ -165,7 +165,8 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
       'TECHNICIAN': 'Nhân viên kỹ thuật',
       'ADMIN': 'Quản trị viên',
       'DIRECTOR': 'Ban giám đốc',
-      'MANAGER': 'Quản lý'
+      'MANAGER': 'Quản lý',
+      'HR_MANAGER': 'Quản lý Nhân sự'
   };
 
   return (
@@ -202,24 +203,26 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
 
             <Space size={24}>
                 {/* 360 Search Input */}
-                <div style={{ lineHeight: 'normal', display: 'flex', alignItems: 'center' }}>
-                    <AutoComplete
-                        style={{ width: 300 }}
-                        dropdownMatchSelectWidth={350}
-                        options={searchOptions}
-                        onSelect={handleSelectUser}
-                        onSearch={setSearchTerm}
-                        value={searchTerm}
-                        allowClear
-                    >
-                        <Input 
-                            placeholder="Tìm kiếm NV (Tên / Mã)..." 
-                            suffix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-                            style={{ borderRadius: 6 }}
-                            onKeyDown={handleKeyDown}
-                        />
-                    </AutoComplete>
-                </div>
+                {user && ['ADMIN', 'HR_MANAGER', 'DIRECTOR', 'UNIT_HEAD'].includes(user.role) && (
+                    <div style={{ lineHeight: 'normal', display: 'flex', alignItems: 'center' }}>
+                        <AutoComplete
+                            style={{ width: 300 }}
+                            dropdownMatchSelectWidth={350}
+                            options={searchOptions}
+                            onSelect={handleSelectUser}
+                            onSearch={setSearchTerm}
+                            value={searchTerm}
+                            allowClear
+                        >
+                            <Input 
+                                placeholder="Tìm kiếm NV (Tên / Mã)..." 
+                                suffix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                                style={{ borderRadius: 6 }}
+                                onKeyDown={handleKeyDown}
+                            />
+                        </AutoComplete>
+                    </div>
+                )}
 
                 {/* Notification */}
                 <Dropdown 
@@ -297,13 +300,13 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
                 <Dropdown menu={{ items: userMenu }} trigger={['click']} placement="bottomRight">
                     <Space style={{ cursor: 'pointer' }}>
                         <Avatar 
-                            src={user?.avatar} 
+                            src={user?.avatar ? getBackendImageUrl(user?.avatar) : undefined} 
                             icon={<UserOutlined />} 
                             style={{ backgroundColor: '#1890ff' }} 
                         />
                         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
                              <Text strong style={{ fontSize: 14 }}>{user?.name || 'Administrator'}</Text>
-                             <Text type="secondary" style={{ fontSize: 11 }}>{ROLE_MAP[user?.role] || user?.role}</Text>
+                             <Text type="secondary" style={{ fontSize: 11 }}>{user?.position || ROLE_MAP[user?.role] || user?.role}</Text>
                         </div>
                     </Space>
                 </Dropdown>

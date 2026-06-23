@@ -60,7 +60,7 @@ const certificatesApi = {
         return res.json();
     },
 
-    createCertificate: async (userId: number | string, data: any, file?: File): Promise<IEmployeeCertificate> => {
+    createCertificate: async (userId: number | string, data: any, files?: File[]): Promise<IEmployeeCertificate> => {
         const token = getToken();
         const formData = new FormData();
         Object.keys(data).forEach(key => {
@@ -68,8 +68,8 @@ const certificatesApi = {
                 formData.append(key, data[key]);
             }
         });
-        if (file) {
-            formData.append('file', file);
+        if (files && files.length > 0) {
+            files.forEach(f => formData.append('files', f));
         }
         const res = await fetch(`${process.env.REACT_APP_BASE_URL}/certificates/user/${userId}`, {
             method: 'POST',
@@ -80,7 +80,7 @@ const certificatesApi = {
         return res.json();
     },
 
-    updateCertificate: async (id: number | string, data: any, file?: File): Promise<IEmployeeCertificate> => {
+    updateCertificate: async (id: number | string, data: any, files?: File[]): Promise<IEmployeeCertificate> => {
         const token = getToken();
         const formData = new FormData();
         Object.keys(data).forEach(key => {
@@ -88,8 +88,8 @@ const certificatesApi = {
                 formData.append(key, data[key]);
             }
         });
-        if (file) {
-            formData.append('file', file);
+        if (files && files.length > 0) {
+            files.forEach(f => formData.append('files', f));
         }
         const res = await fetch(`${process.env.REACT_APP_BASE_URL}/certificates/${id}`, {
             method: 'PUT',

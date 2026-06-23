@@ -23,6 +23,7 @@ import {
   BulkRepairUpsertPayload,
 } from "../../types/repairs.types";
 import { StockOutPayload } from "../../types/inventory.types";
+import { useRefreshOnFocus } from "../../hooks/useRefreshOnFocus";
 
 type Role = "manager" | "technician" | "admin" | "viewer";
 
@@ -74,6 +75,9 @@ export const RepairsProvider = ({
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Phase A: Tự refetch khi user quay lại tab
+  useRefreshOnFocus(reload);
 
   const setRole = (role: Role) => setUserRole(role);
 

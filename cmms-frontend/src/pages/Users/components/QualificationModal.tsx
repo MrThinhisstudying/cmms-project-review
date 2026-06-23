@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Modal, Form, Input, Select, DatePicker, Upload, message, InputNumber, Button, Radio, Checkbox } from 'antd';
+import { Modal, Form, Input, Select, DatePicker, Upload, message, InputNumber, Button, Radio, Checkbox, Alert } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
 import { IEmployeeCertificate } from '../../../types/certificates.types';
 import { IUser } from '../../../types/user.types';
@@ -10,14 +10,14 @@ type QualSubType = 'BANG_CAP' | 'GIAY_PHEP_LAI_XE' | 'CHUNG_CHI_NGOAI_NGU' | 'CH
 interface QualificationModalProps {
     open: boolean;
     onCancel: () => void;
-    onOk: (values: any, file?: File | null) => void;
+    onOk: (values: any, files?: File[]) => void;
     initialValues?: IEmployeeCertificate | null;
     loading?: boolean;
     user?: IUser | null;
     okText?: string;
 }
 
-const DEGREE_TYPES = ['Trung cấp', 'Cao đẳng', 'Cử nhân', 'Kỹ sư', 'Thạc sĩ', 'Tiến sĩ'];
+const DEGREE_TYPES = ['THPT', 'Trung cấp', 'Cao đẳng', 'Cử nhân', 'Kỹ sư', 'Thạc sĩ', 'Tiến sĩ'];
 const STUDY_MODES = ['Chính quy', 'Tại chức', 'Từ xa', 'Liên thông'];
 const GRADINGS = ['Xuất sắc', 'Giỏi', 'Khá', 'Trung bình'];
 const LICENSE_CLASSES = ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'C', 'D', 'E', 'F', 'FB2', 'FC', 'FD', 'FE'];
@@ -38,12 +38,14 @@ const QualificationModal: React.FC<QualificationModalProps> = ({
     const [fileList, setFileList] = useState<any[]>([]);
     const [subType, setSubType] = useState<QualSubType>('BANG_CAP');
     const [isPermanent, setIsPermanent] = useState(false);
+    const [selectedDegreeType, setSelectedDegreeType] = useState<string>('');
 
     useEffect(() => {
         if (open && initialValues) {
             const qualType = initialValues.qualification_type as QualSubType || 'BANG_CAP';
             setSubType(qualType);
             setIsPermanent(initialValues.is_permanent || false);
+            setSelectedDegreeType(initialValues.degree_type || '');
             form.setFieldsValue({
                 ...initialValues,
                 qualification_type: qualType,
@@ -51,13 +53,23 @@ const QualificationModal: React.FC<QualificationModalProps> = ({
                 expiry_date: initialValues.expiry_date ? dayjs(initialValues.expiry_date) : null,
                 is_permanent: initialValues.is_permanent || false,
             });
+            let urls: string[] = [];
             if (initialValues.file_url) {
-                setFileList([{
-                    uid: '-1',
-                    name: initialValues.file_url.split('/').pop(),
+                try {
+                    const parsed = JSON.parse(initialValues.file_url);
+                    if (Array.isArray(parsed)) urls = parsed;
+                    else urls = [initialValues.file_url];
+                } catch {
+                    urls = [initialValues.file_url];
+                }
+            }
+            if (urls.length > 0) {
+                setFileList(urls.map((u, i) => ({
+                    uid: String(-1 - i),
+                    name: u.split('/').pop(),
                     status: 'done',
-                    url: `http://localhost:3000${initialValues.file_url}`,
-                }]);
+                    url: `http://localhost:3000${u}`
+                })));
             } else {
                 setFileList([]);
             }
@@ -66,6 +78,7 @@ const QualificationModal: React.FC<QualificationModalProps> = ({
             setFileList([]);
             setSubType('BANG_CAP');
             setIsPermanent(false);
+            setSelectedDegreeType('');
         }
     }, [open, initialValues, form]);
 
@@ -78,17 +91,18 @@ const QualificationModal: React.FC<QualificationModalProps> = ({
                 qualification_type: subType,
                 issue_date: values.issue_date?.format('YYYY-MM-DD'),
                 expiry_date: values.expiry_date?.format('YYYY-MM-DD'),
+                exam_session: values.exam_session?.format('YYYY-MM-DD'),
                 is_permanent: ['GIAY_PHEP_LAI_XE', 'CHUNG_CHI_NGOAI_NGU', 'CHUNG_CHI_TIN_HOC'].includes(subType) ? isPermanent : false,
             };
-            const file = fileList.length > 0 && fileList[0].originFileObj ? fileList[0].originFileObj : null;
-            onOk(formattedValues, file);
+            const files: File[] = fileList.map(f => f.originFileObj).filter(Boolean);
+            onOk(formattedValues, files);
         } catch (error) {
             console.error('Validation failed:', error);
         }
     };
 
     const handleUploadChange = ({ fileList: newFileList }: any) => {
-        setFileList(newFileList.slice(-1));
+        setFileList(newFileList);
     };
 
     const beforeUpload = (file: File) => {
@@ -145,6 +159,7 @@ const QualificationModal: React.FC<QualificationModalProps> = ({
                                 setSubType(e.target.value);
                                 form.resetFields();
                                 setIsPermanent(false);
+                                setSelectedDegreeType('');
                             }}
                             optionType="button"
                             buttonStyle="solid"
@@ -160,72 +175,136 @@ const QualificationModal: React.FC<QualificationModalProps> = ({
                 {/* === BẰNG CẤP FORM === */}
                 {subType === 'BANG_CAP' && (
                     <>
-                        <div style={{ display: 'flex', gap: 16, marginBottom: 0 }}>
-                            <Form.Item
-                                name="degree_type"
-                                label={<span>Loại bằng <span style={{ color: 'red' }}>*</span></span>}
-                                style={{ flex: 1 }}
-                                rules={[{ required: true, message: 'Vui lòng chọn loại bằng' }]}
-                            >
-                                <Select placeholder="-- Chọn --">
-                                    {DEGREE_TYPES.map(d => (
-                                        <Select.Option key={d} value={d}>{d}</Select.Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-
-                            <Form.Item
-                                name="major"
-                                label={<span>Chuyên ngành <span style={{ color: 'red' }}>*</span></span>}
-                                style={{ flex: 2 }}
-                                rules={[{ required: true, message: 'Vui lòng nhập chuyên ngành' }]}
-                            >
-                                <Input placeholder="Ví dụ: Tài chính - Ngân hàng" />
-                            </Form.Item>
-                        </div>
-
                         <Form.Item
-                            name="school_name"
-                            label={<span>Trường / Cơ sở đào tạo <span style={{ color: 'red' }}>*</span></span>}
-                            rules={[{ required: true, message: 'Vui lòng nhập tên trường' }]}
+                            name="degree_type"
+                            label={<span>Loại bằng <span style={{ color: 'red' }}>*</span></span>}
+                            rules={[{ required: true, message: 'Vui lòng chọn loại bằng' }]}
                         >
-                            <Input placeholder="Ví dụ: Đại học Hoa Sen" />
+                            <Select placeholder="-- Chọn --" onChange={(v) => setSelectedDegreeType(v)}>
+                                {DEGREE_TYPES.map(d => (
+                                    <Select.Option key={d} value={d}>{d === 'THPT' ? 'THPT - Bằng tốt nghiệp THPT' : d}</Select.Option>
+                                ))}
+                            </Select>
                         </Form.Item>
 
-                        <div style={{ display: 'flex', gap: 16, marginBottom: 0 }}>
-                            <Form.Item
-                                name="graduation_year"
-                                label="Năm tốt nghiệp"
-                                style={{ flex: 1 }}
-                            >
-                                <InputNumber min={1950} max={2100} style={{ width: '100%' }} placeholder="2013" />
-                            </Form.Item>
+                        {/* --- Form THPT --- */}
+                        {selectedDegreeType === 'THPT' && (
+                            <>
+                                {/* Cảnh báo thiếu thông tin cá nhân */}
+                                {user && (!user.gender || !user.ethnicity || !user.date_of_birth || !user.place_of_birth) && (
+                                    <Alert
+                                        type="warning"
+                                        showIcon
+                                        style={{ marginBottom: 16 }}
+                                        message="Thiếu thông tin cá nhân"
+                                        description={
+                                            <span>
+                                                Bằng THPT yêu cầu: Giới tính, Dân tộc, Ngày sinh, Nơi sinh.
+                                                Vui lòng cập nhật tại <b>Thông tin cá nhân</b> trước khi lưu.
+                                                {' '}Thiếu: {[
+                                                    !user.gender && 'Giới tính',
+                                                    !user.ethnicity && 'Dân tộc',
+                                                    !user.date_of_birth && 'Ngày sinh',
+                                                    !user.place_of_birth && 'Nơi sinh',
+                                                ].filter(Boolean).join(', ')}
+                                            </span>
+                                        }
+                                    />
+                                )}
+                                <Form.Item
+                                    name="school_name"
+                                    label={<span>Trường THPT <span style={{ color: 'red' }}>*</span></span>}
+                                    rules={[{ required: true, message: 'Vui lòng nhập tên trường' }]}
+                                >
+                                    <Input placeholder="Ví dụ: THPT Nguyễn Thái Bình" />
+                                </Form.Item>
 
-                            <Form.Item name="grading" label="Xếp loại tốt nghiệp" style={{ flex: 1 }}>
-                                <Select placeholder="-- Chọn --" allowClear>
-                                    {GRADINGS.map(g => (
-                                        <Select.Option key={g} value={g}>{g}</Select.Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
+                                <div style={{ display: 'flex', gap: 16, marginBottom: 0 }}>
+                                    <Form.Item name="exam_session" label="Khoá thi" style={{ flex: 1 }}>
+                                        <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày" />
+                                    </Form.Item>
+                                    <Form.Item name="exam_council" label="Hội đồng thi" style={{ flex: 2 }}>
+                                        <Input placeholder="Ví dụ: Đại học Quốc gia TP HCM" />
+                                    </Form.Item>
+                                </div>
 
-                            <Form.Item name="study_mode" label="Hình thức đào tạo" style={{ flex: 1 }}>
-                                <Select placeholder="-- Chọn --" allowClear>
-                                    {STUDY_MODES.map(s => (
-                                        <Select.Option key={s} value={s}>{s}</Select.Option>
-                                    ))}
-                                </Select>
-                            </Form.Item>
-                        </div>
+                                <div style={{ display: 'flex', gap: 16, marginBottom: 0 }}>
+                                    <Form.Item name="grading" label="Xếp loại tốt nghiệp" style={{ flex: 1 }}>
+                                        <Select placeholder="-- Chọn --" allowClear>
+                                            {GRADINGS.map(g => (
+                                                <Select.Option key={g} value={g}>{g}</Select.Option>
+                                            ))}
+                                        </Select>
+                                    </Form.Item>
+                                    <Form.Item name="graduation_year" label="Năm tốt nghiệp" style={{ flex: 1 }}>
+                                        <InputNumber min={1950} max={2100} style={{ width: '100%' }} placeholder="2015" />
+                                    </Form.Item>
+                                </div>
 
-                        <div style={{ display: 'flex', gap: 16, marginBottom: 0 }}>
-                            <Form.Item name="certificate_number" label="Số hiệu bằng" style={{ flex: 1 }}>
-                                <Input placeholder="Ví dụ: 263/TCNH" />
-                            </Form.Item>
-                            <Form.Item name="issue_date" label="Ngày cấp bằng" style={{ flex: 1 }}>
-                                <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày" />
-                            </Form.Item>
-                        </div>
+                                <div style={{ display: 'flex', gap: 16, marginBottom: 0 }}>
+                                    <Form.Item name="certificate_number" label="Số hiệu bằng" style={{ flex: 1 }}>
+                                        <Input placeholder="Ví dụ: B 589312" />
+                                    </Form.Item>
+                                    <Form.Item name="registry_number" label="Số vào sổ cấp bằng" style={{ flex: 1 }}>
+                                        <Input placeholder="Ví dụ: 02047-0199" />
+                                    </Form.Item>
+                                </div>
+
+                                <Form.Item name="issue_date" label="Ngày cấp bằng">
+                                    <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày" />
+                                </Form.Item>
+                            </>
+                        )}
+
+                        {/* --- Form bằng cấp khác (không phải THPT) --- */}
+                        {selectedDegreeType !== 'THPT' && selectedDegreeType && (
+                            <>
+                                <Form.Item
+                                    name="major"
+                                    label={<span>Chuyên ngành <span style={{ color: 'red' }}>*</span></span>}
+                                    rules={[{ required: true, message: 'Vui lòng nhập chuyên ngành' }]}
+                                >
+                                    <Input placeholder="Ví dụ: Tài chính - Ngân hàng" />
+                                </Form.Item>
+
+                                <Form.Item
+                                    name="school_name"
+                                    label={<span>Trường / Cơ sở đào tạo <span style={{ color: 'red' }}>*</span></span>}
+                                    rules={[{ required: true, message: 'Vui lòng nhập tên trường' }]}
+                                >
+                                    <Input placeholder="Ví dụ: Đại học Hoa Sen" />
+                                </Form.Item>
+
+                                <div style={{ display: 'flex', gap: 16, marginBottom: 0 }}>
+                                    <Form.Item name="graduation_year" label="Năm tốt nghiệp" style={{ flex: 1 }}>
+                                        <InputNumber min={1950} max={2100} style={{ width: '100%' }} placeholder="2013" />
+                                    </Form.Item>
+                                    <Form.Item name="grading" label="Xếp loại tốt nghiệp" style={{ flex: 1 }}>
+                                        <Select placeholder="-- Chọn --" allowClear>
+                                            {GRADINGS.map(g => (
+                                                <Select.Option key={g} value={g}>{g}</Select.Option>
+                                            ))}
+                                        </Select>
+                                    </Form.Item>
+                                    <Form.Item name="study_mode" label="Hình thức đào tạo" style={{ flex: 1 }}>
+                                        <Select placeholder="-- Chọn --" allowClear>
+                                            {STUDY_MODES.map(s => (
+                                                <Select.Option key={s} value={s}>{s}</Select.Option>
+                                            ))}
+                                        </Select>
+                                    </Form.Item>
+                                </div>
+
+                                <div style={{ display: 'flex', gap: 16, marginBottom: 0 }}>
+                                    <Form.Item name="certificate_number" label="Số hiệu bằng" style={{ flex: 1 }}>
+                                        <Input placeholder="Ví dụ: 263/TCNH" />
+                                    </Form.Item>
+                                    <Form.Item name="issue_date" label="Ngày cấp bằng" style={{ flex: 1 }}>
+                                        <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày" />
+                                    </Form.Item>
+                                </div>
+                            </>
+                        )}
                     </>
                 )}
 
@@ -363,7 +442,8 @@ const QualificationModal: React.FC<QualificationModalProps> = ({
                         beforeUpload={beforeUpload}
                         fileList={fileList}
                         onChange={handleUploadChange}
-                        maxCount={1}
+                        maxCount={5}
+                        multiple={true}
                         customRequest={({ onSuccess }) => setTimeout(() => onSuccess?.("ok"), 0)}
                     >
                         <p className="ant-upload-drag-icon">

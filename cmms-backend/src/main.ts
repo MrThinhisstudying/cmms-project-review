@@ -7,6 +7,7 @@ import {setupAuth} from './setup-auth';
 import {setupSwagger} from './setup-swagger';
 import {ValidationPipe} from '@nestjs/common';
 import bodyParser from 'body-parser';
+import {AllExceptionsFilter} from './common/filters/http-exception.filter';
 
 import {NestExpressApplication} from '@nestjs/platform-express';
 import {join} from 'path';
@@ -28,6 +29,7 @@ async function bootstrap() {
     app.setGlobalPrefix('api');
     app.enableCors();
     app.useGlobalPipes(new ValidationPipe());
+    app.useGlobalFilters(new AllExceptionsFilter());
 
     setupAuth(app);
 

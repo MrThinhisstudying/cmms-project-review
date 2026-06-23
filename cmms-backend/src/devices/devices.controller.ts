@@ -9,11 +9,15 @@ import {RequirePermissions} from 'src/auth/decorators/permissions.decorator';
 import {FileInterceptor} from '@nestjs/platform-express';
 import * as path from 'path';
 import { DeviceStatus } from './enums/device-status.enum';
+import { RepairsGateway } from '../repairs/repairs.gateway';
 
 @ApiTags('Devices')
 @Controller('devices')
 export class DevicesController {
-    constructor(private readonly devicesService: DevicesService) {}
+    constructor(
+        private readonly devicesService: DevicesService,
+        private readonly gateway: RepairsGateway,
+    ) {}
 
     @Get()
     @UseGuards(JWTAuthGuard)
@@ -101,6 +105,8 @@ export class DevicesController {
     async create(@Body() dto: CreateDeviceDto) {
         try {
             const device = await this.devicesService.create(dto);
+            this.gateway.notifyDeviceUpdate();
+            this.gateway.notifyDashboardRefresh();
             return {message: 'Thêm mới trang thiết bị thành công', data: device};
         } catch {
             throw new HttpException('Thêm mới trang thiết bị thất bại', HttpStatus.BAD_REQUEST);
@@ -113,6 +119,8 @@ export class DevicesController {
     async update(@Param('id') id: string, @Body() dto: CreateDeviceDto) {
         try {
             const device = await this.devicesService.update(+id, dto);
+            this.gateway.notifyDeviceUpdate();
+            this.gateway.notifyDashboardRefresh();
             return {message: 'Cập nhật trang thiết bị thành công', data: device};
         } catch {
             throw new HttpException('Cập nhật trang thiết bị thất bại', HttpStatus.BAD_REQUEST);
@@ -125,6 +133,8 @@ export class DevicesController {
     async remove(@Param('id') id: string) {
         try {
             await this.devicesService.remove(+id);
+            this.gateway.notifyDeviceUpdate();
+            this.gateway.notifyDashboardRefresh();
             return {message: 'Xoá trang thiết bị thành công'};
         } catch {
             throw new HttpException('Xoá trang thiết bị thất bại', HttpStatus.BAD_REQUEST);
@@ -153,6 +163,8 @@ export class DevicesController {
         }
         try {
             const result = await this.devicesService.importDevicesFromExcel(file.buffer);
+            this.gateway.notifyDeviceUpdate();
+            this.gateway.notifyDashboardRefresh();
             return {message: 'Tệp được xử lý thành công', data: result};
         } catch {
             throw new HttpException('Xử lý tệp thất bại', HttpStatus.INTERNAL_SERVER_ERROR);

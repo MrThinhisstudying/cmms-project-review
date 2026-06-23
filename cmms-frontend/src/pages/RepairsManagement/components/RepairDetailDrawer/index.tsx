@@ -194,11 +194,16 @@ export default function RepairDetailDrawer({
       return false;
   }, [data, role, currentPhase]);
 
-  // Redo Actions
+  // Redo Actions (khi phiếu bị từ chối)
   const showRedoB03 = (data?.status_request === 'REJECTED_B03' || data?.status_request === 'REJECTED') && (role === 'OPERATOR');
-  // Only technician can redo B04/B05
   const showRedoB04 = (data?.status_inspection === 'REJECTED_B04' || data?.status_inspection === 'inspection_rejected') && (role === 'TECHNICIAN' || role === 'ADMIN');
   const showRedoB05 = (data?.status_acceptance === 'REJECTED_B05' || data?.status_acceptance === 'acceptance_rejected') && (role === 'TECHNICIAN' || role === 'ADMIN');
+
+  // ADMIN: Chỉnh sửa nội dung phiếu bất kỳ lúc nào
+  const isAdmin = role === 'ADMIN';
+  const showAdminEditB03 = isAdmin && data && data.status_request === 'COMPLETED' && !showRedoB03;
+  const showAdminEditB04 = isAdmin && data && !!data.inspection_created_at && !showRedoB04;
+  const showAdminEditB05 = isAdmin && data && !!data.acceptance_created_at && !showRedoB05;
 
   // --- Limited Use Logic ---
   const { requestLimitedUseItem } = useRepairsContext();
@@ -654,7 +659,7 @@ export default function RepairDetailDrawer({
             <Space>
                 <Button onClick={onClose}>Đóng</Button>
                 
-                {/* REDO BUTTONS */}
+                {/* REDO BUTTONS (khi phiếu bị từ chối) */}
                 {showRedoB03 && (
                     <Button type="primary" danger ghost onClick={onEdit}>Sửa lại phiếu yêu cầu</Button>
                 )}
@@ -663,6 +668,17 @@ export default function RepairDetailDrawer({
                 )}
                 {showRedoB05 && (
                     <Button type="primary" danger ghost onClick={onEditAcceptance}>Sửa lại phiếu nghiệm thu (B05)</Button>
+                )}
+
+                {/* ADMIN EDIT BUTTONS (chỉnh sửa nội dung bất kỳ lúc nào) */}
+                {showAdminEditB03 && (
+                    <Button type="primary" ghost onClick={onEdit}>Chỉnh sửa B03</Button>
+                )}
+                {showAdminEditB04 && (
+                    <Button type="primary" ghost onClick={onEditInspection}>Chỉnh sửa B04</Button>
+                )}
+                {showAdminEditB05 && (
+                    <Button type="primary" ghost onClick={onEditAcceptance}>Chỉnh sửa B05</Button>
                 )}
 
                 {canReviewAction && (

@@ -8,11 +8,11 @@ import { DevicesScheduler } from './devices.scheduler';
 import { DeviceType } from './entities/device-type.entity';
 import { DeviceTypesController } from './device-types.controller';
 import { DeviceTypesService } from './device-types.service';
+import { RepairsModule } from 'src/repairs/repairs.module';
 
 @Module({
-    imports: [TypeOrmModule.forFeature([Device, User, DeviceType])],
+    imports: [TypeOrmModule.forFeature([Device, User, DeviceType]), RepairsModule],
     controllers: [DevicesController, DeviceTypesController],
     providers: [DevicesService, DevicesScheduler, DeviceTypesService],
 })
 export class DevicesModule {}
-

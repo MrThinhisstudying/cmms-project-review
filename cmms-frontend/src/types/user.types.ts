@@ -13,12 +13,16 @@ export interface IUser {
   signature_url?: string;
   date_of_birth?: string;
   place_of_birth?: string;
+  gender?: string;
+  ethnicity?: string;
   cccd_issue_date?: string;
   permanent_address?: string;
   temporary_address?: string;
   hometown?: string;
   department?: IDepartment;
   user_device_groups?: IUserDeviceGroup[];
+  user_departments?: IUserDepartment[];
+  must_change_password?: boolean;
   created_at: Date;
   updated_at?: Date;
 }
@@ -47,6 +51,8 @@ export interface ICreateUser {
   signature_url?: string;
   date_of_birth?: string;
   place_of_birth?: string;
+  gender?: string;
+  ethnicity?: string;
   cccd_issue_date?: string;
   permanent_address?: string;
   temporary_address?: string;
@@ -80,8 +86,20 @@ export interface IDepartment {
   manager_id?: number;
   description?: string;
   scope?: 'PERSONAL' | 'GROUP' | 'DEPARTMENT' | 'ALL';
+  level?: 'PHONG_BAN' | 'DOI' | 'TO';
+  is_technical?: boolean;
   created_at?: string;
   updated_at?: string;
   parent_id?: number;
   parent?: IDepartment;
+  children?: IDepartment[];
+}
+
+export interface IUserDepartment {
+  id: number;
+  user_id: number;
+  dept_id: number;
+  role_in_dept: 'MEMBER' | 'DEPUTY_LEAD' | 'LEAD';
+  is_primary: boolean;
+  department?: IDepartment;
 }

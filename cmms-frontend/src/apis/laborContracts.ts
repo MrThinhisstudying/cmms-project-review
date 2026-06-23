@@ -5,7 +5,7 @@ export interface ILaborContract {
     id: number;
     user: any;
     contract_number: string;
-    contract_type: '1_MONTH' | 'PROBATION' | '12_MONTHS' | '24_MONTHS' | '36_MONTHS' | 'INDEFINITE';
+    contract_type: '1_MONTH' | 'APPRENTICESHIP' | 'PROBATION' | '12_MONTHS' | '24_MONTHS' | '36_MONTHS' | 'INDEFINITE';
     start_date: string;
     end_date?: string;
     status: 'ACTIVE' | 'EXPIRED' | 'TERMINATED';
@@ -55,7 +55,10 @@ export const updateLaborContract = async (id: number, data: Partial<ILaborContra
         },
         body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error('Lỗi cập nhật hợp đồng');
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Lỗi cập nhật hợp đồng');
+    }
     return response.json();
 };
 

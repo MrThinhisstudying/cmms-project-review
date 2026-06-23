@@ -77,26 +77,52 @@ const ProfileRequests: React.FC = () => {
                 position: 'Chức vụ',
                 date_of_birth: 'Ngày sinh',
                 place_of_birth: 'Nơi sinh',
-                cccd_issue_date: 'Ngày cấp',
+                gender: 'Giới tính',
+                ethnicity: 'Dân tộc',
+                cccd_issue_date: 'Ngày cấp CCCD',
                 permanent_address: 'Thường trú',
+                temporary_address: 'Tạm trú',
                 hometown: 'Quê quán'
             };
-            
-            return Object.entries(payload).map(([k, v]) => {
-                if (v === null || v === undefined || v === '') return null;
-                
-                let displayValue = String(v);
-                if (k === 'date_of_birth' || k === 'cccd_issue_date') {
-                    displayValue = dayjs(displayValue).isValid() ? dayjs(displayValue).format('DD/MM/YYYY') : displayValue;
+
+            const dateFields = ['date_of_birth', 'cccd_issue_date'];
+            const oldValues = payload._old_values || {};
+
+            const formatVal = (key: string, val: any): string => {
+                if (val === null || val === undefined || val === '') return '';
+                if (dateFields.includes(key)) {
+                    return dayjs(val).isValid() ? dayjs(val).format('DD/MM/YYYY') : String(val);
                 }
-                
-                return (
-                    <div key={k} style={{ marginBottom: 4 }}>
-                        <Text type="secondary">{keyMap[k] || k}: </Text>
-                        <Text strong>{displayValue}</Text>
-                    </div>
-                );
-            }).filter(Boolean);
+                return String(val);
+            };
+            
+            return Object.entries(payload)
+                .filter(([k]) => k !== '_old_values')
+                .map(([k, v]) => {
+                    if (v === null || v === undefined || v === '') return null;
+                    
+                    const newDisplay = formatVal(k, v);
+                    const oldVal = oldValues[k];
+                    const oldDisplay = formatVal(k, oldVal);
+
+                    return (
+                        <div key={k} style={{ marginBottom: 6, display: 'flex', alignItems: 'baseline', gap: 4, lineHeight: 1.6 }}>
+                            <Text type="secondary" style={{ flexShrink: 0 }}>{keyMap[k] || k}: </Text>
+                            {oldDisplay ? (
+                                <span>
+                                    <Text delete type="secondary" style={{ color: '#ff4d4f', fontSize: 12 }}>{oldDisplay}</Text>
+                                    <Text style={{ margin: '0 4px', color: '#bfbfbf' }}>→</Text>
+                                    <Text strong style={{ color: '#52c41a' }}>{newDisplay}</Text>
+                                </span>
+                            ) : (
+                                <span>
+                                    <Tag color="blue" style={{ fontSize: 11, lineHeight: '18px', padding: '0 4px', marginRight: 4 }}>Mới</Tag>
+                                    <Text strong>{newDisplay}</Text>
+                                </span>
+                            )}
+                        </div>
+                    );
+                }).filter(Boolean);
         } else if (req.request_type === 'NEW_CERTIFICATE') {
             const qualMap: Record<string, string> = {
                 BANG_CAP: 'Bằng cấp',
@@ -146,11 +172,25 @@ const ProfileRequests: React.FC = () => {
                         payload.expiry_date && renderRow('Hết hạn', dayjs(payload.expiry_date).format('DD/MM/YYYY'))
                     )}
 
-                    {req.file_url && (
-                        <div style={{ marginTop: 8 }}>
-                            <Button size="small" type="dashed" href={`http://localhost:3000${req.file_url}`} target="_blank">Xem File Đính Kèm</Button>
-                        </div>
-                    )}
+                    {req.file_url && (() => {
+                        let urls: string[] = [];
+                        try {
+                            const parsed = JSON.parse(req.file_url);
+                            if (Array.isArray(parsed)) urls = parsed;
+                            else urls = [req.file_url];
+                        } catch {
+                            urls = [req.file_url];
+                        }
+                        return (
+                            <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                {urls.map((u, i) => (
+                                    <Button key={i} size="small" type="dashed" href={`http://localhost:3000${u}`} target="_blank">
+                                        Xem File {urls.length > 1 ? i + 1 : ''}
+                                    </Button>
+                                ))}
+                            </div>
+                        );
+                    })()}
                 </div>
             );
         }

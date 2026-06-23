@@ -6,6 +6,13 @@ import { JWTAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UserRole } from '../user/user-role.enum';
 import { ApiTags } from '@nestjs/swagger';
 
+
+
+// Roles có quyền đọc dữ liệu HR
+const HR_READ_ROLES: string[] = [UserRole.ADMIN, 'admin', UserRole.HR_MANAGER, UserRole.DIRECTOR, UserRole.UNIT_HEAD];
+// Roles có quyền ghi/sửa/xoá dữ liệu HR
+const HR_WRITE_ROLES: string[] = [UserRole.ADMIN, 'admin', UserRole.HR_MANAGER];
+
 @ApiTags('Labor Contracts')
 @Controller('labor-contracts')
 @UseGuards(JWTAuthGuard)
@@ -14,7 +21,7 @@ export class LaborContractsController {
 
   @Post()
   create(@Body() createLaborContractDto: CreateLaborContractDto, @Req() req: any) {
-    if (req.user.role !== UserRole.ADMIN && req.user.role !== 'admin' && req.user.role !== UserRole.HR_MANAGER) {
+    if (!HR_WRITE_ROLES.includes(req.user.role)) {
         throw new ForbiddenException();
     }
     return this.laborContractsService.create(createLaborContractDto);
@@ -22,8 +29,7 @@ export class LaborContractsController {
 
   @Get()
   findAll(@Req() req: any) {
-    const role = req.user.role;
-    if (role !== UserRole.ADMIN && role !== 'admin' && role !== UserRole.HR_MANAGER && role !== UserRole.DIRECTOR) {
+    if (!HR_READ_ROLES.includes(req.user.role)) {
         throw new ForbiddenException();
     }
     return this.laborContractsService.findAll();
@@ -31,13 +37,7 @@ export class LaborContractsController {
 
   @Get('user/:userId')
   findByUser(@Param('userId') userId: string, @Req() req: any) {
-    const role = req.user.role;
-    if (
-        role !== UserRole.ADMIN && role !== 'admin' &&
-        role !== UserRole.HR_MANAGER &&
-        role !== UserRole.DIRECTOR &&
-        req.user.user_id !== +userId
-    ) {
+    if (!HR_READ_ROLES.includes(req.user.role) && req.user.user_id !== +userId) {
         throw new ForbiddenException('Bạn không được phép xem hợp đồng của người khác');
     }
     return this.laborContractsService.findByUserId(+userId);
@@ -45,8 +45,7 @@ export class LaborContractsController {
 
   @Get(':id')
   findOne(@Param('id') id: string, @Req() req: any) {
-    const role = req.user.role;
-    if (role !== UserRole.ADMIN && role !== 'admin' && role !== UserRole.HR_MANAGER && role !== UserRole.DIRECTOR) {
+    if (!HR_READ_ROLES.includes(req.user.role)) {
         throw new ForbiddenException();
     }
     return this.laborContractsService.findOne(+id);
@@ -54,7 +53,7 @@ export class LaborContractsController {
 
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateLaborContractDto: UpdateLaborContractDto, @Req() req: any) {
-    if (req.user.role !== UserRole.ADMIN && req.user.role !== 'admin' && req.user.role !== UserRole.HR_MANAGER) {
+    if (!HR_WRITE_ROLES.includes(req.user.role)) {
         throw new ForbiddenException();
     }
     return this.laborContractsService.update(+id, updateLaborContractDto);
@@ -62,7 +61,7 @@ export class LaborContractsController {
 
   @Delete(':id')
   remove(@Param('id') id: string, @Req() req: any) {
-    if (req.user.role !== UserRole.ADMIN && req.user.role !== 'admin' && req.user.role !== UserRole.HR_MANAGER) {
+    if (!HR_WRITE_ROLES.includes(req.user.role)) {
         throw new ForbiddenException();
     }
     return this.laborContractsService.remove(+id);

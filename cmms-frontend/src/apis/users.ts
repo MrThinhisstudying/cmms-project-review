@@ -223,3 +223,76 @@ export const uploadSignature = async (userId: number, file: File, token: string 
     throw error;
   }
 };
+
+export const uploadAvatar = async (userId: number, file: File, token: string | null) => {
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(
+      `${process.env.REACT_APP_BASE_URL}/user/${userId}/avatar`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: formData,
+      }
+    );
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || "Upload failed");
+    return data.data; // { avatar: string }
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const syncUserDepartments = async (
+  userId: number,
+  departments: { dept_id: number; role_in_dept?: string; is_primary?: boolean }[],
+  token: string | null,
+) => {
+  try {
+    const response = await fetch(
+      `${process.env.REACT_APP_BASE_URL}/user-department/user/${userId}/sync`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify({ departments }),
+      }
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || "Đồng bộ đơn vị thất bại");
+    return data;
+  } catch (error) {
+    throw error;
+  }
+};
+
+export const changePasswordFirstLogin = async (
+  data: { currentPassword?: string; newPassword?: string; confirmNewPassword?: string },
+  token: string | null
+) => {
+  try {
+    const response = await fetch(
+      `${process.env.REACT_APP_BASE_URL}/auth/change-password-first-login`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+        body: JSON.stringify(data),
+      }
+    );
+    const res = await response.json();
+    if (!response.ok) throw new Error(res.message || "Đổi mật khẩu thất bại");
+    return res as { accessToken: string };
+  } catch (error) {
+    throw error;
+  }
+};

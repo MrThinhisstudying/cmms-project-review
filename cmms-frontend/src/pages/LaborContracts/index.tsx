@@ -5,15 +5,24 @@ import dayjs from 'dayjs';
 import { getLaborContracts, createLaborContract, updateLaborContract, deleteLaborContract, ILaborContract } from '../../apis/laborContracts';
 import { getAllUsers } from '../../apis/users';
 import { getToken } from '../../utils/auth';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuthContext } from '../../context/AuthContext/AuthContext';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
 const LaborContracts: React.FC = () => {
+    const location = useLocation();
+    const navigate = useNavigate();
+    
+    const { user: currentAuthUser } = useAuthContext();
+    const canWrite = ['ADMIN', 'HR_MANAGER'].includes(currentAuthUser?.role || '');
+    
     const [contracts, setContracts] = useState<ILaborContract[]>([]);
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [searchText, setSearchText] = useState('');
+    const [contractTypeFilter, setContractTypeFilter] = useState<string | null>(null);
     
     // Modal
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,6 +34,25 @@ const LaborContracts: React.FC = () => {
         fetchContracts();
         fetchUsers();
     }, []);
+
+    // HYBRID WORKFLOW: Catch routing from HR Dashboard to auto-fill contract renewal
+    useEffect(() => {
+        const state = location.state as any;
+        if (state?.action === 'renew' && state?.userId) {
+            setEditingContract(null);
+            form.resetFields();
+            form.setFieldsValue({
+                start_date: dayjs(),
+                status: 'ACTIVE',
+                contract_type: '12_MONTHS',
+                user_id: state.userId
+            });
+            setIsModalOpen(true);
+            
+            // Clear React Router state so it doesn't loop
+            navigate(location.pathname, { replace: true });
+        }
+    }, [location, navigate, form]);
 
     const fetchContracts = async () => {
         setLoading(true);
@@ -120,10 +148,11 @@ const LaborContracts: React.FC = () => {
     const getContractTypeLabel = (type: string) => {
         const types: Record<string, string> = {
             '1_MONTH': '1 Tháng',
+            'APPRENTICESHIP': 'Học việc',
             'PROBATION': 'Thử việc',
-            '12_MONTHS': '1 Năm',
+            '12_MONTHS': '12 tháng',
             '24_MONTHS': '2 Năm',
-            '36_MONTHS': '3 Năm',
+            '36_MONTHS': '36 tháng',
             'INDEFINITE': 'Vô thời hạn'
         };
         return types[type] || type;
@@ -148,10 +177,12 @@ const LaborContracts: React.FC = () => {
         return <Tag color="green">Còn hiệu lực</Tag>;
     };
 
-    const filtered = contracts.filter(c => 
-        c.user?.name?.toLowerCase().includes(searchText.toLowerCase()) || 
-        c.contract_number.toLowerCase().includes(searchText.toLowerCase())
-    );
+    const filtered = contracts.filter(c => {
+        const matchSearch = c.user?.name?.toLowerCase().includes(searchText.toLowerCase()) || 
+                            c.contract_number.toLowerCase().includes(searchText.toLowerCase());
+        const matchType = contractTypeFilter ? c.contract_type === contractTypeFilter : true;
+        return matchSearch && matchType;
+    });
 
     const columns = [
         {
@@ -195,7 +226,7 @@ const LaborContracts: React.FC = () => {
             width: 160,
             render: (_: any, record: ILaborContract) => getStatusDisplay(record)
         },
-        {
+        ...(canWrite ? [{
             title: 'Thao tác',
             key: 'action',
             width: 100,
@@ -210,7 +241,7 @@ const LaborContracts: React.FC = () => {
                     </Tooltip>
                 </Space>
             )
-        }
+        }] : [])
     ];
 
     return (
@@ -222,23 +253,42 @@ const LaborContracts: React.FC = () => {
                         <Text type="secondary">Quản lý và cảnh báo thời hạn hợp đồng của toàn bộ nhân sự</Text>
                     </Col>
                     <Col>
-                        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd} size="large">
-                            Thêm Hợp đồng
-                        </Button>
+                        {canWrite && (
+                            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd} size="large">
+                                Thêm Hợp đồng
+                            </Button>
+                        )}
                     </Col>
                 </Row>
             </Card>
 
             <Card variant="borderless" style={{ borderRadius: 8, boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
                 <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-                    <Input
-                        placeholder="Tìm kiếm theo Tên NV hoặc Mã Hợp đồng"
-                        prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-                        value={searchText}
-                        onChange={(e) => setSearchText(e.target.value)}
-                        style={{ width: 350 }}
-                        allowClear
-                    />
+                    <Space>
+                        <Input
+                            placeholder="Tìm kiếm theo Tên NV hoặc Mã Hợp đồng"
+                            prefix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                            value={searchText}
+                            onChange={(e) => setSearchText(e.target.value)}
+                            style={{ width: 350 }}
+                            allowClear
+                        />
+                        <Select
+                            placeholder="Lọc theo loại hợp đồng"
+                            allowClear
+                            style={{ width: 200 }}
+                            value={contractTypeFilter}
+                            onChange={(val) => setContractTypeFilter(val)}
+                        >
+                            <Option value="APPRENTICESHIP">Học việc</Option>
+                            <Option value="PROBATION">Thử việc</Option>
+                            <Option value="1_MONTH">1 Tháng</Option>
+                            <Option value="12_MONTHS">12 tháng</Option>
+                            <Option value="24_MONTHS">2 Năm</Option>
+                            <Option value="36_MONTHS">36 tháng</Option>
+                            <Option value="INDEFINITE">Vô thời hạn</Option>
+                        </Select>
+                    </Space>
                 </div>
 
                 <Table 
@@ -256,15 +306,16 @@ const LaborContracts: React.FC = () => {
                 onOk={handleModalOk}
                 onCancel={() => setIsModalOpen(false)}
                 confirmLoading={modalLoading}
-                width={700}
+                width={900}
                 destroyOnClose
             >
                 <Form form={form} layout="vertical" style={{ marginTop: 20 }}>
                     <Row gutter={16}>
-                        <Col span={12}>
+                        <Col span={16}>
                             <Form.Item name="user_id" label="Nhân viên" rules={[{ required: true, message: 'Vui lòng chọn nhân viên' }]}>
                                 <Select
                                     showSearch
+                                    popupMatchSelectWidth={false}
                                     placeholder="Chọn nhân viên"
                                     optionFilterProp="children"
                                     filterOption={(input, option: any) =>
@@ -272,12 +323,14 @@ const LaborContracts: React.FC = () => {
                                     }
                                 >
                                     {users.map(u => (
-                                        <Option key={u.user_id} value={u.user_id}>{u.name} - {u.employee_code}</Option>
+                                        <Option key={u.user_id} value={u.user_id}>
+                                            {u.name} - {u.employee_code || 'N/A'} - {u.position || 'N/A'}
+                                        </Option>
                                     ))}
                                 </Select>
                             </Form.Item>
                         </Col>
-                        <Col span={12}>
+                        <Col span={8}>
                             <Form.Item name="contract_number" label="Số hợp đồng" rules={[{ required: true, message: 'Vui lòng nhập số HĐ' }]}>
                                 <Input placeholder="VD: 01/2026/HĐLĐ" />
                             </Form.Item>
@@ -288,11 +341,10 @@ const LaborContracts: React.FC = () => {
                         <Col span={12}>
                             <Form.Item name="contract_type" label="Loại hợp đồng" rules={[{ required: true }]}>
                                 <Select>
-                                    <Option value="1_MONTH">1 Tháng</Option>
+                                    <Option value="APPRENTICESHIP">Học việc</Option>
                                     <Option value="PROBATION">Thử việc</Option>
-                                    <Option value="12_MONTHS">1 Năm</Option>
-                                    <Option value="24_MONTHS">2 Năm</Option>
-                                    <Option value="36_MONTHS">3 Năm</Option>
+                                    <Option value="12_MONTHS">12 tháng</Option>
+                                    <Option value="36_MONTHS">36 tháng</Option>
                                     <Option value="INDEFINITE">Vô thời hạn</Option>
                                 </Select>
                             </Form.Item>

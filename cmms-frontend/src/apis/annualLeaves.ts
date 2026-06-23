@@ -22,6 +22,33 @@ export interface IAnnualLeave {
     m12_taken: number;
 }
 
+export interface IRecordLeavePayload {
+    user_id: number;
+    from_date: string;
+    to_date: string;
+    days_taken: number;
+    applied_month: number;
+    year: number;
+    reason?: string;
+    location?: string;
+    attachments?: string[];
+}
+
+export interface ILeaveHistory {
+    id: number;
+    user_id: number;
+    annual_leave_id: number;
+    from_date: string;
+    to_date: string;
+    days_taken: number;
+    applied_month: number;
+    year: number;
+    reason?: string;
+    location?: string;
+    attachments?: string[];
+    created_at: string;
+}
+
 export const getAnnualLeaves = async (year: number): Promise<IAnnualLeave[]> => {
     const response = await fetchClient(`/annual-leaves?year=${year}`, {
         headers: { Authorization: `Bearer ${getToken()}` },
@@ -36,6 +63,15 @@ export const getAnnualLeavesByUser = async (userId: number, year?: number): Prom
         headers: { Authorization: `Bearer ${getToken()}` },
     });
     if (!response.ok) throw new Error('Lỗi lấy thông tin phép nhân viên');
+    return response.json();
+};
+
+export const getLeaveHistoriesByUser = async (userId: number, year?: number): Promise<ILeaveHistory[]> => {
+    const url = year ? `/annual-leaves/user/${userId}/histories?year=${year}` : `/annual-leaves/user/${userId}/histories`;
+    const response = await fetchClient(url, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (!response.ok) throw new Error('Lỗi lấy lịch sử phép nhân viên');
     return response.json();
 };
 
@@ -81,4 +117,38 @@ export const importAnnualLeaves = async (data: any[]): Promise<{success: number,
         throw new Error('Lỗi import dữ liệu phép');
     }
     return response.json();
+};
+
+export const recordLeave = async (data: IRecordLeavePayload): Promise<any> => {
+    const response = await fetchClient('/annual-leaves/record', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Lỗi ghi nhận nghỉ phép');
+    }
+    return response.json();
+};
+
+export const uploadLeaveAttachments = async (files: File[]): Promise<string[]> => {
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f));
+
+    const response = await fetch(`${process.env.REACT_APP_BASE_URL}/annual-leaves/upload-attachments`, {
+        method: 'POST',
+        headers: {
+            Authorization: `Bearer ${getToken()}`,
+        },
+        body: formData,
+    });
+    const res = await response.json();
+    if (!response.ok) {
+        throw new Error(res.message || 'Lỗi tải lên file đính kèm');
+    }
+    return res.data;
 };

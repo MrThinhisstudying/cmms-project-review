@@ -18,12 +18,15 @@ import { Item } from 'src/inventory_item/entities/item.entity';
 import { StockOutStatus } from 'src/stock-out/enum/stock-out.enum';
 import { UserRole } from 'src/user/user-role.enum';
 import { UserDeviceGroup } from 'src/device-groups/entities/user-device-group.entity';
+import { UserDepartment } from 'src/departments/entities/user-department.entity';
 import { RepairsGateway } from './repairs.gateway';
 import { buildRepairPdfTemplate } from './utils/repair-pdf-template.util';
 import * as puppeteer from 'puppeteer';
 import { PDFDocument } from 'pdf-lib';
 import { CertificatesService } from '../certificates/certificates.service';
 import { CertificateType } from '../certificates/entities/user-certificate.entity';
+import { ActivityLogService } from '../common/services/activity-log.service';
+import { ActivityAction, ActivityEntityType } from '../common/entities/activity-log.entity';
 
 @Injectable()
 export class RepairsService {
@@ -35,10 +38,88 @@ export class RepairsService {
         @InjectRepository(Item) private readonly itemRepo: Repository<Item>,
         @InjectRepository(UserDeviceGroup) private readonly userDeviceGroupRepo: Repository<UserDeviceGroup>,
         @InjectRepository(Department) private readonly departmentRepo: Repository<Department>,
+        @InjectRepository(UserDepartment) private readonly userDepartmentRepo: Repository<UserDepartment>,
         private readonly notificationService: NotificationService,
         private readonly repairsGateway: RepairsGateway,
         private readonly certificatesService: CertificatesService,
+        private readonly activityLogService: ActivityLogService,
     ) { }
+
+    /**
+     * Check: user là Tổ trưởng (LEAD) ở cấp Tổ trong Đội kỹ thuật
+     * Dùng cho: B04/B05 bước 1
+     * ⚡ Fallback: nếu chưa migrate user_department → check user.role === TEAM_LEAD
+     */
+    private async isTeamLeadInTechnicalUnit(userId: number): Promise<boolean> {
+        const uds = await this.userDepartmentRepo.find({
+            where: { user_id: userId },
+            relations: ['department'],
+        });
+
+        // Nếu có data trong user_department → dùng context-based check
+        if (uds.length > 0) {
+            return uds.some(ud =>
+                ud.role_in_dept === 'LEAD' &&
+                ud.department?.level === 'TO' &&
+                ud.department?.is_technical
+            );
+        }
+
+        // ⚡ Fallback: chưa migrate → check role cũ
+        const user = await this.userRepo.findOne({ where: { user_id: userId } });
+        return user?.role === UserRole.TEAM_LEAD;
+    }
+
+    /**
+     * Check: user là Đội trưởng/Đội phó (LEAD/DEPUTY_LEAD) ở cấp Đội kỹ thuật
+     * Dùng cho: B03 bước 2, B04/B05 bước 2
+     * ⚡ Fallback: nếu chưa migrate → check user.role === UNIT_HEAD
+     */
+    private async isUnitLeadInTechnicalUnit(userId: number): Promise<boolean> {
+        const uds = await this.userDepartmentRepo.find({
+            where: { user_id: userId },
+            relations: ['department'],
+        });
+
+        // Nếu có data trong user_department → dùng context-based check
+        if (uds.length > 0) {
+            return uds.some(ud =>
+                ['LEAD', 'DEPUTY_LEAD'].includes(ud.role_in_dept) &&
+                ud.department?.level === 'DOI' &&
+                ud.department?.is_technical
+            );
+        }
+
+        // ⚡ Fallback: chưa migrate → check role cũ
+        const user = await this.userRepo.findOne({ where: { user_id: userId } });
+        return user?.role === UserRole.UNIT_HEAD;
+    }
+
+    /**
+     * Check: user thuộc Đội kỹ thuật (bất kỳ vai trò)
+     * Dùng cho: B03 bước 1 (tiếp nhận kỹ thuật)
+     * ⚡ Fallback: nếu chưa migrate → check user thuộc department có is_technical
+     */
+    private async isMemberOfTechnicalUnit(userId: number): Promise<boolean> {
+        const uds = await this.userDepartmentRepo.find({
+            where: { user_id: userId },
+            relations: ['department'],
+        });
+
+        // Nếu có data trong user_department → dùng context-based check
+        if (uds.length > 0) {
+            return uds.some(ud => ud.department?.is_technical);
+        }
+
+        // ⚡ Fallback: chưa migrate → check department cũ hoặc role phù hợp
+        const user = await this.userRepo.findOne({
+            where: { user_id: userId },
+            relations: ['department'],
+        });
+        if (user?.department?.is_technical) return true;
+        // Nếu department cũ chưa có is_technical → check role
+        return [UserRole.TEAM_LEAD, UserRole.UNIT_HEAD, UserRole.TECHNICIAN].includes(user?.role);
+    }
 
     async createBulk(dto: { device_ids: number[], location_issue?: string, recommendation?: string, note?: string }, userId: number) {
         // Iterate and call create manually to leverage all the existing validations and notifications
@@ -112,6 +193,21 @@ export class RepairsService {
         }
         
         this.repairsGateway.notifyRepairUpdate(); // Broadcast update to reload lists
+
+        // Activity Log: Ghi lịch sử tạo phiếu
+        try {
+            await this.activityLogService.log({
+                entityType: ActivityEntityType.REPAIR,
+                entityId: saved.repair_id,
+                action: ActivityAction.CREATE,
+                changedById: userId,
+                newValue: { device: device.name, status: 'WAITING_TECH' },
+                description: `Tạo phiếu sửa chữa #${saved.repair_id} cho thiết bị "${device.name}"`,
+            });
+        } catch (logErr) {
+            console.error('ActivityLog error:', logErr);
+        }
+
         return saved;
     }
 
@@ -119,16 +215,20 @@ export class RepairsService {
         const repair = await this.repairRepo.findOne({ where: { repair_id: id }, relations: ['device', 'created_by', 'created_department'] });
         if (!repair) throw new NotFoundException('Không tìm thấy phiếu');
         
-        // Strict ownership check
-        if (repair.created_by.user_id !== userId && userRole !== 'admin') {
+        const isAdmin = userRole === 'admin' || userRole === 'ADMIN';
+
+        // Strict ownership check (ADMIN bypass)
+        if (repair.created_by.user_id !== userId && !isAdmin) {
             throw new ForbiddenException('Bạn không có quyền chỉnh sửa phiếu này (chỉ người tạo mới được sửa)');
         }
 
         if (repair.canceled && repair.status_request !== 'REJECTED_B03' && (repair.status_request as string) !== 'REJECTED') throw new BadRequestException('Phiếu đã bị hủy');
 
-        // Allow update if WAITING_TECH or REJECTED_B03
-        if (repair.status_request !== 'WAITING_TECH' && repair.status_request !== 'REJECTED_B03') {
-             throw new BadRequestException('Chỉ phiếu trạng thái chờ duyệt hoặc bị từ chối mới được chỉnh sửa');
+        // ADMIN có thể sửa bất kỳ lúc nào, các role khác chỉ sửa khi WAITING_TECH hoặc REJECTED_B03
+        if (!isAdmin) {
+            if (repair.status_request !== 'WAITING_TECH' && repair.status_request !== 'REJECTED_B03') {
+                 throw new BadRequestException('Chỉ phiếu trạng thái chờ duyệt hoặc bị từ chối mới được chỉnh sửa');
+            }
         }
 
         const device = await this.deviceRepo.findOne({ where: { device_id: dto.device_id } });
@@ -166,14 +266,20 @@ export class RepairsService {
         if (repair.canceled && repair.status_inspection !== 'REJECTED_B04' && (repair.status_inspection as string) !== 'inspection_rejected') throw new BadRequestException('Phiếu đã bị hủy');
         if (repair.status_request !== 'COMPLETED') throw new BadRequestException('Phiếu yêu cầu chưa được phê duyệt hoàn tất');
 
-        if (repair.status_inspection === 'REJECTED_B04' || (repair.status_inspection as string) === 'inspection_rejected') {
-             // Allow edit to redo
-             // Reset logic handled at save
-        } else if (['inspection_manager_approved', 'inspection_admin_approved'].includes(repair.status_inspection))
-            throw new BadRequestException('Kiểm nghiệm đã được phê duyệt, không thể chỉnh sửa');
+        // Kiểm tra quyền ADMIN
+        const adminUser = await this.userRepo.findOne({ where: { user_id: userId } });
+        const isAdmin = adminUser?.role === UserRole.ADMIN;
 
-        if (repair.status_acceptance !== 'acceptance_pending')
-            throw new BadRequestException('Phiếu đã chuyển sang nghiệm thu, không thể chỉnh sửa kiểm nghiệm');
+        if (!isAdmin) {
+            if (repair.status_inspection === 'REJECTED_B04' || (repair.status_inspection as string) === 'inspection_rejected') {
+                 // Allow edit to redo
+            } else if (['inspection_manager_approved', 'inspection_admin_approved'].includes(repair.status_inspection)) {
+                throw new BadRequestException('Kiểm nghiệm đã được phê duyệt, không thể chỉnh sửa');
+            }
+
+            if (repair.status_acceptance !== 'acceptance_pending')
+                throw new BadRequestException('Phiếu đã chuyển sang nghiệm thu, không thể chỉnh sửa kiểm nghiệm');
+        }
 
         if (dto.inspection_materials) {
             dto.inspection_materials = dto.inspection_materials.map((m) => ({
@@ -290,10 +396,16 @@ export class RepairsService {
         if (repair.canceled && repair.status_acceptance !== 'REJECTED_B05' && (repair.status_acceptance as string) !== 'acceptance_rejected') throw new BadRequestException('Phiếu đã bị hủy');
         if (repair.status_inspection !== 'inspection_admin_approved') throw new BadRequestException('Kiểm nghiệm chưa hoàn tất');
         
-        if (repair.status_acceptance === 'REJECTED_B05' || (repair.status_acceptance as string) === 'acceptance_rejected') {
-            // Allow edit
-        } else if (['acceptance_manager_approved', 'acceptance_admin_approved'].includes(repair.status_acceptance)) {
-            throw new BadRequestException('Nghiệm thu đã được phê duyệt, không thể chỉnh sửa');
+        // Kiểm tra quyền ADMIN
+        const adminUserAcc = await this.userRepo.findOne({ where: { user_id: userId } });
+        const isAdminAcc = adminUserAcc?.role === UserRole.ADMIN;
+
+        if (!isAdminAcc) {
+            if (repair.status_acceptance === 'REJECTED_B05' || (repair.status_acceptance as string) === 'acceptance_rejected') {
+                // Allow edit
+            } else if (['acceptance_manager_approved', 'acceptance_admin_approved'].includes(repair.status_acceptance)) {
+                throw new BadRequestException('Nghiệm thu đã được phê duyệt, không thể chỉnh sửa');
+            }
         }
         repair.acceptance_note = dto.acceptance_note ?? repair.acceptance_note;
 
@@ -424,22 +536,31 @@ export class RepairsService {
 
             if (dto.action === 'approve') {
                 if (repair.status_request === 'WAITING_TECH') {
-                    if (user.role === UserRole.UNIT_HEAD) throw new ForbiddenException('Lãnh đạo Đội không được phép duyệt ở bước Tiếp nhận kỹ thuật. Vui lòng chờ nhân viên kỹ thuật.');
+                    // Context-based: Phải thuộc Đội kỹ thuật mới được tiếp nhận
+                    const isTechMember = await this.isMemberOfTechnicalUnit(user.user_id);
+                    if (!isTechMember) throw new ForbiddenException('Chỉ nhân viên thuộc Đội kỹ thuật mới được tiếp nhận phiếu.');
+                    // Đội trưởng/Đội phó không được duyệt bước này
+                    const isUnitLead = await this.isUnitLeadInTechnicalUnit(user.user_id);
+                    if (isUnitLead) throw new ForbiddenException('Lãnh đạo Đội không được phép duyệt ở bước Tiếp nhận kỹ thuật.');
 
-                    // Tech approvals (Normally specific Permission check here)
                     repair.status_request = 'WAITING_MANAGER';
                     repair.approved_by_tech_request = user; 
                     
-                    // Notify Unit Head
-                    const managers = await this.userRepo.find({ where: { role: UserRole.UNIT_HEAD }, relations: ['department'] });
-                    const deptManagers = managers.filter(m => m.department?.dept_id === repair.created_department?.dept_id);
-                    for (const manager of deptManagers) {
-                         const msg = `Phiếu sửa chữa #${repair.repair_id} ("${repair.device?.name}") đã được Tổ kỹ thuật tiếp nhận và đang chờ Quản lý duyệt.`;
-                         await this.notificationService.createForUser(manager, msg);
-                         this.repairsGateway.sendToUser(manager.user_id, msg);
+                    // Notify: Đội trưởng/Đội phó Đội kỹ thuật
+                    const unitLeads = await this.userDepartmentRepo.find({
+                        where: { role_in_dept: In(['LEAD', 'DEPUTY_LEAD']) },
+                        relations: ['user', 'department'],
+                    });
+                    const techUnitLeads = unitLeads.filter(ud => ud.department?.level === 'DOI' && ud.department?.is_technical);
+                    for (const ud of techUnitLeads) {
+                         const msg = `Phiếu sửa chữa #${repair.repair_id} ("${repair.device?.name}") đã được tiếp nhận kỹ thuật và đang chờ Đội trưởng/Đội phó duyệt.`;
+                         await this.notificationService.createForUser(ud.user, msg);
+                         this.repairsGateway.sendToUser(ud.user_id, msg);
                     }
                 } else if (repair.status_request === 'WAITING_MANAGER') {
-                    if (user.role !== UserRole.UNIT_HEAD) throw new ForbiddenException('Chỉ Trưởng bộ phận mới được duyệt bước này');
+                    // Context-based: Đội trưởng/Đội phó Đội kỹ thuật
+                    const isUnitLead = await this.isUnitLeadInTechnicalUnit(user.user_id);
+                    if (!isUnitLead) throw new ForbiddenException('Chỉ Đội trưởng/Đội phó Đội kỹ thuật mới được duyệt bước này');
                     repair.status_request = 'WAITING_DIRECTOR';
                     repair.approved_by_manager_request = user;
                     
@@ -513,29 +634,31 @@ export class RepairsService {
 
             if (dto.action === 'approve') {
                 if (repair.status_inspection === 'inspection_pending') {
-                    // Strict check: Only Team Lead (Removed Dept check to match frontend)
-                    if (user.role !== UserRole.TEAM_LEAD) {
-                        throw new ForbiddenException('Chỉ Tổ trưởng mới thực hiện ký duyệt mục này.');
+                    // Context-based: Tổ trưởng trong Đội kỹ thuật
+                    const isTeamLead = await this.isTeamLeadInTechnicalUnit(user.user_id);
+                    if (!isTeamLead) {
+                        throw new ForbiddenException('Chỉ Tổ trưởng thuộc Đội kỹ thuật mới thực hiện ký duyệt mục này.');
                     }
                     
                     repair.status_inspection = 'inspection_lead_approved';
                     repair.approved_by_operator_lead_inspection = user;
                     repair.inspection_approved_at = new Date(); 
                     
-                    // Notify Unit Head
-                    const managers = await this.userRepo.find({ where: { role: UserRole.UNIT_HEAD }, relations: ['department'] });
-                    // Usually notify Manager of "Tổ VHTTBMĐ" (Operator)? Or Creator's manager?
-                    // Inspection is usually approved by Operator Manager.
-                    // Let's notify all Managers of the Operator Dept (Tổ VHTTBMĐ) if obtainable, or just Creator's as fallback.
-                    // Assuming Operator Manager manages the inspection.
-                    const opManagers = managers.filter(m => m.department?.name === 'Tổ VHTTBMĐ' || m.department?.dept_id === repair.created_department?.dept_id);
-                     for (const manager of opManagers) {
-                          const msg = `Biên bản kiểm nghiệm #${repair.repair_id} ("${repair.device?.name}") đã được Tổ trưởng duyệt và đang chờ Quản lý duyệt.`;
-                          await this.notificationService.createForUser(manager, msg);
-                          this.repairsGateway.sendToUser(manager.user_id, msg);
-                     } 
+                    // Notify: Đội trưởng/Đội phó Đội kỹ thuật
+                    const unitLeads = await this.userDepartmentRepo.find({
+                        where: { role_in_dept: In(['LEAD', 'DEPUTY_LEAD']) },
+                        relations: ['user', 'department'],
+                    });
+                    const techUnitLeads = unitLeads.filter(ud => ud.department?.level === 'DOI' && ud.department?.is_technical);
+                    for (const ud of techUnitLeads) {
+                         const msg = `Biên bản kiểm nghiệm #${repair.repair_id} ("${repair.device?.name}") đã được Tổ trưởng duyệt và đang chờ Đội trưởng/Đội phó duyệt.`;
+                         await this.notificationService.createForUser(ud.user, msg);
+                         this.repairsGateway.sendToUser(ud.user_id, msg);
+                    } 
                 } else if (repair.status_inspection === 'inspection_lead_approved') {
-                    if (user.role !== UserRole.UNIT_HEAD) throw new ForbiddenException('Chỉ Trưởng bộ phận mới được duyệt bước này');
+                    // Context-based: Đội trưởng/Đội phó Đội kỹ thuật
+                    const isUnitLead = await this.isUnitLeadInTechnicalUnit(user.user_id);
+                    if (!isUnitLead) throw new ForbiddenException('Chỉ Đội trưởng/Đội phó Đội kỹ thuật mới được duyệt bước này');
                     repair.status_inspection = 'inspection_manager_approved';
                     repair.approved_by_manager_inspection = user;
 
@@ -619,25 +742,31 @@ export class RepairsService {
 
              if (dto.action === 'approve') {
                 if (repair.status_acceptance === 'acceptance_pending') {
-                    // Strict check: Only Team Lead (Removed Dept check to match frontend)
-                    if (user.role !== UserRole.TEAM_LEAD) {
-                        throw new ForbiddenException('Chỉ Tổ trưởng mới thực hiện ký duyệt mục này.');
+                    // Context-based: Tổ trưởng trong Đội kỹ thuật
+                    const isTeamLead = await this.isTeamLeadInTechnicalUnit(user.user_id);
+                    if (!isTeamLead) {
+                        throw new ForbiddenException('Chỉ Tổ trưởng thuộc Đội kỹ thuật mới thực hiện ký duyệt mục này.');
                     }
                     
                     repair.status_acceptance = 'acceptance_lead_approved';
                     repair.approved_by_operator_lead_acceptance = user;
                     repair.acceptance_approved_at = new Date();
 
-                    // Notify Unit Head
-                    const managers = await this.userRepo.find({ where: { role: UserRole.UNIT_HEAD }, relations: ['department'] });
-                    const opManagers = managers.filter(m => m.department?.name === 'Tổ VHTTBMĐ' || m.department?.dept_id === repair.created_department?.dept_id);
-                     for (const manager of opManagers) {
-                          const msg = `Phiếu nghiệm thu #${repair.repair_id} ("${repair.device?.name}") đã được Tổ trưởng duyệt và đang chờ Quản lý duyệt.`;
-                          await this.notificationService.createForUser(manager, msg);
-                          this.repairsGateway.sendToUser(manager.user_id, msg);
-                     }
+                    // Notify: Đội trưởng/Đội phó Đội kỹ thuật
+                    const unitLeads = await this.userDepartmentRepo.find({
+                        where: { role_in_dept: In(['LEAD', 'DEPUTY_LEAD']) },
+                        relations: ['user', 'department'],
+                    });
+                    const techUnitLeads = unitLeads.filter(ud => ud.department?.level === 'DOI' && ud.department?.is_technical);
+                    for (const ud of techUnitLeads) {
+                         const msg = `Phiếu nghiệm thu #${repair.repair_id} ("${repair.device?.name}") đã được Tổ trưởng duyệt và đang chờ Đội trưởng/Đội phó duyệt.`;
+                         await this.notificationService.createForUser(ud.user, msg);
+                         this.repairsGateway.sendToUser(ud.user_id, msg);
+                    }
                 } else if (repair.status_acceptance === 'acceptance_lead_approved') {
-                    if (user.role !== UserRole.UNIT_HEAD) throw new ForbiddenException('Chỉ Trưởng bộ phận mới được duyệt bước này');
+                    // Context-based: Đội trưởng/Đội phó Đội kỹ thuật
+                    const isUnitLead = await this.isUnitLeadInTechnicalUnit(user.user_id);
+                    if (!isUnitLead) throw new ForbiddenException('Chỉ Đội trưởng/Đội phó Đội kỹ thuật mới được duyệt bước này');
                     repair.status_acceptance = 'acceptance_manager_approved';
                     repair.approved_by_manager_acceptance = user;
 
@@ -686,6 +815,26 @@ export class RepairsService {
 
         const saved = await this.repairRepo.save(repair);
         this.repairsGateway.notifyRepairUpdate();
+
+        // --- Activity Log: Ghi lịch sử thay đổi ---
+        const phaseLabel = phase === 'request' ? 'B03 Yêu cầu' : phase === 'inspection' ? 'B04 Kiểm nghiệm' : 'B05 Nghiệm thu';
+        const actionLabel = dto.action === 'approve' ? 'Phê duyệt' : 'Từ chối';
+        try {
+            await this.activityLogService.log({
+                entityType: ActivityEntityType.REPAIR,
+                entityId: saved.repair_id,
+                action: dto.action === 'approve' ? ActivityAction.APPROVE : ActivityAction.REJECT,
+                changedById: userId,
+                oldValue: { phase, status_request: repair.status_request, status_inspection: repair.status_inspection, status_acceptance: repair.status_acceptance },
+                newValue: { status_request: saved.status_request, status_inspection: saved.status_inspection, status_acceptance: saved.status_acceptance },
+                description: `${actionLabel} ${phaseLabel} phiếu #${saved.repair_id} (${repair.device?.name || ''})${dto.reason ? ' - Lý do: ' + dto.reason : ''}`,
+                fieldName: `status_${phase}`,
+            });
+        } catch (logErr) {
+            // Không để log lỗi block luồng chính
+            console.error('ActivityLog error:', logErr);
+        }
+
         return saved;
     }
 
@@ -750,58 +899,65 @@ export class RepairsService {
 
 
         
-        // --- PRE-FETCH HIERARCHY FOR UNIT_HEAD ---
+        // --- CONTEXT-BASED FILTER: Dựa trên user_department ---
         let permittedDeptIds: number[] = [];
-        let isUnitHeadFilter = false;
+        let needsDeptFilter = false;
 
-        if (user && user.role === UserRole.UNIT_HEAD) {
-            isUnitHeadFilter = true;
-            // 1. Fetch user's department with children
-            if (user.department) {
-                const userDept = await this.departmentRepo.findOne({
-                     where: { dept_id: user.department.dept_id },
-                     relations: ['children'] // Load direct children
+        if (user && [UserRole.ADMIN, UserRole.DIRECTOR, UserRole.UNIT_HEAD].includes(user.role)) {
+            // Admin/Director/Đội trưởng (UNIT_HEAD) → thấy tất cả
+            needsDeptFilter = false;
+        } else if (user) {
+            // Context-based: Đội trưởng/Phó kỹ thuật (từ user_department) cũng thấy tất cả
+            const isUnitLead = await this.isUnitLeadInTechnicalUnit(user.user_id);
+            if (isUnitLead) {
+                needsDeptFilter = false;
+            } else {
+                needsDeptFilter = true;
+
+                // 1. Lấy tất cả dept mà user thuộc (từ bảng user_department)
+                const userDepts = await this.userDepartmentRepo.find({
+                    where: { user_id: user.user_id },
+                    relations: ['department', 'department.children'],
                 });
-                if (userDept) {
-                    permittedDeptIds.push(userDept.dept_id);
-                    if (userDept.children) {
-                        permittedDeptIds.push(...userDept.children.map(c => c.dept_id));
+
+                for (const ud of userDepts) {
+                    if (ud.department) {
+                        permittedDeptIds.push(ud.department.dept_id);
+                        // Nếu user thuộc Đội (level=DOI) → cũng thấy phiếu của các Tổ con
+                        if (ud.department.children) {
+                            permittedDeptIds.push(...ud.department.children.map(c => c.dept_id));
+                        }
+                    }
+                }
+
+                // 2. Fallback: giữ dept_id cũ (backward compatible khi chưa migrate)
+                if (permittedDeptIds.length === 0 && user.department) {
+                    permittedDeptIds.push(user.department.dept_id);
+                }
+
+                // 3. Nếu là OPERATOR, thêm filter theo device group
+                if (user.role === UserRole.OPERATOR) {
+                    const userGroups = await this.userDeviceGroupRepo.find({ 
+                        where: { user_id: user.user_id },
+                        select: ['group_id']
+                    });
+                    const groupIds = userGroups.map(ug => ug.group_id);
+                    if (groupIds.length > 0) {
+                        query.andWhere('device.group_id IN (:...groupIds)', { groupIds });
                     }
                 }
             }
-
-            // 2. Fetch departments where user is Manager
-            const managedDepts = await this.departmentRepo.find({ 
-                where: { manager_id: user.user_id },
-                relations: ['children'] // Also load children of managed departments
-            });
-            
-            managedDepts.forEach(d => {
-                permittedDeptIds.push(d.dept_id);
-                if (d.children) {
-                    permittedDeptIds.push(...d.children.map(c => c.dept_id));
-                }
-            });
         }
         
-        // Apply Filters
-        if (isUnitHeadFilter) {
+        // Apply dept filter
+        if (needsDeptFilter) {
              if (permittedDeptIds.length > 0) {
-                 query.andWhere('created_department.dept_id IN (:...permittedDeptIds)', { permittedDeptIds });
+                 // Loại bỏ duplicate
+                 const uniqueDeptIds = [...new Set(permittedDeptIds)];
+                 query.andWhere('created_department.dept_id IN (:...permittedDeptIds)', { permittedDeptIds: uniqueDeptIds });
              } else {
-                 // Fallback if no department found (shouldn't happen for valid users)
                  query.andWhere('1=0'); 
              }
-        } else if (user && user.role === UserRole.OPERATOR) {
-              // ... existing operator logic ...
-              // Re-implementing simplified Operator logic here to fit flow
-             const userGroups = await this.userDeviceGroupRepo.find({ 
-                 where: { user_id: user.user_id },
-                 select: ['group_id']
-             });
-             const groupIds = userGroups.map(ug => ug.group_id);
-             if (groupIds.length === 0) return [];
-             query.andWhere('device.group_id IN (:...groupIds)', { groupIds });
         }
 
         if (filters?.device_id) {
@@ -998,7 +1154,7 @@ export class RepairsService {
         return { data: repairs, total };
     }
 
-    async remove(id: number) {
+    async remove(id: number, role?: string) {
         const repair = await this.repairRepo.findOne({
             where: { repair_id: id },
             relations: [
@@ -1013,16 +1169,19 @@ export class RepairsService {
 
         if (!repair) throw new NotFoundException('Không tìm thấy phiếu');
 
-        const hasAnyApproval =
-            repair.approved_by_manager_request ||
-            repair.approved_by_admin_request ||
-            repair.approved_by_manager_inspection ||
-            repair.approved_by_admin_inspection ||
-            repair.approved_by_manager_acceptance ||
-            repair.approved_by_admin_acceptance;
+        // ADMIN bypass: cho phép xóa phiếu đã duyệt
+        if (role !== 'ADMIN') {
+            const hasAnyApproval =
+                repair.approved_by_manager_request ||
+                repair.approved_by_admin_request ||
+                repair.approved_by_manager_inspection ||
+                repair.approved_by_admin_inspection ||
+                repair.approved_by_manager_acceptance ||
+                repair.approved_by_admin_acceptance;
 
-        if (hasAnyApproval) {
-            throw new BadRequestException('Không thể xóa phiếu đã được phê duyệt. Chỉ có thể xóa phiếu chưa có bất kỳ phê duyệt nào.');
+            if (hasAnyApproval) {
+                throw new BadRequestException('Không thể xóa phiếu đã được phê duyệt. Chỉ có thể xóa phiếu chưa có bất kỳ phê duyệt nào.');
+            }
         }
 
         const stockOuts = await this.stockOutRepo.find({

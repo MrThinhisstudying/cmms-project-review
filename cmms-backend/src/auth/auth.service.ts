@@ -57,6 +57,7 @@ export class AuthService {
             status: user.status,
             permissions: departmentPermissions,
             signature_url: user.signature_url,
+            mustChangePassword: user.must_change_password,
         };
 
         return {
@@ -68,8 +69,9 @@ export class AuthService {
         let user: User;
 
         try {
-            user = await this.userService.findOne({
+            user = await this.userService.findOneSignup({
                 where: {email: payload.email},
+                relations: ['department', 'user_departments', 'user_departments.department'],
             });
         } catch (error) {
             throw new UnauthorizedException(`Không có người dùng nào có email:: ${payload.email}`);
@@ -106,5 +108,67 @@ export class AuthService {
         await this.userRepository.save(user);
 
         return {message: 'Đổi mật khẩu thành công'};
+    }
+
+    async changePasswordFirstLogin(userId: number, data: any) {
+        const {currentPassword, newPassword, confirmNewPassword} = data;
+        if (!currentPassword || !newPassword || !confirmNewPassword) {
+            throw new BadRequestException('Vui lòng điền đầy đủ các thông tin mật khẩu');
+        }
+        if (newPassword !== confirmNewPassword) {
+            throw new BadRequestException('Mật khẩu mới và mật khẩu xác nhận không khớp');
+        }
+
+        const user = await this.userRepository.findOne({
+            where: {user_id: userId},
+            relations: ['department'],
+        });
+        if (!user) {
+            throw new NotFoundException('Người dùng không tồn tại');
+        }
+
+        // Verify current password
+        const isMatch = await user.checkPassword(currentPassword);
+        if (!isMatch) {
+            throw new BadRequestException('Mật khẩu hiện tại không chính xác');
+        }
+
+        // Check if the new password is same as default password
+        if (newPassword === 'Vcs@123456' || newPassword === '12345678') {
+            throw new BadRequestException('Mật khẩu mới không được trùng với mật khẩu mặc định');
+        }
+
+        if (newPassword.length < 6) {
+            throw new BadRequestException('Mật khẩu mới phải có ít nhất 6 ký tự');
+        }
+
+        user.password = newPassword;
+        user.must_change_password = false;
+        await this.userRepository.save(user);
+
+        // Generate new token
+        delete user.password;
+        const departmentPermissions = user.department?.permissions || [];
+
+        const payload = {
+            email: user.email,
+            sub: user.name,
+            id: user.user_id,
+            role: user.role,
+            department: {
+                id: user.department?.dept_id,
+                name: user.department?.name,
+            },
+            position: user.position,
+            avatar: user.avatar,
+            status: user.status,
+            permissions: departmentPermissions,
+            signature_url: user.signature_url,
+            mustChangePassword: false,
+        };
+
+        return {
+            accessToken: this.jwtService.sign(payload),
+        };
     }
 }

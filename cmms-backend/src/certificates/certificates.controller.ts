@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseInterceptors, UploadedFiles, BadRequestException } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { CertificatesService } from './certificates.service';
 import { CertificateType } from './entities/user-certificate.entity';
 import { diskStorage } from 'multer';
@@ -53,7 +53,7 @@ export class CertificatesController {
     }
 
     @Post('user/:userId')
-    @UseInterceptors(FileInterceptor('file', {
+    @UseInterceptors(FilesInterceptor('files', 5, {
         storage: diskStorage({
             destination: './uploads/certificates',
             filename: (req, file, cb) => {
@@ -65,20 +65,24 @@ export class CertificatesController {
     async createCertificate(
         @Param('userId') userId: string,
         @Body() body: any,
-        @UploadedFile() file: any,
+        @UploadedFiles() files: any[],
     ) {
         let fileUrl: string | undefined;
-        if (file) {
-            const filePath = join(process.cwd(), 'uploads', 'certificates', file.filename);
-            const result = await compressImage(filePath);
-            const finalFilename = require('path').basename(result.outputPath);
-            fileUrl = `/uploads/certificates/${finalFilename}`;
+        if (files && files.length > 0) {
+            const urls = [];
+            for (const f of files) {
+                const filePath = join(process.cwd(), 'uploads', 'certificates', f.filename);
+                const result = await compressImage(filePath);
+                const finalFilename = require('path').basename(result.outputPath);
+                urls.push(`/uploads/certificates/${finalFilename}`);
+            }
+            fileUrl = JSON.stringify(urls);
         }
         return this.certificatesService.createCertificate(parseInt(userId), body, fileUrl);
     }
 
     @Put(':id')
-    @UseInterceptors(FileInterceptor('file', {
+    @UseInterceptors(FilesInterceptor('files', 5, {
         storage: diskStorage({
             destination: './uploads/certificates',
             filename: (req, file, cb) => {
@@ -90,14 +94,18 @@ export class CertificatesController {
     async updateCertificate(
         @Param('id') id: number,
         @Body() body: any,
-        @UploadedFile() file: any,
+        @UploadedFiles() files: any[],
     ) {
         let fileUrl: string | undefined;
-        if (file) {
-            const filePath = join(process.cwd(), 'uploads', 'certificates', file.filename);
-            const result = await compressImage(filePath);
-            const finalFilename = require('path').basename(result.outputPath);
-            fileUrl = `/uploads/certificates/${finalFilename}`;
+        if (files && files.length > 0) {
+            const urls = [];
+            for (const f of files) {
+                const filePath = join(process.cwd(), 'uploads', 'certificates', f.filename);
+                const result = await compressImage(filePath);
+                const finalFilename = require('path').basename(result.outputPath);
+                urls.push(`/uploads/certificates/${finalFilename}`);
+            }
+            fileUrl = JSON.stringify(urls);
         }
         return this.certificatesService.updateCertificate(id, body, fileUrl);
     }

@@ -35,23 +35,40 @@ export class AuditService {
   }
 
   async getAllLogs(
-    filters: { actorUserId?: string; entity?: string; entityId?: string },
+    filters: { actorUserId?: string; entity?: string; entityId?: string; action?: string; dateFrom?: string; dateTo?: string },
     page = 1,
-    limit = 20,
+    limit = 50,
   ) {
     const repo = this.connection.getRepository(AuditLog);
-    const where: any = {};
-    if (filters.actorUserId) where.actor_user_id = Number(filters.actorUserId);
-    if (filters.entity) where.entity_name = filters.entity;
-    if (filters.entityId) where.entity_id = String(filters.entityId);
+    const qb = repo.createQueryBuilder('log')
+      .leftJoinAndSelect('log.transaction', 'transaction')
+      .orderBy('log.created_at', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit);
 
-    const [items, total] = await repo.findAndCount({
-      where,
-      order: { created_at: 'DESC' },
-      skip: (page - 1) * limit,
-      take: limit,
-      relations: ['transaction'],
-    });
+    if (filters.actorUserId) {
+      qb.andWhere('log.actor_user_id = :actorUserId', { actorUserId: Number(filters.actorUserId) });
+    }
+    if (filters.entity) {
+      qb.andWhere('log.entity_name = :entity', { entity: filters.entity });
+    }
+    if (filters.entityId) {
+      qb.andWhere('log.entity_id = :entityId', { entityId: String(filters.entityId) });
+    }
+    if (filters.action) {
+      qb.andWhere('log.action = :action', { action: filters.action });
+    }
+    if (filters.dateFrom) {
+      qb.andWhere('log.created_at >= :dateFrom', { dateFrom: new Date(filters.dateFrom) });
+    }
+    if (filters.dateTo) {
+      // dateTo + 1 day to include the whole day
+      const endDate = new Date(filters.dateTo);
+      endDate.setDate(endDate.getDate() + 1);
+      qb.andWhere('log.created_at < :dateTo', { dateTo: endDate });
+    }
+
+    const [items, total] = await qb.getManyAndCount();
     return { items, total, page, limit };
   }
 
