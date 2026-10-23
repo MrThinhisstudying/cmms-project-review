@@ -28,6 +28,40 @@ export class LaborContractsService {
     return await this.laborContractRepo.save(contract);
   }
 
+  async createBulk(dtos: CreateLaborContractDto[]): Promise<{ created: number; updated: number; failed: number }> {
+    let created = 0;
+    let updated = 0;
+    let failed = 0;
+
+    for (const dto of dtos) {
+      try {
+        const existing = await this.laborContractRepo.findOne({
+          where: { contract_number: dto.contract_number },
+        });
+
+        if (existing) {
+          Object.assign(existing, {
+            ...dto,
+            user: { user_id: dto.user_id } as User,
+          });
+          await this.laborContractRepo.save(existing);
+          updated++;
+        } else {
+          const contract = this.laborContractRepo.create({
+            ...dto,
+            user: { user_id: dto.user_id } as User,
+          });
+          await this.laborContractRepo.save(contract);
+          created++;
+        }
+      } catch (err) {
+        failed++;
+      }
+    }
+
+    return { created, updated, failed };
+  }
+
   async findAll(): Promise<LaborContract[]> {
     return await this.laborContractRepo.find({
         relations: ['user', 'user.department'],

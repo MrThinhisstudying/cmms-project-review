@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, Table, Input, Select, Tag, Badge, Tabs, Button, message, Spin, Avatar, Tooltip } from 'antd';
-import { SearchOutlined, UserOutlined, WarningOutlined, SafetyCertificateOutlined, BookOutlined, CarOutlined, CalendarOutlined, EyeOutlined } from '@ant-design/icons';
+import { SearchOutlined, UserOutlined, SafetyCertificateOutlined, BookOutlined, CarOutlined, EyeOutlined } from '@ant-design/icons';
 import { IUser } from '../../types/user.types';
 import { IEmployeeCertificate, IUserTrainingRequirement } from '../../types/certificates.types';
 import { getAllUsers } from '../../apis/users';
@@ -37,26 +37,7 @@ const HRCertificates: React.FC = () => {
     const [certData, setCertData] = useState<Record<number, { certificates: IEmployeeCertificate[]; requirements: IUserTrainingRequirement[] }>>({});
     const [certLoading, setCertLoading] = useState(false);
 
-    useEffect(() => {
-        fetchUsers();
-    }, []);
-
-    const fetchUsers = async () => {
-        setLoading(true);
-        try {
-            const token = getToken();
-            const data = await getAllUsers(token);
-            setUsers(data);
-            // Load cert data for all users
-            loadAllCertData(data);
-        } catch (error) {
-            message.error('Lỗi tải danh sách nhân viên');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const loadAllCertData = async (userList: IUser[]) => {
+    const loadAllCertData = useCallback(async (userList: IUser[]) => {
         setCertLoading(true);
         try {
             const promises = userList.map(async (u) => {
@@ -79,7 +60,26 @@ const HRCertificates: React.FC = () => {
         } finally {
             setCertLoading(false);
         }
-    };
+    }, []);
+
+    const fetchUsers = useCallback(async () => {
+        setLoading(true);
+        try {
+            const token = getToken();
+            const data = await getAllUsers(token);
+            setUsers(data);
+            // Load cert data for all users
+            loadAllCertData(data);
+        } catch (error) {
+            message.error('Lỗi tải danh sách nhân viên');
+        } finally {
+            setLoading(false);
+        }
+    }, [loadAllCertData]);
+
+    useEffect(() => {
+        fetchUsers();
+    }, [fetchUsers]);
 
     const isExpiring = (cert: IEmployeeCertificate): boolean => {
         if (!cert.next_training_date && !cert.expiry_date) return false;

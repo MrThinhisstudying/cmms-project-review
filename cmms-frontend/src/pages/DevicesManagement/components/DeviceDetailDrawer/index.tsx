@@ -1,6 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { Drawer, Tabs, Descriptions, Tag, Row, Col, Space, Table, Empty, Card, Tooltip, Button, notification } from "antd";
-import { StarFilled } from "@ant-design/icons";
+import { Drawer, Tabs, Descriptions, Tag, Row, Col, Space, Table, Empty, Card, Button, notification, Select, Popover, message, Avatar, Typography } from "antd";
+import {
+  StarFilled,
+  ToolOutlined,
+  TeamOutlined,
+  ApartmentOutlined,
+  SwapOutlined,
+  PhoneOutlined,
+  MailOutlined,
+  UserOutlined,
+} from "@ant-design/icons";
 
 import { getToken } from "../../../../utils/auth";
 import { getMaintenancesByDevice } from "../../../../apis/maintenance";
@@ -14,7 +23,10 @@ import { IUser } from "../../../../types/user.types";
 import LicenseModal from "./LicenseModal";
 import { updateDevice } from "../../../../apis/devices";
 import { IDevice } from "../../../../types/devicesManagement.types";
+import { IDeviceGroup, getDeviceGroups, getDeviceGroup, assignDeviceToGroup } from "../../../../apis/device-groups";
 import dayjs from "dayjs";
+
+const { Text } = Typography;
 
 type Props = {
   open: boolean;
@@ -41,24 +53,65 @@ export default function DeviceDetailDrawer({
   const [repairPageSize, setRepairPageSize] = useState(10);
   const [repairTotal, setRepairTotal] = useState(0);
 
-  useEffect(() => {
-    if (!open || !device?.device_group?.id) {
-        setUsers([]);
-        return;
+  // Quản lý Nhóm thiết bị & Cấp bậc tổ chức
+  const [currentGroup, setCurrentGroup] = useState<IDeviceGroup | null>(null);
+  const [allGroups, setAllGroups] = useState<IDeviceGroup[]>([]);
+  const [changingGroup, setChangingGroup] = useState(false);
+  const [changeGroupOpen, setChangeGroupOpen] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState<number | null>(null);
+
+  const fetchGroupDetails = React.useCallback(async (groupId?: number | null) => {
+    if (!groupId) {
+      setCurrentGroup(null);
+      setUsers([]);
+      return;
     }
     const token = getToken();
-    (async () => {
-        setLoadingUsers(true);
-        try {
-            const res = await getAllUsers(token, { groupId: device.device_group?.id });
-            setUsers(res);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoadingUsers(false);
+    setLoadingUsers(true);
+    try {
+      const [groupData, groupUsers] = await Promise.all([
+        getDeviceGroup(groupId),
+        getAllUsers(token, { groupId }),
+      ]);
+      setCurrentGroup(groupData);
+      setUsers(groupUsers || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoadingUsers(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      getDeviceGroups().then(setAllGroups).catch(() => {});
+      fetchGroupDetails(device?.device_group?.id);
+      setSelectedGroupId(device?.device_group?.id || null);
+    }
+  }, [open, device?.device_group?.id, fetchGroupDetails]);
+
+  const handleAssignGroup = async (newGroupId: number | null) => {
+    if (!device?.device_id) return;
+    setChangingGroup(true);
+    try {
+      await assignDeviceToGroup(device.device_id, newGroupId);
+      message.success("Cập nhật nhóm quản lý thiết bị thành công");
+      setChangeGroupOpen(false);
+      await fetchGroupDetails(newGroupId);
+      if (device) {
+        if (newGroupId) {
+          const matched = allGroups.find(g => g.id === newGroupId);
+          device.device_group = matched || ({ id: newGroupId } as any);
+        } else {
+          device.device_group = undefined;
         }
-    })();
-  }, [open, device?.device_group?.id]);
+      }
+    } catch (e) {
+      message.error("Gán nhóm thiết bị thất bại");
+    } finally {
+      setChangingGroup(false);
+    }
+  };
 
   const fetchMaintenances = React.useCallback(async () => {
     if (!device?.device_id) return;
@@ -199,45 +252,223 @@ export default function DeviceDetailDrawer({
 
   // --- Tab 2: Nhân viên QL ---
   const renderManagement = () => {
+      const parentDoi = currentGroup?.department?.parent;
+      const parentTo = currentGroup?.department;
+      const groupLeader = currentGroup?.leader || users.find(u => 
+          u.user_device_groups?.some(g => g.group_id === currentGroup?.id && g.is_group_lead)
+      );
+
+      const changeGroupContent = (
+          <div style={{ width: 300, padding: 4 }}>
+              <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 13 }}>
+                  <SwapOutlined /> Chọn Nhóm kỹ thuật phụ trách:
+              </div>
+              <Select
+                  style={{ width: '100%', marginBottom: 12 }}
+                  placeholder="-- Chọn nhóm quản lý --"
+                  value={selectedGroupId}
+                  onChange={val => setSelectedGroupId(val)}
+                  allowClear
+              >
+                  {allGroups.map(g => (
+                      <Select.Option key={g.id} value={g.id}>
+                          ⚙️ {g.name} {g.department?.name ? `(${g.department.name})` : ''}
+                      </Select.Option>
+                  ))}
+              </Select>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <Button size="small" danger onClick={() => handleAssignGroup(null)} loading={changingGroup}>
+                      Gỡ khỏi nhóm
+                  </Button>
+                  <Button size="small" type="primary" onClick={() => handleAssignGroup(selectedGroupId)} loading={changingGroup}>
+                      Xác nhận gán
+                  </Button>
+              </div>
+          </div>
+      );
+
       const columns = [
+          {
+              title: 'STT',
+              key: 'index',
+              width: 50,
+              align: 'center' as const,
+              render: (_: any, __: any, index: number) => index + 1,
+          },
           { 
               title: 'Họ và tên', 
               dataIndex: 'name', 
               key: 'name',
               render: (text: string, record: IUser) => {
-                  const currentGroupId = device.device_group?.id;
-                  const isLeader = record.user_device_groups?.some(
-                      g => g.group_id === currentGroupId && g.is_group_lead
+                  const isLeader = record.user_id === groupLeader?.user_id || record.user_device_groups?.some(
+                      g => g.group_id === currentGroup?.id && g.is_group_lead
                   );
                   return (
                       <Space>
-                          {text}
+                          <Avatar size="small" icon={<UserOutlined />} style={{ backgroundColor: isLeader ? '#faad14' : '#1890ff' }} />
+                          <span style={{ fontWeight: isLeader ? 600 : 400 }}>{text}</span>
                           {isLeader && (
-                              <Tooltip title="Nhóm trưởng">
-                                  <StarFilled style={{ color: '#faad14', fontSize: '16px' }} />
-                              </Tooltip>
+                              <Tag color="gold" icon={<StarFilled />} style={{ fontSize: 11, padding: '0 6px' }}>
+                                  Nhóm trưởng
+                              </Tag>
                           )}
                       </Space>
                   );
               }
           },
-          { title: 'Chức vụ', dataIndex: 'position', key: 'position' },
-          { title: 'Email', dataIndex: 'email', key: 'email' },
-          { title: 'Phòng ban', dataIndex: ['department', 'name'], key: 'dept', render: (val: any) => val || '-' },
+          {
+              title: 'Vai trò trong nhóm',
+              key: 'role_in_group',
+              width: 140,
+              render: (_: any, record: IUser) => {
+                  const isLeader = record.user_id === groupLeader?.user_id || record.user_device_groups?.some(
+                      g => g.group_id === currentGroup?.id && g.is_group_lead
+                  );
+                  return isLeader ? (
+                      <Tag color="gold" style={{ fontWeight: 600 }}>⭐ Nhóm trưởng</Tag>
+                  ) : (
+                      <Tag color="cyan">Thành viên kỹ thuật</Tag>
+                  );
+              }
+          },
+          { 
+              title: 'Số điện thoại', 
+              dataIndex: 'phone_number', 
+              key: 'phone',
+              render: (phone: string) => phone ? (
+                  <Space size={4}>
+                      <PhoneOutlined style={{ color: '#52c41a' }} />
+                      <span>{phone}</span>
+                  </Space>
+              ) : <span style={{ color: '#ccc' }}>—</span>
+          },
+          { 
+              title: 'Email', 
+              dataIndex: 'email', 
+              key: 'email',
+              render: (email: string) => email ? (
+                  <Space size={4}>
+                      <MailOutlined style={{ color: '#1890ff' }} />
+                      <span style={{ fontSize: 12 }}>{email}</span>
+                  </Space>
+              ) : <span style={{ color: '#ccc' }}>—</span>
+          },
+          { title: 'Chức vụ', dataIndex: 'position', key: 'position', render: (val: any) => val || '—' },
+          { title: 'Phòng ban / Đơn vị', dataIndex: ['department', 'name'], key: 'dept', render: (val: any) => val || '-' },
       ];
 
       return (
-          <Card title={`II. Nhân viên Quản lý (Nhóm: ${device.device_group?.name || 'Chưa gán'})`} size="small">
-             <Table 
-                columns={columns} 
-                dataSource={users} 
-                rowKey="user_id" 
-                size="small" 
-                pagination={false} 
-                loading={loadingUsers}
-                locale={{ emptyText: <Empty description="Chưa có nhân viên nào trong nhóm này" /> }}
-            />
-          </Card>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Card thông tin cơ cấu phân cấp */}
+              <Card
+                  size="small"
+                  style={{
+                      background: currentGroup ? 'linear-gradient(135deg, #f6f8fc 0%, #eef2fe 100%)' : '#fffbe6',
+                      borderColor: currentGroup ? '#adc6ff' : '#ffe58f',
+                  }}
+              >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: currentGroup ? '#1d39c4' : '#d48806', marginBottom: 4 }}>
+                              CƠ CẤU PHÂN CẤP QUẢN LÝ THIẾT BỊ
+                          </div>
+                          {currentGroup ? (
+                              <Space size={16} wrap style={{ fontSize: 12 }}>
+                                  <div>
+                                      <ApartmentOutlined style={{ color: '#1890ff', marginRight: 4 }} />
+                                      <span style={{ color: '#666' }}>Đội:</span>{' '}
+                                      <strong>{parentDoi?.name || (parentTo?.parent_id ? 'Đội kỹ thuật' : '—')}</strong>
+                                  </div>
+                                  <div>
+                                      <TeamOutlined style={{ color: '#13c2c2', marginRight: 4 }} />
+                                      <span style={{ color: '#666' }}>Tổ trực thuộc:</span>{' '}
+                                      <strong>{parentTo?.name || 'Chưa phân Tổ'}</strong>
+                                  </div>
+                                  <div>
+                                      <ToolOutlined style={{ color: '#722ed1', marginRight: 4 }} />
+                                      <span style={{ color: '#666' }}>Nhóm quản lý:</span>{' '}
+                                      <Tag color="purple" style={{ fontWeight: 600, margin: 0 }}>{currentGroup.name}</Tag>
+                                  </div>
+                                  {groupLeader && (
+                                      <div>
+                                          <StarFilled style={{ color: '#faad14', marginRight: 4 }} />
+                                          <span style={{ color: '#666' }}>Nhóm trưởng:</span>{' '}
+                                          <strong style={{ color: '#d48806' }}>{groupLeader.name}</strong>
+                                          {groupLeader.phone_number && ` (${groupLeader.phone_number})`}
+                                      </div>
+                                  )}
+                              </Space>
+                          ) : (
+                              <div style={{ fontSize: 12, color: '#ad6800' }}>
+                                  ⚠️ Thiết bị này hiện chưa được phân công cho Nhóm kỹ thuật nào để quản trị vận hành.
+                              </div>
+                          )}
+                      </div>
+
+                      <Popover
+                          content={changeGroupContent}
+                          title="Gán / Chuyển Nhóm quản lý"
+                          trigger="click"
+                          open={changeGroupOpen}
+                          onOpenChange={setChangeGroupOpen}
+                          placement="bottomRight"
+                      >
+                          <Button
+                              type={currentGroup ? "default" : "primary"}
+                              icon={<SwapOutlined />}
+                              size="small"
+                              style={{ borderColor: currentGroup ? '#1890ff' : undefined }}
+                          >
+                              {currentGroup ? "Đổi Nhóm" : "Gán vào Nhóm ngay"}
+                          </Button>
+                      </Popover>
+                  </div>
+              </Card>
+
+              {/* Table Danh sách Nhân viên quản lý */}
+              <Card
+                  title={
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span>II. Danh sách Nhân viên Quản lý ({users.length} nhân sự)</span>
+                          {currentGroup && (
+                              <Text type="secondary" style={{ fontSize: 11, fontWeight: 400 }}>
+                                  Tất cả thành viên trong nhóm <strong>{currentGroup.name}</strong> chịu trách nhiệm bảo dưỡng & vận hành thiết bị này
+                              </Text>
+                          )}
+                      </div>
+                  }
+                  size="small"
+              >
+                 <Table 
+                    columns={columns} 
+                    dataSource={users} 
+                    rowKey="user_id" 
+                    size="small" 
+                    pagination={false} 
+                    loading={loadingUsers}
+                    locale={{
+                        emptyText: (
+                            <Empty
+                                description="Chưa có nhân viên nào trong nhóm này hoặc thiết bị chưa được gán nhóm."
+                                children={
+                                    <Popover
+                                        content={changeGroupContent}
+                                        title="Gán Nhóm kỹ thuật"
+                                        trigger="click"
+                                        open={changeGroupOpen}
+                                        onOpenChange={setChangeGroupOpen}
+                                    >
+                                        <Button type="primary" icon={<ToolOutlined />} size="small" style={{ marginTop: 8 }}>
+                                            Gán thiết bị vào nhóm ngay
+                                        </Button>
+                                    </Popover>
+                                }
+                            />
+                        )
+                    }}
+                />
+              </Card>
+          </div>
       );
   };
 
@@ -335,6 +566,7 @@ export default function DeviceDetailDrawer({
           maintenances={maintenances} 
           deviceId={device.device_id!}
           deviceName={device.name}
+          device={device}
           onRefresh={fetchMaintenances}
        />
   );

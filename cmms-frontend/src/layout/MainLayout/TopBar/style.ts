@@ -1,19 +1,18 @@
-import {
-  AppBar,
-  AppBarProps,
-  styled,
-  Toolbar,
-  ToolbarProps,
-} from "@mui/material";
+import styled from "styled-components";
 
-export const AppBarContainer = styled(AppBar)<AppBarProps>(({ theme }) => ({
-  background: "#fff",
-  height: "70px",
-  position: "fixed",
-}));
+export const AppBarContainer = styled.header`
+  background: #fff;
+  height: 70px;
+  position: fixed;
+  width: 100%;
+  top: 0;
+  z-index: 100;
+`;
 
-export const ToolbarContainer = styled(Toolbar)<ToolbarProps>(({ theme }) => ({
-  display: "flex",
-  justifyContent: "space-between",
-  height: "100%",
-}));
+export const ToolbarContainer = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 100%;
+  padding: 0 24px;
+`;

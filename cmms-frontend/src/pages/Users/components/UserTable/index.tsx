@@ -1,24 +1,8 @@
 import React, { useMemo, useState } from "react";
-import {
-  TableHead,
-  TableCell,
-  TableBody,
-  IconButton,
-  Box,
-  Typography,
-} from "@mui/material";
-import EditIcon from "@mui/icons-material/Edit";
-import DeleteIcon from "@mui/icons-material/Delete";
-import LockIcon from "@mui/icons-material/Lock";
+import { Table, Button, Tag, Avatar } from "antd";
+import { EditOutlined, DeleteOutlined, LockOutlined, UserOutlined } from "@ant-design/icons";
 import { IUser } from "../../../../types/user.types";
 import ConfirmModal from "../../../../components/Modal";
-import UNKNOWN from "../../../../assets/images/unknown.jpg";
-import {
-  CustomTable,
-  TableCellHeader,
-  TableRowBody,
-  TableRowContainer,
-} from "./style";
 
 interface UserTableProps {
   users: IUser[];
@@ -59,104 +43,99 @@ const UserTable: React.FC<UserTableProps> = ({
     setSelectedUserId(null);
   };
 
+  const columns = [
+    {
+      title: "Tên",
+      dataIndex: "name",
+      key: "name",
+      render: (text: string, record: IUser) => (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Avatar src={record.avatar} icon={<UserOutlined />} size={32} />
+          <span style={{ fontWeight: 600 }}>{text}</span>
+        </div>
+      ),
+    },
+    {
+      title: "Email",
+      dataIndex: "email",
+      key: "email",
+    },
+    {
+      title: "Chức vụ",
+      dataIndex: "position",
+      key: "position",
+    },
+    {
+      title: "Phòng ban",
+      key: "department",
+      render: (_: any, record: IUser) => record.department?.name || "-",
+    },
+    {
+      title: "Số CCCD",
+      dataIndex: "citizen_identification_card",
+      key: "citizen_identification_card",
+    },
+    {
+      title: "Trạng thái",
+      dataIndex: "status",
+      key: "status",
+      render: (status: string) => (
+        <Tag color={status === "active" || status === "ACTIVE" ? "success" : "error"}>
+          {status === "active" || status === "ACTIVE" ? "Đang hoạt động" : "Không hoạt động"}
+        </Tag>
+      ),
+    },
+    {
+      title: "Vai trò",
+      dataIndex: "role",
+      key: "role",
+      render: (role: string) => <Tag color="blue">{role}</Tag>,
+    },
+    {
+      title: "Đổi MK",
+      key: "password",
+      render: (_: any, record: IUser) => (
+        <Button
+          type="text"
+          icon={<LockOutlined style={{ color: "#1890ff" }} />}
+          onClick={() => onUpdatePassword(record)}
+        />
+      ),
+    },
+    {
+      title: "Sửa",
+      key: "edit",
+      render: (_: any, record: IUser) => (
+        <Button
+          type="text"
+          icon={<EditOutlined style={{ color: "#52c41a" }} />}
+          onClick={() => onEdit(record)}
+        />
+      ),
+    },
+    {
+      title: "Xoá",
+      key: "delete",
+      render: (_: any, record: IUser) => (
+        <Button
+          type="text"
+          danger
+          icon={<DeleteOutlined />}
+          onClick={() => handleDeleteClick(record.user_id)}
+        />
+      ),
+    },
+  ];
+
   return (
     <>
-      <CustomTable stickyHeader>
-        <TableHead>
-          <TableRowContainer>
-            <TableCellHeader>Tên</TableCellHeader>
-            <TableCellHeader>Email</TableCellHeader>
-            <TableCellHeader>Chức vụ</TableCellHeader>
-            <TableCellHeader>Phòng ban</TableCellHeader>
-            <TableCellHeader>Số CCCD</TableCellHeader>
-            <TableCellHeader>Trạng thái</TableCellHeader>
-            <TableCellHeader>Vai trò</TableCellHeader>
-            <TableCellHeader>Thay đổi mật khẩu</TableCellHeader>
-            <TableCellHeader>Sửa</TableCellHeader>
-            <TableCellHeader>Xoá</TableCellHeader>
-          </TableRowContainer>
-        </TableHead>
-        <TableBody>
-          {paginatedUsers.map((user, index) => (
-            <TableRowBody key={user.user_id} index={index}>
-              <TableCell>
-                <Box style={{ display: "flex", alignItems: "center" }}>
-                  <img
-                    src={user.avatar || UNKNOWN}
-                    alt={user.name}
-                    style={{
-                      width: "30px",
-                      height: "30px",
-                      borderRadius: "50%",
-                      marginRight: "8px",
-                    }}
-                  />
-                  {user.name}
-                </Box>
-              </TableCell>
-              <TableCell>{user.email}</TableCell>
-              <TableCell>{user.position}</TableCell>
-              <TableCell>{user.department?.name}</TableCell>
-              <TableCell>{user.citizen_identification_card}</TableCell>
-              <TableCell>
-                {user.status === "active" ? (
-                  <>
-                    <Typography
-                      width="10px"
-                      height="10px"
-                      borderRadius="50%"
-                      display="inline-block"
-                      marginRight="8px"
-                      bgcolor="green"
-                    />
-                    Đang hoạt động
-                  </>
-                ) : (
-                  <>
-                    <Typography
-                      width="10px"
-                      height="10px"
-                      borderRadius="50%"
-                      display="inline-block"
-                      marginRight="8px"
-                      bgcolor="red"
-                    />
-                    Không hoạt động
-                  </>
-                )}
-              </TableCell>
-              <TableCell>{user.role}</TableCell>
-              <TableCell>
-                <IconButton
-                  color="primary"
-                  onClick={() => onUpdatePassword(user)}
-                  aria-label="pass"
-                >
-                  <LockIcon />
-                </IconButton>
-              </TableCell>
-              <TableCell>
-                <IconButton
-                  color="primary"
-                  onClick={() => onEdit(user)}
-                  aria-label="edit"
-                >
-                  <EditIcon />
-                </IconButton>
-              </TableCell>
-              <TableCell>
-                <IconButton
-                  color="error"
-                  onClick={() => handleDeleteClick(user.user_id)}
-                  aria-label="delete"
-                >
-                  <DeleteIcon />
-                </IconButton>
-              </TableCell>
-            </TableRowBody>
-          ))}
-        </TableBody>
-      </CustomTable>
+      <Table
+        dataSource={paginatedUsers}
+        columns={columns}
+        rowKey="user_id"
+        pagination={false}
+        bordered
+      />
 
       <ConfirmModal
         open={open}

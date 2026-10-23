@@ -4,6 +4,7 @@ import { IDevice } from "./devicesManagement.types";
 
 export type RequestStatus =
   | "WAITING_TECH"
+  | "WAITING_TEAM_LEAD"
   | "WAITING_MANAGER"
   | "WAITING_DIRECTOR"
   | "REJECTED_B03"
@@ -58,6 +59,8 @@ export interface IRepair {
   created_by: IUser;
   created_department: IDepartment;
 
+  description_defect?: string;
+  stock_outs?: any[];
   location_issue?: string;
   recommendation?: string;
   note?: string;

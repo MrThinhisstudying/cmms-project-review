@@ -64,6 +64,18 @@ export class CertificatesService {
     }
 
     // --- User Certificates ---
+    async getAllCertificates(type?: CertificateType): Promise<UserCertificate[]> {
+        const where: any = {};
+        if (type) {
+            where.type = type;
+        }
+        return this.userCertificateRepository.find({
+            where,
+            relations: ['program', 'user', 'user.user_departments', 'user.user_departments.department'],
+            order: { issue_date: 'DESC' }
+        });
+    }
+
     async getCertificatesByUser(userId: number, type?: CertificateType): Promise<UserCertificate[]> {
         const where: any = { user: { user_id: userId } };
         if (type) {
@@ -101,6 +113,101 @@ export class CertificatesService {
         }
 
         return await this.userCertificateRepository.save(cert);
+    }
+
+    async createBulk(items: any[]): Promise<{ created: number; updated: number; failed: number }> {
+        let created = 0;
+        let updated = 0;
+        let failed = 0;
+
+        for (const item of items) {
+            try {
+                const userId = parseInt(item.user_id);
+                if (!userId) {
+                    failed++;
+                    continue;
+                }
+                const user = await this.userRepository.findOne({ where: { user_id: userId } });
+                if (!user) {
+                    failed++;
+                    continue;
+                }
+
+                let program: TrainingProgram | null = null;
+                if (item.program_id) {
+                    program = await this.trainingProgramRepository.findOne({ where: { id: parseInt(item.program_id) } });
+                }
+
+                // Check existing certificate to update or create
+                let existing: UserCertificate | null = null;
+                if (item.certificate_number && String(item.certificate_number).trim()) {
+                    existing = await this.userCertificateRepository.findOne({
+                        where: {
+                            user: { user_id: userId },
+                            certificate_number: String(item.certificate_number).trim(),
+                        },
+                    });
+                }
+
+                if (!existing) {
+                    if (item.license_class) {
+                        existing = await this.userCertificateRepository.findOne({
+                            where: {
+                                user: { user_id: userId },
+                                license_class: item.license_class,
+                            },
+                        });
+                    } else if (item.degree_type) {
+                        existing = await this.userCertificateRepository.findOne({
+                            where: {
+                                user: { user_id: userId },
+                                degree_type: item.degree_type,
+                            },
+                        });
+                    } else if (item.program_id) {
+                        existing = await this.userCertificateRepository.findOne({
+                            where: {
+                                user: { user_id: userId },
+                                program: { id: parseInt(item.program_id) },
+                            },
+                        });
+                    }
+                }
+
+                if (existing) {
+                    Object.assign(existing, item);
+                    existing.user = user;
+                    if (program) existing.program = program;
+                    // Auto compute next training date if not provided and program has validity
+                    if (!existing.next_training_date && program && program.validity_months && existing.issue_date) {
+                        const nextDate = new Date(existing.issue_date);
+                        nextDate.setMonth(nextDate.getMonth() + program.validity_months);
+                        existing.next_training_date = nextDate;
+                    }
+                    await this.userCertificateRepository.save(existing);
+                    updated++;
+                } else {
+                    const cert = new UserCertificate();
+                    Object.assign(cert, item);
+                    cert.user = user;
+                    cert.program = program;
+                    cert.status = CertificateStatus.ACTIVE;
+                    // Auto compute next training date if not provided and program has validity
+                    if (!cert.next_training_date && program && program.validity_months && cert.issue_date) {
+                        const nextDate = new Date(cert.issue_date);
+                        nextDate.setMonth(nextDate.getMonth() + program.validity_months);
+                        cert.next_training_date = nextDate;
+                    }
+                    await this.userCertificateRepository.save(cert);
+                    created++;
+                }
+            } catch (err) {
+                console.error('Error importing certificate row:', err);
+                failed++;
+            }
+        }
+
+        return { created, updated, failed };
     }
 
     async updateCertificate(id: number, data: any, fileUrl?: string): Promise<UserCertificate> {

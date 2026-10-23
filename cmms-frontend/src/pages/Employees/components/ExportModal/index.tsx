@@ -4,7 +4,7 @@ import {
   Divider, Tag, Spin, message
 } from 'antd';
 import {
-  UserOutlined, SafetyCertificateOutlined, FileTextOutlined,
+  UserOutlined, FileTextOutlined,
   TrophyOutlined, ApartmentOutlined, ExportOutlined,
   WarningOutlined, BookOutlined, IdcardOutlined
 } from '@ant-design/icons';

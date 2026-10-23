@@ -1,11 +1,5 @@
 import React, { useState } from "react";
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
-} from "@mui/material";
+import { Modal as AntdModal, Input as AntdInput } from "antd";
 import { CustomButton } from "../../../../components/Button";
 
 type Props = {
@@ -28,39 +22,35 @@ export default function CompleteDialog({ open, onClose, onSubmit }: Props) {
   };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Hoàn tất phiếu bảo dưỡng</DialogTitle>
-      <DialogContent dividers>
-        <TextField
-          label="Mô tả công việc đã thực hiện *"
-          multiline
-          minRows={4}
-          fullWidth
+    <AntdModal
+      open={open}
+      onCancel={onClose}
+      title="Hoàn tất phiếu bảo dưỡng"
+      footer={[
+        <CustomButton key="cancel" variant="outlined" onClick={onClose}>
+          Hủy
+        </CustomButton>,
+        <CustomButton key="confirm" variant="contained" bgrColor="#1890ff" onClick={handleSave}>
+          Xác nhận hoàn tất
+        </CustomButton>,
+      ]}
+      centered
+    >
+      <div style={{ marginTop: 16 }}>
+        <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>
+          Mô tả công việc đã thực hiện *
+        </label>
+        <AntdInput.TextArea
+          rows={4}
+          placeholder="Ví dụ: thay dầu, vệ sinh lọc, siết ốc, thay bạc đạn..."
           value={review}
           onChange={(e) => setReview(e.target.value)}
-          error={!!error}
-          helperText={
-            error || "Ví dụ: thay dầu, vệ sinh lọc, siết ốc, thay bạc đạn..."
-          }
-          sx={{ mt: 1 }}
+          status={error ? "error" : ""}
         />
-      </DialogContent>
-      <DialogActions>
-        <CustomButton
-          variant="outlined"
-          sx={{ height: "40px" }}
-          onClick={onClose}
-        >
-          Hủy
-        </CustomButton>
-        <CustomButton
-          variant="contained"
-          sx={{ height: "40px" }}
-          onClick={handleSave}
-        >
-          Xác nhận hoàn tất
-        </CustomButton>
-      </DialogActions>
-    </Dialog>
+        <span style={{ color: error ? "#B42318" : "#667085", fontSize: 12, marginTop: 4, display: "block" }}>
+          {error || "Ví dụ: thay dầu, vệ sinh lọc, siết ốc, thay bạc đạn..."}
+        </span>
+      </div>
+    </AntdModal>
   );
 }

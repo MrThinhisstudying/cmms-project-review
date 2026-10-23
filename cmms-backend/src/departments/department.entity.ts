@@ -1,5 +1,6 @@
 import {ApiProperty} from '@nestjs/swagger';
 import {User} from 'src/user/user.entity';
+import {DeviceGroup} from '../device-groups/entities/device-group.entity';
 import {Entity, PrimaryGeneratedColumn, Column, OneToMany, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn} from 'typeorm';
 import { DEPARTMENT_PERMISSION_CODES } from './constant/department-permissions.constant';
 
@@ -33,6 +34,13 @@ export class Department {
     @Column({ nullable: true })
     manager_id?: number;
 
+    @ManyToOne(() => User, { nullable: true })
+    @JoinColumn({ name: 'deputy_id' })
+    deputy?: User;
+
+    @Column({ nullable: true })
+    deputy_id?: number;
+
     @ManyToOne(() => Department, (department) => department.children, { nullable: true })
     @JoinColumn({ name: 'parent_id' })
     parent?: Department;
@@ -42,6 +50,9 @@ export class Department {
 
     @OneToMany(() => Department, (department) => department.parent)
     children: Department[];
+
+    @OneToMany(() => DeviceGroup, (deviceGroup) => deviceGroup.department)
+    device_groups?: DeviceGroup[];
 
     @ApiProperty({ enum: ['PHONG_BAN', 'DOI', 'TO'], default: 'TO' })
     @Column({

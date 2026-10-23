@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { Modal, Table, Tag, Button, message, Empty } from "antd";
 import {
   CheckCircleOutlined,
@@ -30,14 +30,8 @@ const DeviceMaintenanceDetail: React.FC<Props> = ({
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const token = getToken();
 
-  // 1. Load dữ liệu khi mở Modal
-  useEffect(() => {
-    if (open && device) {
-      fetchPlans();
-    }
-  }, [open, device]);
-
-  const fetchPlans = async () => {
+  const fetchPlans = useCallback(async () => {
+    if (!device?.device_id) return;
     setLoading(true);
     try {
       // Gọi API lấy toàn bộ kế hoạch (Active, Inactive, Completed) của xe này
@@ -58,7 +52,14 @@ const DeviceMaintenanceDetail: React.FC<Props> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [device?.device_id, token]);
+
+  // 1. Load dữ liệu khi mở Modal
+  useEffect(() => {
+    if (open && device) {
+      fetchPlans();
+    }
+  }, [open, device, fetchPlans]);
 
   // 2. Xử lý khi bấm nút "Tạo phiếu"
   const handleCreateTicket = (plan: any) => {
@@ -248,20 +249,20 @@ const DeviceMaintenanceDetail: React.FC<Props> = ({
       {/* Form tạo phiếu sẽ hiện đè lên Modal chi tiết */}
       {isFormOpen && (
         <Modal
-          title="Lập phiếu bảo dưỡng"
+          title="Thực Hiện Bảo Dưỡng Định Kỳ"
           open={isFormOpen}
           footer={null}
           onCancel={() => setIsFormOpen(false)}
-          width={1000}
+          width={750}
           destroyOnClose
-          style={{ top: 20 }}
+          centered
         >
           <MaintenanceForm
             initialData={{
               device_id: device?.device_id,
+              device: device,
               maintenance_level: selectedPlan?.level,
-              // Truyền thêm ID kế hoạch để backend biết mà update trạng thái
-              scheduled_date: selectedPlan?.scheduled_date,
+              scheduled_date: selectedPlan?.scheduled_date || selectedPlan?.next_maintenance_date,
               maintenance_plan_id: selectedPlan?.maintenance_id,
             }}
             onSuccess={handleFormSuccess}

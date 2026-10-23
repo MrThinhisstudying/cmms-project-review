@@ -2,14 +2,8 @@ import React, { useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { resetPassword } from "../../apis/users";
-import {
-  Container,
-  Box,
-  Typography,
-  TextField,
-  Button,
-  Paper,
-} from "@mui/material";
+import { Card, Input as AntdInput } from "antd";
+import { CustomButton } from "../../components/Button";
 import Toast from "../../components/Toast";
 
 export type ToastContent = {
@@ -44,7 +38,7 @@ const ResetPasswordPage = () => {
         content: res?.message || "Đổi mật khẩu thành công",
       });
       setTimeout(() => {
-        navigate("/dang_nhap");
+        navigate("/login");
       }, 1000);
     } catch (error: any) {
       showToast({
@@ -55,43 +49,33 @@ const ResetPasswordPage = () => {
   };
 
   return (
-    <Container maxWidth="sm">
-      <Paper elevation={4} sx={{ p: 4, mt: 8, borderRadius: 3 }}>
-        <Typography
-          variant="h5"
-          align="center"
-          gutterBottom
-          sx={{ fontWeight: "bold", mb: 3 }}
-        >
+    <div style={{ maxWidth: 480, margin: "64px auto", padding: "0 16px" }}>
+      <Card style={{ borderRadius: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", padding: 24 }}>
+        <h2 style={{ textAlign: "center", fontWeight: "bold", marginBottom: 24 }}>
           Đặt lại mật khẩu
-        </Typography>
+        </h2>
 
-        <Box component="form" onSubmit={handleSubmit(onSubmit)}>
-          <TextField
-            type="password"
-            label="Mật khẩu mới"
-            fullWidth
-            margin="normal"
-            {...register("newPassword", { required: true })}
-          />
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", marginBottom: 8, fontWeight: 500 }}>Mật khẩu mới</label>
+            <AntdInput.Password
+              size="large"
+              placeholder="Nhập mật khẩu mới"
+              {...register("newPassword", { required: true })}
+            />
+          </div>
 
-          <Button
+          <CustomButton
             type="submit"
             fullWidth
             variant="contained"
-            sx={{
-              mt: 3,
-              py: 1.5,
-              fontSize: "1rem",
-              fontWeight: "bold",
-              backgroundColor: "#6512c2",
-              "&:hover": { backgroundColor: "#4b0d91" },
-            }}
+            bgrColor="#6512c2"
+            style={{ height: 48, fontSize: 16, marginTop: 16 }}
           >
             Đặt lại
-          </Button>
-        </Box>
-      </Paper>
+          </CustomButton>
+        </form>
+      </Card>
 
       <Toast
         content={toast.current.content}
@@ -99,7 +83,7 @@ const ResetPasswordPage = () => {
         open={openToast}
         onClose={() => setOpenToast(false)}
       />
-    </Container>
+    </div>
   );
 };
 

@@ -3,7 +3,6 @@ import { IUserDepartment } from "../types/user.types";
 import {
     HomeOutlined,
     TeamOutlined,
-    BookOutlined,
     ToolOutlined,
     SettingOutlined,
     BarChartOutlined,
@@ -12,8 +11,6 @@ import {
     ExportOutlined,
     CarOutlined,
     FileTextOutlined,
-    FormOutlined,
-    TrophyOutlined,
 } from "@ant-design/icons";
 
 export interface SidebarMenuItem {
@@ -60,7 +57,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
                 roles: ["ADMIN", "HR_MANAGER", "DIRECTOR", "UNIT_HEAD"],
             },
             {
-                name: "Quản lý nhân viên",
+                name: "Trung tâm Nhân sự 360°",
                 icon: <TeamOutlined />,
                 textColor: "#fff",
                 color: "#FFC900",
@@ -74,46 +71,6 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
                 color: "#FFC900",
                 path: "/quan_ly_nguoi_dung",
                 roles: ["ADMIN"],
-            },
-            {
-                name: "Phê duyệt hồ sơ",
-                icon: <FormOutlined />,
-                textColor: "#fff",
-                color: "#FFC900",
-                path: "/phe_duyet_ho_so",
-                roles: ["ADMIN", "HR_MANAGER"],
-            },
-            {
-                name: "Hợp đồng lao động",
-                icon: <FileTextOutlined />,
-                textColor: "#fff",
-                color: "#FFC900",
-                path: "/hop-dong-lao-dong",
-                roles: ["ADMIN", "HR_MANAGER", "DIRECTOR", "UNIT_HEAD"],
-            },
-            {
-                name: "Khen thưởng / Kỷ luật",
-                icon: <TrophyOutlined />,
-                textColor: "#fff",
-                color: "#FFC900",
-                path: "/khen-thuong-ky-luat",
-                roles: ["ADMIN", "HR_MANAGER", "DIRECTOR", "UNIT_HEAD"],
-            },
-            {
-                name: "Quản lý CTĐT / CCCM",
-                icon: <BookOutlined />,
-                textColor: "#fff",
-                color: "#FFC900",
-                path: "/training-programs",
-                roles: ["ADMIN", "HR_MANAGER", "DIRECTOR", "UNIT_HEAD"],
-            },
-            {
-                name: "Quản lý phép năm",
-                icon: <BarChartOutlined />,
-                textColor: "#fff",
-                color: "#FFC900",
-                path: "/quan_ly_phep",
-                roles: ["ADMIN", "HR_MANAGER", "DIRECTOR", "UNIT_HEAD"],
             },
         ],
     },

@@ -14,12 +14,12 @@ import MaintenanceProcedurePage from "../pages/MaintenanceProcedure";
 import MaintenanceHistoryPage from "../pages/MaintenanceHistory";
 import Profile from "../pages/Profile/Profile";
 import HRDashboard from "../pages/HRDashboard";
-import TrainingPrograms from "../pages/TrainingPrograms";
 import ProfileRequests from "../pages/ProfileRequests";
 import LeaveManagement from "../pages/LeaveManagement";
 import Employees from "../pages/Employees";
 import LaborContracts from "../pages/LaborContracts";
 import RewardDisciplines from "../pages/RewardDisciplines";
+import DevicePassportPage from "../pages/DevicePassport";
 
 export const protectedRoutes = (userRole: string) => {
   const isFullAccess = ['admin', 'ADMIN', 'HR_MANAGER', 'DIRECTOR', 'UNIT_HEAD', 'TEAM_LEAD'].includes(userRole);
@@ -49,7 +49,7 @@ export const protectedRoutes = (userRole: string) => {
       children.push(
         { path: "/quan_ly_nhan_vien/*", element: <Employees /> },
         { path: "/hr-dashboard/*", element: <HRDashboard /> },
-        { path: "/training-programs/*", element: <TrainingPrograms /> },
+        { path: "/training-programs/*", element: <Navigate to="/quan_ly_nhan_vien" replace /> },
         { path: "/hop-dong-lao-dong/*", element: <LaborContracts /> },
         { path: "/khen-thuong-ky-luat/*", element: <RewardDisciplines /> },
         { path: "/quan_ly_phep/*", element: <LeaveManagement /> },
@@ -74,12 +74,14 @@ export const protectedRoutes = (userRole: string) => {
     children.push({ path: "*", element: <Navigate to="trang_chu" /> });
 
     return [
+      { path: "/device-passport/:id", element: <DevicePassportPage /> },
       { path: "/", element: <Navigate to="/trang_chu" /> },
       { path: "/", element: <MainLayout />, children },
     ];
   } else {
     // OPERATOR, TECHNICIAN - quyền cơ bản
     return [
+      { path: "/device-passport/:id", element: <DevicePassportPage /> },
       {
         path: "/",
         element: <Navigate to="/trang_chu" />,

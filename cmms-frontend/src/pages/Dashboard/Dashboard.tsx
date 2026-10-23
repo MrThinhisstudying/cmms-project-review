@@ -15,14 +15,14 @@ import HRDashboard from '../HRDashboard';
  */
 const Dashboard: React.FC = () => {
     const { user } = useAuthContext();
-    const role = user?.role || '';
+    const role = (user?.role || '').toUpperCase();
 
     // HR Manager → Dashboard nhân sự
     if (role === 'HR_MANAGER') {
         return <HRDashboard />;
     }
 
-    // Cán bộ quản lý → Hybrid Dashboard
+    // Cán bộ quản lý & Admin → Hybrid Dashboard (Executive Command Center)
     if (['ADMIN', 'DIRECTOR', 'UNIT_HEAD', 'TEAM_LEAD'].includes(role)) {
         return <HybridDashboard />;
     }

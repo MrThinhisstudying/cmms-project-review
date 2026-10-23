@@ -1,7 +1,6 @@
-import { Checkbox, FormControlLabel } from '@mui/material';
-import React from 'react';
-import { Controller } from 'react-hook-form';
-import { CustomCheckedIcon, CustomIcon } from './styles';
+import React from "react";
+import { Controller } from "react-hook-form";
+import { StyledAntdCheckbox } from "./styles";
 
 interface CheckBoxProps {
   control: any;
@@ -13,12 +12,13 @@ const CheckBox: React.FC<CheckBoxProps> = ({ control, name, label }) => {
   return (
     <Controller
       render={({ field }) => (
-        <FormControlLabel
-          control={
-            <Checkbox icon={<CustomIcon />} checkedIcon={<CustomCheckedIcon />} value={field.value} onChange={field.onChange} disabled={field?.disabled} name={name} />
-          }
-          label={label}
-        />
+        <StyledAntdCheckbox
+          checked={!!field.value}
+          onChange={(e) => field.onChange(e.target.checked)}
+          disabled={field?.disabled}
+        >
+          {label}
+        </StyledAntdCheckbox>
       )}
       name={name}
       control={control}

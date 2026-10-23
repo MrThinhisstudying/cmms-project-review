@@ -1,28 +1,19 @@
-import { styled } from "@mui/material/styles";
-import {
-  Dialog,
-  DialogContent,
-  DialogContentProps,
-  DialogProps,
-  DialogTitle,
-  DialogTitleProps,
-} from "@mui/material";
+import styled from "styled-components";
 
-export const DialogContainer = styled(Dialog)<DialogProps>({
-  "& .MuiPaper-root": {
-    width: "50%",
-  },
-});
+export const DialogContainer = styled.div`
+  width: 100%;
+`;
 
-export const DialogContentContainer = styled(DialogContent)<DialogContentProps>(
-  {
-    display: "flex",
-    flexDirection: "column",
-    gap: "12px",
-    paddingTop: "16px !important",
-  }
-);
+export const DialogContentContainer = styled.form`
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+`;
 
-export const DialogTitleContainer = styled(DialogTitle)<DialogTitleProps>({
-  paddingBottom: 0,
-});
+export const DialogTitleContainer = styled.h3`
+  padding-bottom: 0;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+`;

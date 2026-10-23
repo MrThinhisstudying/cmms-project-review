@@ -1,9 +1,8 @@
 import { yupResolver } from "@hookform/resolvers/yup";
-import { Box, Dialog, IconButton, Typography } from "@mui/material";
+import { Modal as AntdModal } from "antd";
 import React from "react";
 import { useForm, Resolver } from "react-hook-form";
 import * as yup from "yup";
-import CloseIcon from "../../../../assets/icons/close-icon.svg";
 import { CustomButton } from "../../../../components/Button";
 import { ForgotPasswordFormContainer } from "../../styles";
 import Input from "../../../../components/Input";
@@ -40,24 +39,17 @@ const ForgotPasswordDialog: React.FC<DialogProps> = ({
   });
 
   return (
-    <Dialog onClose={onClose} open={open}>
+    <AntdModal
+      open={open}
+      onCancel={onClose}
+      footer={null}
+      title="Tìm tài khoản của bạn"
+      centered
+    >
       <ForgotPasswordFormContainer onSubmit={handleSubmit(onSubmit)}>
-        <Box display="flex" justifyContent="space-between" alignItems="center">
-          <Typography
-            color="#101828"
-            fontWeight={600}
-            fontSize={18}
-            sx={{ whiteSpace: "normal", wordBreak: "break-word", flex: 1 }}
-          >
-            Tìm tài khoản của bạn
-          </Typography>
-          <IconButton onClick={() => onClose()}>
-            <img src={CloseIcon} alt="close" />
-          </IconButton>
-        </Box>
-        <Typography color="#475467" fontWeight={400} fontSize={14}>
+        <p style={{ color: "#475467", fontWeight: 400, fontSize: 14, margin: "0 0 16px 0" }}>
           Vui lòng nhập địa chỉ email của bạn để lấy lại mật khẩu.
-        </Typography>
+        </p>
         <Input
           control={control}
           error={errors?.email?.message || ""}
@@ -68,12 +60,13 @@ const ForgotPasswordDialog: React.FC<DialogProps> = ({
         <CustomButton
           variant="contained"
           type="submit"
-          sx={{ minWidth: "100%" }}
+          fullWidth
+          style={{ marginTop: 16 }}
         >
           Quên mật khẩu
         </CustomButton>
       </ForgotPasswordFormContainer>
-    </Dialog>
+    </AntdModal>
   );
 };
 

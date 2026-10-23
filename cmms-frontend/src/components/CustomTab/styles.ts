@@ -1,19 +1,19 @@
-import { makeStyles } from '@mui/styles';
+import styled from "styled-components";
 
-const useStyles = makeStyles(() => ({
-  Box: {
-    display: 'flex',
-    borderRadius: '6px',
-    padding: '10px 14px',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  BoxCustomTab: {
-    display: 'flex',
-    padding: '2px 10px',
-    alignItems: 'center',
-    borderRadius: '16px',
-  },
-}));
+export const TabBox = styled.div<{ $isActive?: boolean }>`
+  display: flex;
+  border-radius: 6px;
+  padding: 10px 14px;
+  align-items: center;
+  gap: 8px;
+  background-color: ${(props) => (props.$isActive ? "rgba(242, 251, 243, 1)" : "transparent")};
+  cursor: pointer;
+`;
 
-export { useStyles };
+export const BadgeBox = styled.div`
+  display: flex;
+  padding: 2px 10px;
+  align-items: center;
+  border-radius: 16px;
+  background-color: #EAECF0;
+`;

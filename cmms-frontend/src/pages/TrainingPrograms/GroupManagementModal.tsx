@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Modal, List, Input, Button, Space, message, Popconfirm, Empty } from 'antd';
-import { EditOutlined, DeleteOutlined, PlusOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { Modal, List, Input, Button, Space, message, Empty } from 'antd';
+import { EditOutlined, PlusOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
 import certificatesApi from '../../apis/certificates';
 
 interface GroupManagementModalProps {

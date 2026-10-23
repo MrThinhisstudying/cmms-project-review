@@ -1,10 +1,5 @@
 import React from "react";
-import {
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-} from "@mui/material";
+import { Modal as AntdModal } from "antd";
 import { CustomButton } from "../Button";
 
 interface ConfirmModalProps {
@@ -23,29 +18,29 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   onConfirm,
 }) => {
   return (
-    <Dialog
+    <AntdModal
       open={open}
-      onClose={onClose}
-      BackdropProps={{
-        style: { backgroundColor: "rgba(0, 0, 0, 0.1)" },
-      }}
-    >
-      <DialogTitle>{title}</DialogTitle>
-      <DialogContent>{content}</DialogContent>
-      <DialogActions>
-        <CustomButton onClick={onClose} variant="outlined" padding="4px 12px">
+      title={title}
+      onCancel={onClose}
+      footer={[
+        <CustomButton key="cancel" onClick={onClose} variant="outlined" padding="4px 12px">
           Hủy
-        </CustomButton>
+        </CustomButton>,
         <CustomButton
+          key="confirm"
           onClick={onConfirm}
           bgrColor="#d32f2f"
           variant="contained"
           padding="4px 12px"
+          style={{ marginLeft: "8px" }}
         >
           Xác nhận
-        </CustomButton>
-      </DialogActions>
-    </Dialog>
+        </CustomButton>,
+      ]}
+      centered
+    >
+      <p style={{ margin: "16px 0", fontSize: "14px", color: "#475467" }}>{content}</p>
+    </AntdModal>
   );
 };
 

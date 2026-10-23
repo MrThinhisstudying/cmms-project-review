@@ -1,25 +1,21 @@
 import React from "react";
-import { Dialog, Box, Typography } from "@mui/material";
+import { Modal as AntdModal } from "antd";
 import { CustomButton } from "../../../../components/Button";
 
 export default function WarningModal({ open, handleClose, title }: any) {
   return (
-    <Dialog open={open} onClose={handleClose}>
-      <Box sx={{ width: 400, p: 3 }}>
-        <Typography fontSize={18} fontWeight={600}>
-          Warning
-        </Typography>
-        <Typography sx={{ mt: 2 }}>{title}</Typography>
-        <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
-          <CustomButton
-            id="confirm_button"
-            fullWidth={false}
-            title="Confirm"
-            onClick={handleClose}
-            sx={{ height: "40px" }}
-          />
-        </Box>
-      </Box>
-    </Dialog>
+    <AntdModal
+      open={open}
+      onCancel={handleClose}
+      title="Cảnh báo"
+      footer={[
+        <CustomButton key="confirm" onClick={handleClose} variant="contained" bgrColor="#1890ff">
+          Xác nhận
+        </CustomButton>,
+      ]}
+      centered
+    >
+      <p style={{ margin: "16px 0", fontSize: 14, color: "#475467" }}>{title}</p>
+    </AntdModal>
   );
 }

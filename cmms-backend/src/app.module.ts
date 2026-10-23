@@ -34,6 +34,7 @@ import { LaborContractsModule } from './labor-contracts/labor-contracts.module';
 import { RewardDisciplinesModule } from './reward-disciplines/reward-disciplines.module';
 import { AnnualLeavesModule } from './annual-leaves/annual-leaves.module';
 import { ActivityLogModule } from './common/modules/activity-log.module';
+import { ShiftDebtsModule } from './shift-debts/shift-debts.module';
 
 @Module({
     imports: [
@@ -90,6 +91,7 @@ import { ActivityLogModule } from './common/modules/activity-log.module';
         RewardDisciplinesModule,
         AnnualLeavesModule,
         ActivityLogModule,
+        ShiftDebtsModule,
     ],
     controllers: [AppController],
     providers: [

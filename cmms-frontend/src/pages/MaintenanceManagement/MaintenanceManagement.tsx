@@ -18,6 +18,7 @@ import MaintenanceTable from "./components/MaintenanceTable";
 import MaintenanceForm from "./components/MaintenanceForm";
 import EditPlanModal from "./components/EditPlanModal";
 import MaintenanceImportModal from "./components/MaintenanceImportModal";
+import BatchMaintenanceModal from "./components/BatchMaintenanceModal";
 import CreatePlanModal from "./components/CreatePlanModal";
 import { getDashboardOverview } from "../../apis/maintenance";
 import moment from "moment";
@@ -33,6 +34,7 @@ const MaintenanceManagement: React.FC = () => {
 
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isBatchOpen, setIsBatchOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<any>(null);
 
   // ... (keep existing state)
@@ -136,6 +138,8 @@ const MaintenanceManagement: React.FC = () => {
       device_id: record.device?.device_id,
       maintenance_level: record.level,
       scheduled_date: record.next_maintenance_date,
+      device: record.device,
+      maintenance_id: record.maintenance_id,
     });
     setIsModalOpen(true);
   };
@@ -159,7 +163,8 @@ const MaintenanceManagement: React.FC = () => {
         onCreate={handleCreateNew} 
         onCreatePlan={() => setIsCreatePlanOpen(true)}
         onRefresh={fetchData} 
-        onImport={() => setIsImportOpen(true)} // Pass trigger
+        onImport={() => setIsImportOpen(true)}
+        onBatchMaintenance={() => setIsBatchOpen(true)}
       />
 
       {/* Filter Bar */}
@@ -238,10 +243,10 @@ const MaintenanceManagement: React.FC = () => {
         open={isModalOpen}
         onCancel={() => setIsModalOpen(false)}
         footer={null}
-        width={1000}
+        width={750}
         destroyOnClose
         maskClosable={false}
-        style={{ top: 20 }}
+        centered
       >
         <MaintenanceForm
           initialData={initialData}
@@ -265,10 +270,17 @@ const MaintenanceManagement: React.FC = () => {
         onSuccess={handleRefresh}
       />
 
-      {/* Modal Import */}
+      {/* Modal Import Kế hoạch */}
       <MaintenanceImportModal
         open={isImportOpen}
         onClose={() => setIsImportOpen(false)}
+        onSuccess={handleRefresh}
+      />
+
+      {/* Modal Làm bảo dưỡng hàng loạt qua Excel */}
+      <BatchMaintenanceModal
+        open={isBatchOpen}
+        onClose={() => setIsBatchOpen(false)}
         onSuccess={handleRefresh}
       />
     </div>

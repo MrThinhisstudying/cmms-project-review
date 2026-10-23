@@ -1,25 +1,25 @@
-import { Typography, TypographyProps } from "@mui/material";
-import { styled } from "@mui/material/styles";
+import React from "react";
+import styled from "styled-components";
 
-interface TypographyCustomProps extends TypographyProps {
+export interface TypographyCustomProps extends React.HTMLAttributes<HTMLSpanElement> {
   customcolor?: string;
+  variant?: string;
+  children?: React.ReactNode;
 }
 
-export const TypographyCustom = styled(Typography, {
-  shouldForwardProp: (prop) => prop !== "customcolor",
-})<TypographyCustomProps>(({ theme, customcolor }) => ({
-  fontWeight: 500,
-  color: customcolor || "inherit",
-  fontSize: "16px",
-  lineHeight: "20px",
+export const TypographyCustom = styled.span<{ customcolor?: string }>`
+  font-weight: 500;
+  color: ${(props) => props.customcolor || "inherit"};
+  font-size: 16px;
+  line-height: 20px;
 
-  [theme.breakpoints.down("lg")]: {
-    fontSize: "14px",
-    lineHeight: "18px",
-  },
+  @media (max-width: 1200px) {
+    font-size: 14px;
+    line-height: 18px;
+  }
 
-  [theme.breakpoints.down("sm")]: {
-    fontSize: "12px",
-    lineHeight: "16px",
-  },
-}));
+  @media (max-width: 600px) {
+    font-size: 12px;
+    line-height: 16px;
+  }
+`;

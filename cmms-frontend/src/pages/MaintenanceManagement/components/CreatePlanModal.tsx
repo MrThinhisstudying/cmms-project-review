@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Modal, Form, Select, DatePicker, Input, Button, message } from "antd";
 import { getAllDevices } from "../../../apis/devices";
-import { createMaintenance, generateMaintenanceSeries } from "../../../apis/maintenance";
+import { generateMaintenanceSeries } from "../../../apis/maintenance";
 import { getToken } from "../../../utils/auth";
 import dayjs from "dayjs";
 

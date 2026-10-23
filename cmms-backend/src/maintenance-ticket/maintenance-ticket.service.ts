@@ -143,16 +143,97 @@ export class MaintenanceTicketService {
         return saved;
     }
 
+    // --- HÀM GHI NHẬN BẢO DƯỠNG HÀNG LOẠT (IMPORT EXCEL) ---
+    async batchComplete(items: any[], user: any) {
+        const results = [];
+        let successCount = 0;
+        let failedCount = 0;
+
+        // Đảm bảo sắp xếp các lượt bảo dưỡng theo thứ tự ngày tăng dần (Chronological order)
+        // Để khi 1 xe có nhiều kỳ bảo dưỡng dồn (VD: 3 tuần liên tiếp), hệ thống sẽ kích hoạt và hoàn thành tuần tự
+        const sortedItems = [...items].sort((a, b) => {
+            const dateA = a.execution_date ? new Date(a.execution_date).getTime() : 0;
+            const dateB = b.execution_date ? new Date(b.execution_date).getTime() : 0;
+            return dateA - dateB;
+        });
+
+        for (const item of sortedItems) {
+            try {
+                if (!item.device_id) {
+                    throw new Error('Thiếu ID thiết bị');
+                }
+
+                const plans = await this.maintenanceService.findByDevice(item.device_id);
+                let activePlan = plans.find((p) => p.status === 'active' || p.status === 'warning' || p.status === 'overdue');
+                if (!activePlan) {
+                    // Fallback: Nếu không tìm thấy kế hoạch active, lấy kế hoạch inactive chưa hoàn thành sớm nhất
+                    activePlan = plans.find((p) => p.status === 'inactive' && !p.last_maintenance_date);
+                }
+
+                const actualDate = item.execution_date ? new Date(item.execution_date) : new Date();
+                const level = item.maintenance_level || activePlan?.level || 'Tuần';
+
+                const ticket = this.ticketRepo.create({
+                    device: {device_id: item.device_id} as any,
+                    user: user,
+                    maintenance: activePlan || null,
+                    template: null,
+                    maintenance_level: level,
+                    checklist_result: [],
+                    arising_issues: item.arising_issues || null,
+                    working_hours: item.working_hours || 0,
+                    execution_team: [],
+                    acceptance_result: [],
+                    final_conclusion: true,
+                    execution_date: actualDate,
+                    completed_at: actualDate,
+                    status: 'done',
+                    created_at: new Date(),
+                });
+
+                const saved = await this.ticketRepo.save(ticket);
+
+                if (activePlan) {
+                    await this.maintenanceService.markCompletedAndSpawnNext(activePlan.maintenance_id, actualDate);
+                }
+
+                successCount++;
+                results.push({
+                    device_id: item.device_id,
+                    status: 'success',
+                    ticket_id: saved.ticket_id,
+                    level: level,
+                    execution_date: actualDate,
+                    message: 'Hoàn thành bảo dưỡng thành công',
+                });
+            } catch (err: any) {
+                failedCount++;
+                results.push({
+                    device_id: item.device_id,
+                    status: 'failed',
+                    message: err.message || 'Lỗi khi ghi nhận bảo dưỡng',
+                });
+            }
+        }
+
+        return {
+            total: items.length,
+            successCount,
+            failedCount,
+            results,
+        };
+    }
+
     async listForAssignee(userId?: number, deptId?: number) {
         const where: FindOptionsWhere<MaintenanceTicket> = {} as FindOptionsWhere<MaintenanceTicket>;
         if (userId) Object.assign(where, {user: {user_id: userId}} as any);
         if (deptId) Object.assign(where, {department: {dept_id: deptId}} as any);
-        return await this.ticketRepo.find({where, order: {updated_at: 'DESC'}});
+        return await this.ticketRepo.find({where, relations: ['device', 'user', 'template'], order: {updated_at: 'DESC'}});
     }
 
     async listForUser(user: any) {
         if (user?.role === 'admin' || user?.role === 'manager') {
-            return await this.ticketRepo.find({order: {updated_at: 'DESC'}});
+            return await this.ticketRepo.find({relations: ['device', 'user', 'template'], order: {updated_at: 'DESC'}});
         }
         const where: FindOptionsWhere<MaintenanceTicket> = {} as FindOptionsWhere<MaintenanceTicket>;
         Object.assign(where, {user: {user_id: user.user_id}} as any);
@@ -160,10 +241,11 @@ export class MaintenanceTicketService {
         if (deptId) {
             return await this.ticketRepo.find({
                 where: [{user: {user_id: user.user_id}} as any, {department: {dept_id: deptId}} as any],
+                relations: ['device', 'user', 'template'],
                 order: {updated_at: 'DESC'},
             });
         }
-        return await this.ticketRepo.find({where, order: {updated_at: 'DESC'}});
+        return await this.ticketRepo.find({where, relations: ['device', 'user', 'template'], order: {updated_at: 'DESC'}});
     }
 
     async findOne(id: number) {

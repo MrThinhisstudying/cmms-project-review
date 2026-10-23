@@ -107,7 +107,6 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
       // HR Module
       'hr-dashboard': 'TỔNG QUAN NHÂN SỰ',
       'phe_duyet_ho_so': 'PHÊ DUYỆT HỒ SƠ',
-      'training-programs': 'QUẢN LÝ CTĐT / CCCM',
       'quan_ly_phep': 'QUẢN LÝ PHÉP NĂM',
       'lay_vat_tu': 'XUẤT VẬT TƯ',
   };

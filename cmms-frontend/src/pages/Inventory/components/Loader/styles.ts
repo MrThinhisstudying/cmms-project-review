@@ -1,6 +1,18 @@
-import { makeStyles } from '@mui/styles';
+import styled from "styled-components";
 
-const useStyles = makeStyles(() => ({
+export const BoxCard = styled.div`
+  display: flex;
+  padding: 16px;
+  align-items: flex-start;
+  gap: 12px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  border: 1px solid #EAECF0;
+  background: #FFF;
+  box-shadow: 0px 1px 3px 0px rgba(16, 24, 40, 0.10), 0px 1px 2px 0px rgba(16, 24, 40, 0.06);
+`;
+
+const useStyles = () => ({
   BoxCard: {
     display: 'flex',
     padding: '16px',
@@ -8,8 +20,8 @@ const useStyles = makeStyles(() => ({
     gap: '12px',
     flexShrink: 0,
     borderRadius: '12px',
-    border: '1px solid var(--Gray-200, #EAECF0)',
-    background: 'var(--Base-White, #FFF)',
+    border: '1px solid #EAECF0',
+    background: '#FFF',
     boxShadow: '0px 1px 3px 0px rgba(16, 24, 40, 0.10), 0px 1px 2px 0px rgba(16, 24, 40, 0.06)',
   },
   Img: {
@@ -37,8 +49,8 @@ const useStyles = makeStyles(() => ({
     overflow: 'hidden',
     textOverflow: 'ellipsis',
     display: '-webkit-box',
-    '-webkit-box-orient': 'vertical',
-    '-webkit-line-clamp': 2,
+    WebkitBoxOrient: 'vertical' as const,
+    WebkitLineClamp: 2,
     alignSelf: 'stretch',
   },
   BoxAction: {
@@ -51,6 +63,6 @@ const useStyles = makeStyles(() => ({
     alignItems: 'center',
     gap: '4px',
   },
-}));
+});
 
 export { useStyles };

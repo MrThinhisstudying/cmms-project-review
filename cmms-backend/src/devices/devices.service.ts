@@ -221,7 +221,18 @@ export class DevicesService {
         try {
             const device = await this.deviceRepository.findOne({
                 where: {device_id: id},
-                relations: ['users', 'repairs', 'deviceType'],
+                relations: [
+                    'users',
+                    'repairs',
+                    'deviceType',
+                    'device_group',
+                    'device_group.department',
+                    'device_group.department.parent',
+                    'device_group.leader',
+                    'device_group.user_device_groups',
+                    'device_group.user_device_groups.user',
+                    'device_group.user_device_groups.user.department',
+                ],
             });
 
             if (!device) {
@@ -286,6 +297,19 @@ export class DevicesService {
     private sanitizeDeviceUsers(device: Device): Device {
         if (device.users) {
             device.users = device.users.map(({password, ...rest}) => rest as User);
+        }
+        if (device.device_group?.user_device_groups) {
+            device.device_group.user_device_groups = device.device_group.user_device_groups.map((udg) => {
+                if (udg.user) {
+                    const { password: _, ...restUser } = udg.user;
+                    udg.user = restUser as User;
+                }
+                return udg;
+            });
+        }
+        if (device.device_group?.leader) {
+            const { password: _, ...restLeader } = device.device_group.leader;
+            device.device_group.leader = restLeader as User;
         }
         return device;
     }

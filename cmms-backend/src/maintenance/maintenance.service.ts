@@ -114,7 +114,7 @@ export class MaintenanceService {
         const allActive = await this.maintenanceRepo.find({
             where: { status: MaintenanceStatus.ACTIVE },
             order: { next_maintenance_date: 'ASC' },
-            relations: ['device']
+            relations: ['device', 'device.deviceType']
         });
 
         // Dedup: Chỉ lấy phiếu đầu tiên (gần nhất) cho mỗi Device
@@ -131,11 +131,22 @@ export class MaintenanceService {
 
     // Modal chi tiết: Lấy TOÀN BỘ (Active + Inactive + Completed) để vẽ Timeline 2 năm
     async findByDevice(deviceId: number) {
-        return await this.maintenanceRepo.find({
+        const list = await this.maintenanceRepo.find({
             where: {device: {device_id: deviceId}},
             order: {next_maintenance_date: 'ASC'},
             relations: ['device', 'user', 'department', 'tickets', 'tickets.user', 'tickets.leader_user', 'tickets.operator_user'],
         });
+        list.forEach(m => {
+            if (m.user) delete (m.user as any).password;
+            if (m.tickets) {
+                m.tickets.forEach((t: any) => {
+                    if (t.user) delete t.user.password;
+                    if (t.leader_user) delete t.leader_user.password;
+                    if (t.operator_user) delete t.operator_user.password;
+                });
+            }
+        });
+        return list;
     }
 
     async findOne(id: number) {
@@ -251,16 +262,20 @@ export class MaintenanceService {
         const sheet = workbook.Sheets[workbook.SheetNames[0]];
         const rawRows = XLSX.utils.sheet_to_json(sheet, {header: 1, defval: ''}) as any[][];
 
-        // 1. Tìm Header (Giữ nguyên logic cũ)
+        // 1. Tìm Header
         let headerRowIdx = -1,
             colNameIdx = -1,
+            colRegNumberIdx = -1,
             dateColIdx = -1;
         for (let i = 0; i < Math.min(rawRows.length, 20); i++) {
             const rowStr = rawRows[i].map((c) => String(c).trim().toUpperCase());
-            if (rowStr.findIndex((s) => s.includes('TÊN') && (s.includes('THIẾT BỊ') || s.includes('TB'))) !== -1) {
+            const hasName = rowStr.findIndex((s) => s.includes('TÊN') && (s.includes('THIẾT BỊ') || s.includes('TB') || s.includes('XE')));
+            const hasReg = rowStr.findIndex((s) => s.includes('BIỂN') || s.includes('BIEN') || s.includes('ĐĂNG KÝ') || s.includes('DANG KY') || s.includes('REG'));
+            if (hasName !== -1 || hasReg !== -1) {
                 headerRowIdx = i;
-                colNameIdx = rowStr.findIndex((s) => s.includes('TÊN') && (s.includes('THIẾT BỊ') || s.includes('TB')));
-                dateColIdx = rowStr.findIndex((s) => s.includes('NGÀY') && (s.includes('BD') || s.includes('GẦN') || s.includes('LAST')));
+                colNameIdx = hasName;
+                colRegNumberIdx = hasReg;
+                dateColIdx = rowStr.findIndex((s) => s.includes('NGÀY') && (s.includes('BD') || s.includes('GẦN') || s.includes('LAST') || s.includes('BẮT ĐẦU')));
                 break;
             }
         }
@@ -272,16 +287,23 @@ export class MaintenanceService {
 
         for (const rowArray of dataRows) {
             if (!rowArray || rowArray.length === 0) continue;
-            const deviceName = rowArray[colNameIdx];
-            if (!deviceName) continue;
+            const deviceName = colNameIdx !== -1 ? String(rowArray[colNameIdx] || '').trim() : '';
+            const regNumber = colRegNumberIdx !== -1 ? String(rowArray[colRegNumberIdx] || '').trim() : '';
+            if (!deviceName && !regNumber) continue;
 
-            const device = await this.deviceRepo
-                .createQueryBuilder('d')
-                .where('d.name ILIKE :name OR d.serial_number ILIKE :name', {name: `%${deviceName}%`})
-                .getOne();
+            let query = this.deviceRepo.createQueryBuilder('d');
+            if (regNumber) {
+                query = query.where('d.reg_number ILIKE :reg OR d.serial_number ILIKE :reg', { reg: `%${regNumber}%` });
+            } else {
+                query = query.where('d.name ILIKE :name OR d.device_code ILIKE :name', {
+                    name: `%${deviceName}%`,
+                });
+            }
+
+            const device = await query.getOne();
 
             if (!device) {
-                results.push({name: deviceName, status: 'Skipped (Not Found)'});
+                results.push({name: deviceName || regNumber, status: 'Skipped (Not Found)'});
                 continue;
             }
 

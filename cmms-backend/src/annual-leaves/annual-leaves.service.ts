@@ -96,39 +96,51 @@ export class AnnualLeavesService {
   }
 
   async bulkUpsert(data: any[]) {
-    // data is expected to be an array of objects
-    // { employee_code, year, leave_balance_n2, leave_balance_n1, current_year_leave, m1_taken, ... }
-    
-    // First, find all valid users based on employee_code
-    const employeeCodes = data.map(d => d.employee_code).filter(Boolean);
-    if (!employeeCodes.length) return { success: 0, errors: ['Không có MSNV nào được gửi'] };
+    if (!data || !data.length) return { success: 0, errors: ['Không có dữ liệu nào được gửi'] };
 
-    const users = await this.userRepo.createQueryBuilder('user')
-      .where('user.employee_code IN (:...codes)', { codes: employeeCodes })
-      .getMany();
-      
-    const userMap = new Map(users.map(u => [u.employee_code, u.user_id]));
-    
+    // Fetch all users to map by user_id, employee_code (with and without leading zeros), and name
+    const allUsers = await this.userRepo.find();
+    const userById = new Map<number, number>();
+    const userByCode = new Map<string, number>();
+
+    allUsers.forEach((u) => {
+      userById.set(u.user_id, u.user_id);
+      if (u.employee_code) {
+        const raw = u.employee_code.trim().toLowerCase();
+        userByCode.set(raw, u.user_id);
+        const noZero = raw.replace(/^0+/, '');
+        if (noZero) userByCode.set(noZero, u.user_id);
+      }
+    });
+
     let successCount = 0;
     const errors = [];
 
     for (const row of data) {
-        if (!row.employee_code || !row.year) {
-            errors.push(`Thiếu MSNV hoặc Năm`);
-            continue;
-        }
-        const userId = userMap.get(row.employee_code);
-        if (!userId) {
-            errors.push(`Không tìm thấy MSNV: ${row.employee_code}`);
-            continue;
-        }
+      if (!row.year) {
+        errors.push(`Thiếu thông tin Năm`);
+        continue;
+      }
 
-        // check if exist
-        let record = await this.annualLeaveRepo.findOne({ where: { user_id: userId, year: row.year } });
-        
-        if (!record) {
-            record = this.annualLeaveRepo.create({ user_id: userId, year: row.year });
-        }
+      let userId: number | undefined;
+      if (row.user_id && userById.has(Number(row.user_id))) {
+        userId = Number(row.user_id);
+      } else if (row.employee_code) {
+        const raw = String(row.employee_code).trim().toLowerCase();
+        userId = userByCode.get(raw) || userByCode.get(raw.replace(/^0+/, ''));
+      }
+
+      if (!userId) {
+        errors.push(`Không tìm thấy nhân viên: ${row.employee_code || row.name || row.user_id}`);
+        continue;
+      }
+
+      // check if exist
+      let record = await this.annualLeaveRepo.findOne({ where: { user_id: userId, year: Number(row.year) } });
+
+      if (!record) {
+        record = this.annualLeaveRepo.create({ user_id: userId, year: Number(row.year) });
+      }
         
         // update fields
         if (row.leave_balance_n2 !== undefined) record.leave_balance_n2 = row.leave_balance_n2;

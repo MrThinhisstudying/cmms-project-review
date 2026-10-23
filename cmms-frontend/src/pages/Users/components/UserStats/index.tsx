@@ -1,8 +1,6 @@
 import React from "react";
-import { Typography, Grid, Box } from "@mui/material";
-import TrendingUpIcon from "@mui/icons-material/TrendingUp";
-import TrendingDownIcon from "@mui/icons-material/TrendingDown";
-import { BoxContent, CardContainer } from "./style";
+import { Row, Col, Card } from "antd";
+import { RiseOutlined, FallOutlined } from "@ant-design/icons";
 
 interface IUserStat {
   label: string;
@@ -20,59 +18,57 @@ const getStatStyles = (change: string) => {
     return {
       backgroundColor: "#dbf6fd",
       color: "#096c86",
-      icon: <TrendingUpIcon sx={{ color: "#096c86" }} />,
+      icon: <RiseOutlined style={{ color: "#096c86" }} />,
     };
   } else if (changeValue < 0) {
     return {
       backgroundColor: "#fee4cb",
       color: "#ff942e",
-      icon: <TrendingDownIcon sx={{ color: "#ff942e" }} />,
+      icon: <FallOutlined style={{ color: "#ff942e" }} />,
     };
   }
-  return { backgroundColor: "transparent", color: "", icon: null };
+  return { backgroundColor: "transparent", color: "#667085", icon: null };
 };
 
 const UserStats: React.FC<UserStatsProps> = ({ stats }) => {
   return (
-    <Grid container spacing={2} paddingY={2}>
+    <Row gutter={[16, 16]} style={{ padding: "16px 0" }}>
       {stats.map((stat, index) => {
         const { backgroundColor, color, icon } = getStatStyles(stat.change);
         return (
-          <Grid item xs={12} sm={6} md={4} lg={3} key={index}>
-            <CardContainer>
-              <BoxContent>
-                <Typography variant="subtitle1" color="textSecondary">
-                  {stat.label}
-                </Typography>
-                <Box
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="space-between"
+          <Col xs={24} sm={12} md={8} lg={6} key={index}>
+            <Card style={{ borderRadius: 8, height: "100%" }}>
+              <div style={{ color: "#667085", fontSize: 14, marginBottom: 8 }}>
+                {stat.label}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <span style={{ fontSize: 24, fontWeight: "bold" }}>{stat.value}</span>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    padding: "2px 8px",
+                    borderRadius: 4,
+                    backgroundColor,
+                  }}
                 >
-                  <Typography variant="h4">{stat.value}</Typography>
-                  <Box
-                    display="flex"
-                    alignItems="center"
-                    padding="2px 4px"
-                    borderRadius={1}
-                    sx={{ backgroundColor }}
-                  >
-                    {icon}
-                    <Typography
-                      variant="body2"
-                      color={color}
-                      sx={{ marginLeft: 1 }}
-                    >
-                      {stat.change}
-                    </Typography>
-                  </Box>
-                </Box>
-              </BoxContent>
-            </CardContainer>
-          </Grid>
+                  {icon}
+                  <span style={{ color, marginLeft: 4, fontSize: 13, fontWeight: 500 }}>
+                    {stat.change}
+                  </span>
+                </div>
+              </div>
+            </Card>
+          </Col>
         );
       })}
-    </Grid>
+    </Row>
   );
 };
 

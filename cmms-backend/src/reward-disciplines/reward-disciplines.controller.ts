@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Req, ForbiddenException } from '@nestjs/common';
 import { RewardDisciplinesService } from './reward-disciplines.service';
 import { CreateRewardDisciplineDto } from './dto/create-reward-discipline.dto';
+import { CreateBatchRewardDisciplineDto } from './dto/create-batch-reward-discipline.dto';
 import { UpdateRewardDisciplineDto } from './dto/update-reward-discipline.dto';
 import { JWTAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { UserRole } from '../user/user-role.enum';
@@ -18,6 +19,14 @@ const HR_WRITE_ROLES: string[] = [UserRole.ADMIN, 'admin', UserRole.HR_MANAGER];
 @UseGuards(JWTAuthGuard)
 export class RewardDisciplinesController {
   constructor(private readonly rewardDisciplinesService: RewardDisciplinesService) {}
+
+  @Post('batch')
+  createBatch(@Body() createBatchDto: CreateBatchRewardDisciplineDto, @Req() req: any) {
+    if (!HR_WRITE_ROLES.includes(req.user.role)) {
+        throw new ForbiddenException();
+    }
+    return this.rewardDisciplinesService.createBatch(createBatchDto.records);
+  }
 
   @Post()
   create(@Body() createRewardDisciplineDto: CreateRewardDisciplineDto, @Req() req: any) {

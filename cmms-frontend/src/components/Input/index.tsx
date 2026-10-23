@@ -1,12 +1,17 @@
-import { Box } from "@mui/material";
 import React from "react";
 import { Controller } from "react-hook-form";
-import { CustomInput, CustomLabel } from "./styles";
+import {
+  CustomInputContainer,
+  CustomLabel,
+  StyledAntdInput,
+  StyledAntdPasswordInput,
+  HelperText,
+} from "./styles";
 
 interface InputProps {
   control: any;
   name: string;
-  error: string;
+  error?: string;
   label: string;
   placeholder?: string;
   type?: string;
@@ -18,26 +23,33 @@ const Input: React.FC<InputProps> = ({
   name,
   label,
   placeholder,
-  type,
+  type = "text",
 }) => {
   return (
     <Controller
       render={({ field }) => (
-        <Box>
+        <CustomInputContainer>
           <CustomLabel htmlFor={name}>{label}</CustomLabel>
-          <CustomInput
-            id={name}
-            error={!!error}
-            variant="outlined"
-            fullWidth
-            helperText={error}
-            margin="dense"
-            placeholder={placeholder || "Enter"}
-            onChange={field.onChange}
-            value={field.value ?? ""}
-            type={type}
-          />
-        </Box>
+          {type === "password" ? (
+            <StyledAntdPasswordInput
+              id={name}
+              $hasError={!!error}
+              placeholder={placeholder || "Enter"}
+              onChange={field.onChange}
+              value={field.value ?? ""}
+            />
+          ) : (
+            <StyledAntdInput
+              id={name}
+              $hasError={!!error}
+              placeholder={placeholder || "Enter"}
+              onChange={field.onChange}
+              value={field.value ?? ""}
+              type={type}
+            />
+          )}
+          {error && <HelperText>{error}</HelperText>}
+        </CustomInputContainer>
       )}
       name={name}
       control={control}

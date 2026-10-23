@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
-import { Modal, Table, Tag, Spin, Typography, Button, Tooltip, DatePicker, Select, message } from "antd";
-import { getMaintenancesByDevice, getAllTemplates, createMaintenanceTicket } from "../../../apis/maintenance";
+import { Modal, Table, Tag, Spin, Typography, Button, DatePicker, message } from "antd";
+import { getMaintenancesByDevice, createMaintenanceTicket } from "../../../apis/maintenance";
 import { getToken } from "../../../utils/auth";
 import dayjs from "dayjs";
 import { CheckCircleOutlined, ClockCircleOutlined, ToolOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
@@ -30,32 +30,12 @@ const MaintenanceDetailModal: React.FC<Props> = ({
   const [performRecord, setPerformRecord] = useState<any>(null);
   const [performDate, setPerformDate] = useState<dayjs.Dayjs | null>(dayjs());
   const [minDate, setMinDate] = useState<dayjs.Dayjs | null>(null); // Constraint
-  const [templates, setTemplates] = useState<any[]>([]);
-  const [performTemplateId, setPerformTemplateId] = useState<number | undefined>(undefined);
   const [creating, setCreating] = useState(false);
-  const [filteredTemplates, setFilteredTemplates] = useState<any[]>([]);
   // ----------------------------------------
-
-  // Fetch templates once
-  useEffect(() => {
-    if (open) {
-        getAllTemplates(getToken()).then(res => {
-            if (Array.isArray(res)) setTemplates(res);
-        }).catch(err => console.error(err));
-    }
-  }, [open]);
-
-  // Filter templates when record changes
-  useEffect(() => {
-     if (performRecord && templates.length > 0) {
-         setFilteredTemplates(templates);
-     }
-  }, [performRecord, templates]);
 
   const handleOpenPerform = (record: any) => {
       setPerformRecord(record);
       setPerformDate(dayjs()); // Default today
-      setPerformTemplateId(undefined); // Reset
       
       // Calculate Min Date (Must be after the previous completed maintenance)
       const idx = data.findIndex(d => d.maintenance_id === record.maintenance_id);

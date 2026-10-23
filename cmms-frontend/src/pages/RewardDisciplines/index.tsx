@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Card, Button, Input, Tag, Space, Modal, Form, Select, DatePicker, message, Tooltip, Row, Col, Typography } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, TeamOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { getRewardDisciplines, createRewardDiscipline, updateRewardDiscipline, deleteRewardDiscipline, IRewardDiscipline } from '../../apis/rewardDisciplines';
 import { getAllUsers } from '../../apis/users';
 import { getToken } from '../../utils/auth';
 import { useAuthContext } from '../../context/AuthContext/AuthContext';
+import { BatchRewardDisciplineModal } from '../Employees/components/BatchRewardDisciplineModal';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -23,6 +24,7 @@ const RewardDisciplines: React.FC = () => {
     
     // Modal
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [batchModalOpen, setBatchModalOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState<IRewardDiscipline | null>(null);
     const [form] = Form.useForm();
     const [modalLoading, setModalLoading] = useState(false);
@@ -196,9 +198,25 @@ const RewardDisciplines: React.FC = () => {
                     </Col>
                     <Col>
                         {canWrite && (
-                            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd} size="large">
-                                Thêm Bản ghi
-                            </Button>
+                            <Space>
+                                <Button 
+                                    type="primary" 
+                                    icon={<TeamOutlined />} 
+                                    onClick={() => setBatchModalOpen(true)} 
+                                    size="large"
+                                    style={{
+                                        background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                                        border: 'none',
+                                        borderRadius: 8,
+                                        fontWeight: 600,
+                                    }}
+                                >
+                                    Thêm hàng loạt (Nhiều NV)
+                                </Button>
+                                <Button icon={<PlusOutlined />} onClick={handleAdd} size="large" style={{ borderRadius: 8 }}>
+                                    Thêm Bản ghi
+                                </Button>
+                            </Space>
                         )}
                     </Col>
                 </Row>
@@ -299,6 +317,14 @@ const RewardDisciplines: React.FC = () => {
                     </Row>
                 </Form>
             </Modal>
+
+            {/* Batch Modal */}
+            <BatchRewardDisciplineModal
+                open={batchModalOpen}
+                onClose={() => setBatchModalOpen(false)}
+                onSuccess={fetchRecords}
+                users={users}
+            />
         </div>
     );
 };

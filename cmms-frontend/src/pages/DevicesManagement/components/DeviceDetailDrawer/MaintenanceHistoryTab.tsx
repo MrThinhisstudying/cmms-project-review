@@ -1,19 +1,21 @@
-import React, { useState, useEffect } from "react";
-import { Table, Tag, Button, Tooltip, Modal, Typography, DatePicker, message, Spin } from "antd";
+import React, { useState } from "react";
+import { Table, Tag, Button, Modal, Typography, DatePicker, message, Card } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { IMaintenance } from "../../../../types/maintenance.types";
+import { IDevice } from "../../../../types/devicesManagement.types";
 import dayjs from "dayjs";
-import { CheckCircleOutlined, ClockCircleOutlined, ToolOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
-import { createMaintenanceTicket, getAllTemplates } from "../../../../apis/maintenance";
+import { CheckCircleOutlined, ClockCircleOutlined, ToolOutlined, ExclamationCircleOutlined, TableOutlined } from "@ant-design/icons";
+import { createMaintenanceTicket } from "../../../../apis/maintenance";
 import { getToken } from "../../../../utils/auth";
 
-const { Text, Title } = Typography;
+const { Text } = Typography;
 
 interface Props {
   loading: boolean;
   maintenances: IMaintenance[];
   deviceId: number;
   deviceName: string;
+  device?: IDevice;
   onRefresh: () => void;
 }
 
@@ -22,6 +24,7 @@ export default function MaintenanceHistoryTab({
   maintenances,
   deviceId,
   deviceName,
+  device,
   onRefresh
 }: Props) {
   // --- STATE FOR PERFORM MAINTENANCE ---
@@ -160,14 +163,6 @@ export default function MaintenanceHistoryTab({
             if (r.status !== 'active') {
                 return <Button size="small" disabled>Thực hiện</Button>;
             }
-
-            // Lock logic (Optional, keep simple for now or match Modal)
-            const firstActiveIndex = maintenances.findIndex(d => d.status === 'active');
-            const isLocked = index !== firstActiveIndex && firstActiveIndex !== -1;
-            
-            // Allow bypassing lock per user request in previous steps? 
-            // The user said "remove template", didn't explicitly say "remove lock".
-            // But let's keep it consistent: Encourage sequential but allows click.
             
             return (
                  <Button 
@@ -183,22 +178,163 @@ export default function MaintenanceHistoryTab({
     }
   ];
 
+  // --- CHU KỲ BẢO DƯỠNG (VIEW GỐC) ---
+  const cycles =
+    maintenances.find((m) => m.cycle_config && m.cycle_config.length > 0)?.cycle_config ||
+    maintenances[0]?.cycle_config ||
+    [];
+
+  const completedRecord = maintenances.find(
+    (m) => m.status === 'inactive' && !!m.last_maintenance_date
+  );
+  const lastMaintenanceDate =
+    completedRecord?.last_maintenance_date ||
+    maintenances[0]?.last_maintenance_date ||
+    maintenances[0]?.start_date;
+
+  const renderCheck = (targetKey: string) => {
+    if (!Array.isArray(cycles)) return null;
+    const matchMap: Record<string, string[]> = {
+      Tuần: ['Tuần', 'Week', '1W'],
+      '1M': ['1M', '1 Tháng', '01 Tháng', '1_month'],
+      '3M': ['3M', '3 Tháng', '03 Tháng', '3_month'],
+      '6M': ['6M', '6 Tháng', '06 Tháng', '6_month'],
+      '1Y': ['1Y', '1 Năm', '01 Năm', '12_month'],
+      '2Y': ['2Y', '2 Năm', '02 Năm', '24_month'],
+    };
+    const targets = matchMap[targetKey] || [targetKey];
+    const isMatch = cycles.some((c) => targets.includes(c));
+    return isMatch ? (
+      <Tag color="green" style={{ margin: 0, fontWeight: 600 }}>
+        x
+      </Tag>
+    ) : null;
+  };
+
+  const originalPlanColumns: ColumnsType<any> = [
+    {
+      title: 'STT',
+      width: 50,
+      align: 'center',
+      render: () => 1,
+    },
+    {
+      title: 'Tên Trang Thiết Bị',
+      dataIndex: 'name',
+      key: 'name',
+      render: (text) => <b>{text || deviceName}</b>,
+    },
+    {
+      title: 'Nước sản xuất',
+      dataIndex: 'country_of_origin',
+      key: 'country',
+      width: 120,
+      render: (val) => val || '—',
+    },
+    {
+      title: 'Biển số xe',
+      dataIndex: 'reg_number',
+      key: 'reg_number',
+      width: 130,
+      render: (text) =>
+        text ? <Tag color="blue">{text}</Tag> : <span style={{ color: '#ccc', fontStyle: 'italic' }}>N/A</span>,
+    },
+    {
+      title: 'Ngày BD Gần Nhất',
+      key: 'last_date',
+      align: 'center',
+      width: 140,
+      render: () => (lastMaintenanceDate ? dayjs(lastMaintenanceDate).format('DD/MM/YYYY') : '—'),
+    },
+    {
+      title: 'Tuần',
+      align: 'center',
+      width: 80,
+      render: () => renderCheck('Tuần'),
+    },
+    {
+      title: '1 Tháng',
+      align: 'center',
+      width: 80,
+      render: () => renderCheck('1M'),
+    },
+    {
+      title: '3 Tháng',
+      align: 'center',
+      width: 80,
+      render: () => renderCheck('3M'),
+    },
+    {
+      title: '6 Tháng',
+      align: 'center',
+      width: 80,
+      render: () => renderCheck('6M'),
+    },
+    {
+      title: '1 Năm',
+      align: 'center',
+      width: 80,
+      render: () => renderCheck('1Y'),
+    },
+    {
+      title: '2 Năm',
+      align: 'center',
+      width: 80,
+      render: () => renderCheck('2Y'),
+    },
+  ];
+
   return (
-    <div>
-      {maintenances.length > 0 && (
-        <div style={{ marginBottom: 16, color: 'rgba(0, 0, 0, 0.45)' }}>
-          Tổng số: <strong>{maintenances.length}</strong> lịch bảo trì
-        </div>
-      )}
-      <Table
-        loading={loading}
-        columns={columns}
-        dataSource={maintenances}
-        rowKey="maintenance_id"
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* 1. BẢNG KẾ HOẠCH BẢO DƯỠNG (VIEW GỐC) */}
+      <Card
         size="small"
-        pagination={false} // List is usually short enough or parent handles scroll
-        locale={{ emptyText: "Không có lịch sử bảo trì" }}
-      />
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <TableOutlined style={{ color: '#1890ff' }} />
+            <span style={{ fontWeight: 700, color: '#002766', fontSize: 13 }}>
+              DANH SÁCH KẾ HOẠCH BẢO DƯỠNG (VIEW GỐC)
+            </span>
+          </div>
+        }
+        style={{ borderRadius: 8, borderColor: '#d9d9d9' }}
+      >
+        <Table
+          columns={originalPlanColumns}
+          dataSource={[device || { name: deviceName, device_id: deviceId }]}
+          rowKey={(r) => r.device_id || 'view-goc'}
+          pagination={false}
+          size="small"
+          scroll={{ x: 'max-content' }}
+        />
+      </Card>
+
+      {/* 2. BẢNG TIẾN ĐỘ THỰC HIỆN TỪNG ĐỢT */}
+      <Card
+        size="small"
+        title={
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>Lịch trình thực hiện bảo dưỡng chi tiết</span>
+            {maintenances.length > 0 && (
+              <span style={{ fontSize: 12, fontWeight: 400, color: 'rgba(0, 0, 0, 0.45)' }}>
+                Tổng số: <strong>{maintenances.length}</strong> lịch bảo trì
+              </span>
+            )}
+          </div>
+        }
+        style={{ borderRadius: 8 }}
+      >
+        <Table
+          loading={loading}
+          columns={columns}
+          dataSource={maintenances}
+          rowKey="maintenance_id"
+          size="small"
+          pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (t, r) => `${r[0]}-${r[1]} / ${t} lịch` }}
+          locale={{ emptyText: "Không có lịch sử bảo trì" }}
+          scroll={{ x: 'max-content' }}
+        />
+      </Card>
       
       <Modal
         title={

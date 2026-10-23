@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Box, CircularProgress, Snackbar, Alert } from "@mui/material";
+import { Spin, notification } from "antd";
 import {
   IMaintenanceTicket,
   TicketStatus,
@@ -18,11 +18,8 @@ const COLS: { key: TicketStatus; title: string }[] = [
 export default function TasksBoard() {
   const { tickets, loading, moveStatus, completeTicket } =
     useMaintenanceTasksContext();
-  const [toast, setToast] = useState<{
-    type: "success" | "error";
-    msg: string;
-  } | null>(null);
 
+  const [api, contextHolder] = notification.useNotification();
   const [completeOpen, setCompleteOpen] = useState(false);
   const [activeTicket, setActiveTicket] = useState<IMaintenanceTicket | null>(
     null
@@ -39,12 +36,22 @@ export default function TasksBoard() {
     return next;
   }, [tickets]);
 
+  const showNotification = (type: "success" | "error", msg: string) => {
+    const titleText = type === "success" ? "Thành công" : "Lỗi";
+    api[type]({
+      title: titleText,
+      message: titleText,
+      description: msg,
+      duration: 2.5,
+    });
+  };
+
   const _moveStatus = async (ticket: IMaintenanceTicket, to: TicketStatus) => {
     try {
       await moveStatus(ticket, to);
-      setToast({ type: "success", msg: "Cập nhật trạng thái thành công" });
+      showNotification("success", "Cập nhật trạng thái thành công");
     } catch (e: any) {
-      setToast({ type: "error", msg: e?.message || "Thao tác thất bại" });
+      showNotification("error", e?.message || "Thao tác thất bại");
     }
   };
 
@@ -59,34 +66,35 @@ export default function TasksBoard() {
       await completeTicket(activeTicket, review);
       setCompleteOpen(false);
       setActiveTicket(null);
-      setToast({ type: "success", msg: "Đã hoàn tất phiếu" });
+      showNotification("success", "Đã hoàn tất phiếu");
     } catch (e: any) {
-      setToast({ type: "error", msg: e?.message || "Hoàn tất thất bại" });
+      showNotification("error", e?.message || "Hoàn tất thất bại");
     }
   };
 
   if (loading) {
     return (
-      <Box
-        sx={{
+      <div
+        style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           height: "60vh",
         }}
       >
-        <CircularProgress />
-      </Box>
+        <Spin size="large" />
+      </div>
     );
   }
 
   return (
     <>
-      <Box
-        sx={{
+      {contextHolder}
+      <div
+        style={{
           display: "grid",
           gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 2,
+          gap: 16,
           alignItems: "start",
         }}
       >
@@ -102,7 +110,7 @@ export default function TasksBoard() {
             onComplete={(t) => openComplete(t)}
           />
         ))}
-      </Box>
+      </div>
 
       <CompleteDialog
         open={completeOpen}
@@ -112,14 +120,6 @@ export default function TasksBoard() {
         }}
         onSubmit={_handleComplete}
       />
-
-      <Snackbar
-        open={!!toast}
-        autoHideDuration={2500}
-        onClose={() => setToast(null)}
-      >
-        <Alert severity={toast?.type || "success"}>{toast?.msg}</Alert>
-      </Snackbar>
     </>
   );
 }

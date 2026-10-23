@@ -19,6 +19,14 @@ const HR_WRITE_ROLES: string[] = [UserRole.ADMIN, 'admin', UserRole.HR_MANAGER];
 export class LaborContractsController {
   constructor(private readonly laborContractsService: LaborContractsService) {}
 
+  @Post('bulk')
+  createBulk(@Body() dtos: CreateLaborContractDto[], @Req() req: any) {
+    if (!HR_WRITE_ROLES.includes(req.user.role)) {
+      throw new ForbiddenException();
+    }
+    return this.laborContractsService.createBulk(dtos);
+  }
+
   @Post()
   create(@Body() createLaborContractDto: CreateLaborContractDto, @Req() req: any) {
     if (!HR_WRITE_ROLES.includes(req.user.role)) {

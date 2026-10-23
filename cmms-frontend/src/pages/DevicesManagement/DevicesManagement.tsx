@@ -11,18 +11,25 @@ import {
   ToolOutlined,
   WarningOutlined,
   SearchOutlined,
-
+  CameraOutlined,
+  PrinterOutlined,
+  SafetyCertificateOutlined,
 } from "@ant-design/icons";
 import {
   uploadDevices,
   deleteDevice,
   updateDevice,
   createDevice,
+  getDeviceById,
 } from "../../apis/devices";
 import { exportDevicesToExcel } from "../../utils";
 import DeviceForm from "./components/DeviceForm";
 import { getToken } from "../../utils/auth";
 import DeviceDetailDrawer from "./components/DeviceDetailDrawer";
+import DeviceQRModal from "./components/DeviceQRModal";
+import BatchQRPrintModal from "./components/BatchQRPrintModal";
+import BatchLicenseModal from "./components/BatchLicenseModal";
+import QRScannerModal from "./components/QRScannerModal";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
 import { getAllDeviceGroups } from "../../apis/deviceGroups";
 import { getAllDeviceTypes, IDeviceType } from "../../apis/device-types";
@@ -49,6 +56,16 @@ const DevicesManagement: React.FC = () => {
   const [detailDevice, setDetailDevice] = useState<IDevice | null>(null);
   const [deviceGroups, setDeviceGroups] = useState<DeviceGroup[]>([]);
   const [deviceTypesList, setDeviceTypesList] = useState<IDeviceType[]>([]);
+
+  // QR Code & Scanner State
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  const [qrDevice, setQrDevice] = useState<IDevice | null>(null);
+  const [batchPrintOpen, setBatchPrintOpen] = useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
+
+  // Batch License & Inspection State
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [batchLicenseOpen, setBatchLicenseOpen] = useState(false);
 
   const userRole = user?.role;
   const userPermissions = user?.permissions || [];
@@ -102,6 +119,54 @@ const DevicesManagement: React.FC = () => {
   const handleView = (device: IDevice) => {
     setDetailDevice(device);
     setDetailOpen(true);
+  };
+
+  const handleShowQR = (device: IDevice) => {
+    setQrDevice(device);
+    setQrModalOpen(true);
+  };
+
+  const handleScanned = async (decodedText: string, deviceId?: number) => {
+    try {
+      let targetDevice: IDevice | undefined;
+      if (deviceId) {
+        targetDevice = devices.find((d) => d.device_id === deviceId);
+        if (!targetDevice) {
+          const token = getToken();
+          targetDevice = await getDeviceById(deviceId, token);
+        }
+      } else {
+        const clean = decodedText.trim().toLowerCase();
+        targetDevice = devices.find(
+          (d) =>
+            d.reg_number?.toLowerCase() === clean ||
+            d.device_code?.toLowerCase() === clean ||
+            d.name?.toLowerCase().includes(clean)
+        );
+      }
+
+      if (targetDevice) {
+        notification.success({
+          message: 'Đã nhận diện phương tiện',
+          title: 'Thành công',
+          description: `${targetDevice.name} (${targetDevice.reg_number || targetDevice.device_code || targetDevice.device_id})`,
+        });
+        setDetailDevice(targetDevice);
+        setDetailOpen(true);
+      } else {
+        notification.warning({
+          message: 'Không tìm thấy thiết bị tương ứng',
+          title: 'Kết quả quét',
+          description: `Mã đã quét: "${decodedText}". Không có trong hệ thống.`,
+        });
+      }
+    } catch (e: any) {
+      notification.error({
+        message: 'Lỗi tra cứu phương tiện',
+        title: 'Lỗi',
+        description: e?.message,
+      });
+    }
   };
 
   const handleDelete = async (id?: number) => {
@@ -279,10 +344,29 @@ const DevicesManagement: React.FC = () => {
                      <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>
                          Lọc
                      </Button>
+                     <Button
+                         icon={<CameraOutlined />}
+                         style={{ borderColor: '#1890ff', color: '#1890ff' }}
+                         onClick={() => setScannerOpen(true)}
+                     >
+                         Quét QR
+                     </Button>
                  </Space>
              </Col>
              <Col xs={24} lg={8} style={{ textAlign: 'right' }}>
                  <Space wrap>
+                     <Button icon={<PrinterOutlined />} onClick={() => setBatchPrintOpen(true)}>
+                         In tem QR
+                     </Button>
+                     {canEdit && (
+                         <Button
+                             icon={<SafetyCertificateOutlined />}
+                             style={{ background: '#52c41a', borderColor: '#52c41a', color: '#fff', fontWeight: 500 }}
+                             onClick={() => setBatchLicenseOpen(true)}
+                         >
+                             {selectedRowKeys.length > 0 ? `Cập nhật Đăng kiểm / Giấy phép (${selectedRowKeys.length})` : 'Cập nhật Đăng kiểm / Giấy phép'}
+                         </Button>
+                     )}
 
                     {canEdit && (
                         <>
@@ -319,8 +403,11 @@ const DevicesManagement: React.FC = () => {
              onEdit={handleEdit}
              onDelete={handleDelete}
              onView={handleView}
+             onShowQR={handleShowQR}
              canEdit={canEdit}
              canDelete={canDelete}
+             selectedRowKeys={selectedRowKeys}
+             onSelectChange={(keys) => setSelectedRowKeys(keys)}
           />
       </Card>
 
@@ -337,6 +424,36 @@ const DevicesManagement: React.FC = () => {
          open={detailOpen}
          onClose={() => setDetailOpen(false)}
          device={detailDevice}
+      />
+
+      <DeviceQRModal
+         open={qrModalOpen}
+         onClose={() => setQrModalOpen(false)}
+         device={qrDevice}
+      />
+
+      <BatchQRPrintModal
+         open={batchPrintOpen}
+         onClose={() => setBatchPrintOpen(false)}
+         devices={devices}
+      />
+
+      <BatchLicenseModal
+         open={batchLicenseOpen}
+         onClose={() => setBatchLicenseOpen(false)}
+         devices={devices}
+         selectedDeviceIds={selectedRowKeys.map((k) => Number(k))}
+         onSuccess={() => {
+             fetchDevices({ name: searchText, status: filterStatus, groupId: filterGroup, deviceTypeId: filterDeviceType });
+             fetchReport();
+             setSelectedRowKeys([]);
+         }}
+      />
+
+      <QRScannerModal
+         open={scannerOpen}
+         onClose={() => setScannerOpen(false)}
+         onScanned={handleScanned}
       />
       
 

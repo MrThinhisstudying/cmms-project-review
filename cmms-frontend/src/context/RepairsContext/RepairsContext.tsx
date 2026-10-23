@@ -59,10 +59,14 @@ export const RepairsProvider = ({
       setPendingCount(count);
   }, []);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (params?: {
+    status_request?: string;
+    status_inspection?: string;
+    device_id?: number;
+  }) => {
     // Reload both list and stats
     fetchPendingStats();
-    await fetchData();
+    await fetchData(params);
   }, [fetchData, fetchPendingStats]);
 
   // Poll for stats every 60s

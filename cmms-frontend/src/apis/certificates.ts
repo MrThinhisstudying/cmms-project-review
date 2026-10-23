@@ -49,6 +49,31 @@ const certificatesApi = {
         return res.json();
     },
 
+    getAllCertificates: async (type?: string): Promise<IEmployeeCertificate[]> => {
+        const token = getToken();
+        const url = new URL(`${process.env.REACT_APP_BASE_URL}/certificates/all`);
+        if (type) url.searchParams.append('type', type);
+        const res = await fetch(url.toString(), {
+            headers: { 'Authorization': token ? `Bearer ${token}` : '' }
+        });
+        if (!res.ok) throw new Error('Failed to fetch certificates');
+        return res.json();
+    },
+
+    createBulkCertificates: async (data: any[]): Promise<{ created: number; updated: number; failed: number }> => {
+        const token = getToken();
+        const res = await fetch(`${process.env.REACT_APP_BASE_URL}/certificates/bulk`, {
+            method: 'POST',
+            headers: {
+                'Authorization': token ? `Bearer ${token}` : '',
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(data),
+        });
+        if (!res.ok) throw new Error('Failed to bulk create certificates');
+        return res.json();
+    },
+
     getUserCertificates: async (userId: number | string, type?: string): Promise<IEmployeeCertificate[]> => {
         const token = getToken();
         const url = new URL(`${process.env.REACT_APP_BASE_URL}/certificates/user/${userId}`);

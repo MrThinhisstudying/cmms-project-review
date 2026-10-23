@@ -161,3 +161,17 @@ export const exportDevicesPdf = async (token: string | null) => {
   }
   return response.blob();
 };
+
+export const getDeviceById = async (id: number, token?: string | null): Promise<IDevice> => {
+  const response = await fetchClient(`/devices/${id}`, {
+    method: 'GET',
+    token,
+  });
+
+  if (!response.ok) {
+    throw new Error('Không thể tải thông tin thiết bị');
+  }
+  const res = await response.json();
+  return res.data;
+};
+

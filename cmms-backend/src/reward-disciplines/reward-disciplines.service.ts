@@ -21,6 +21,16 @@ export class RewardDisciplinesService {
     return await this.rewardDisciplineRepo.save(record);
   }
 
+  async createBatch(createRewardDisciplineDtos: CreateRewardDisciplineDto[]): Promise<RewardDiscipline[]> {
+    const records = createRewardDisciplineDtos.map(dto =>
+      this.rewardDisciplineRepo.create({
+        ...dto,
+        user: { user_id: dto.user_id } as User
+      })
+    );
+    return await this.rewardDisciplineRepo.save(records);
+  }
+
   async findAll(): Promise<RewardDiscipline[]> {
     return await this.rewardDisciplineRepo.find({
         relations: ['user', 'user.department'],

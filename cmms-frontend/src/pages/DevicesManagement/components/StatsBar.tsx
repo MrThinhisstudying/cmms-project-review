@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, Col, Row, Statistic } from 'antd';
-import { CarOutlined, CheckCircleOutlined, WarningOutlined, StopOutlined, RiseOutlined } from '@ant-design/icons';
+import { CarOutlined, CheckCircleOutlined, WarningOutlined, StopOutlined } from '@ant-design/icons';
 import { ReportData } from '../../../types/index.types';
 
 interface StatsBarProps {

@@ -1,13 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
-import {
-  TextField,
-  Box,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-} from "@mui/material";
-import DeleteIcon from "@mui/icons-material/Delete";
+import { Input as AntdInput, Select as AntdSelect } from "antd";
+import { ClearOutlined } from "@ant-design/icons";
 import _ from "lodash";
 import { CustomButton } from "../../../../components/Button";
 import { IDepartment } from "../../../../types/user.types";
@@ -30,14 +23,12 @@ const UserSearchBar: React.FC<UserSearchBarProps> = ({
   const [inputValue, setInputValue] = useState(search);
 
   const debouncedOnChange = useMemo(
-    () => _.debounce((value: string) => onChange(value), 1500),
+    () => _.debounce((value: string) => onChange(value), 500),
     [onChange]
   );
 
   useEffect(() => {
-    if (search !== inputValue) {
-      setInputValue(search);
-    }
+    setInputValue(search);
   }, [search]);
 
   useEffect(() => {
@@ -56,60 +47,51 @@ const UserSearchBar: React.FC<UserSearchBarProps> = ({
   const handleClearSearch = () => {
     setInputValue("");
     onChange("");
+    onChangeDept("");
     debouncedOnChange.cancel();
   };
 
   return (
-    <Box
-      display="flex"
-      justifyContent="space-between"
-      gap="12px"
-      paddingBottom="16px"
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        gap: "12px",
+        paddingBottom: "16px",
+        alignItems: "center",
+      }}
     >
-      <TextField
-        label="Tìm kiếm người dùng"
-        variant="outlined"
-        size="small"
-        fullWidth
+      <AntdInput
+        placeholder="Tìm kiếm người dùng..."
+        size="large"
         value={inputValue}
         onChange={handleInputChange}
+        style={{ flex: 1, borderRadius: 8 }}
       />
-      <TextField
-        select
-        size="small"
-        label="Phòng ban"
-        value={selectedDept}
-        onChange={(e) => onChangeDept(e.target.value as number | "")}
-        sx={{ minWidth: 200 }}
-        SelectProps={{
-          displayEmpty: true,
-          renderValue: (value) => {
-            if (value === "") {
-              return "Tất cả";
-            }
-            const dept = departments.find((d) => d.dept_id === value);
-            return dept ? dept.name : "";
-          },
-        }}
-        InputLabelProps={{ shrink: true }}
+      <AntdSelect
+        size="large"
+        placeholder="Phòng ban"
+        value={selectedDept === "" ? undefined : selectedDept}
+        onChange={(val) => onChangeDept(val ?? "")}
+        style={{ minWidth: 200 }}
+        allowClear
       >
-        <MenuItem value="">Tất cả</MenuItem>
+        <AntdSelect.Option value="">Tất cả</AntdSelect.Option>
         {departments.map((dept) => (
-          <MenuItem key={dept.dept_id} value={dept.dept_id}>
+          <AntdSelect.Option key={dept.dept_id} value={dept.dept_id}>
             {dept.name}
-          </MenuItem>
+          </AntdSelect.Option>
         ))}
-      </TextField>
+      </AntdSelect>
       <CustomButton
         variant="contained"
-        startIcon={<DeleteIcon />}
+        startIcon={<ClearOutlined />}
         bgrColor="#d32f2f"
-        sx={{ whiteSpace: "nowrap", height: "40px" }}
         onClick={handleClearSearch}
       >
         Xóa
       </CustomButton>
-    </Box>
+    </div>
   );
 };
 

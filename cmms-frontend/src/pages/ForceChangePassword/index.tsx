@@ -2,23 +2,13 @@ import React, { useRef, useState } from "react";
 import { useForm, Controller, Resolver } from "react-hook-form";
 import * as yup from "yup";
 import { yupResolver } from "@hookform/resolvers/yup";
-import {
-  Box,
-  Typography,
-  TextField,
-  InputAdornment,
-  IconButton,
-  Button,
-} from "@mui/material";
-import {
-  Visibility,
-  VisibilityOff,
-  Save as SaveIcon,
-} from "@mui/icons-material";
+import { SaveOutlined } from "@ant-design/icons";
+import { Input as AntdInput, Card } from "antd";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
 import { changePasswordFirstLogin } from "../../apis/users";
 import { setToken, getToken } from "../../utils/auth";
 import Toast from "../../components/Toast";
+import { CustomButton } from "../../components/Button";
 
 interface IChangePasswordForm {
   currentPassword?: string;
@@ -37,7 +27,7 @@ const ForceChangePassword = () => {
   const token = getToken();
   const [openToast, setOpenToast] = useState(false);
   const [loading, setLoading] = useState(false);
-  
+
   const toast = useRef<ToastContent>({
     type: "success",
     content: "",
@@ -84,15 +74,13 @@ const ForceChangePassword = () => {
   const onSubmit = async (data: IChangePasswordForm) => {
     setLoading(true);
     try {
-      // API call to change password
       const res = await changePasswordFirstLogin(data, token);
       if (res && res.accessToken) {
         showToast({
           content: "Đổi mật khẩu thành công",
           type: "success",
         });
-        
-        // Save new token and update user session
+
         setToken(res.accessToken, false);
         updateUser(res.accessToken);
       } else {
@@ -122,103 +110,71 @@ const ForceChangePassword = () => {
     placeholder: string;
     error?: string;
   }) => {
-    const [showPassword, setShowPassword] = useState(false);
     return (
       <Controller
         name={name}
         control={control}
         render={({ field }) => (
-          <Box sx={{ mb: 3 }}>
-            <Typography
-              variant="body2"
-              sx={{ fontWeight: 500, color: "#344054", mb: "6px" }}
-            >
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: "block", fontWeight: 500, color: "#344054", marginBottom: 6 }}>
               {label} <span style={{ color: "#d32f2f" }}>*</span>
-            </Typography>
-            <TextField
-              fullWidth
-              type={showPassword ? "text" : "password"}
+            </label>
+            <AntdInput.Password
+              size="large"
               placeholder={placeholder}
               value={field.value ?? ""}
               onChange={field.onChange}
-              error={!!error}
-              helperText={error}
-              margin="none"
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton
-                      onClick={() => setShowPassword(!showPassword)}
-                      edge="end"
-                      size="small"
-                    >
-                      {showPassword ? <Visibility /> : <VisibilityOff />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-                sx: {
-                  borderRadius: "8px",
-                  bgcolor: "#fff",
-                  "& input": {
-                    padding: "10px 14px",
-                  },
-                },
-              }}
+              status={error ? "error" : ""}
+              style={{ borderRadius: 8 }}
             />
-          </Box>
+            {error && (
+              <span style={{ color: "#B42318", fontSize: 12, marginTop: 4, display: "block" }}>
+                {error}
+              </span>
+            )}
+          </div>
         )}
       />
     );
   };
 
   return (
-    <Box
-      sx={{
+    <div
+      style={{
         width: "100%",
         minHeight: "100vh",
         display: "flex",
         justifyContent: "center",
         alignItems: "center",
-        bgcolor: "#f8f9fa",
-        px: 2,
-        py: 4,
+        backgroundColor: "#f8f9fa",
+        padding: "32px 16px",
       }}
     >
-      <Box
-        sx={{
-          bgcolor: "#fff",
-          p: 4,
-          borderRadius: 2,
-          boxShadow: "0px 4px 20px rgba(0, 0, 0, 0.05)",
+      <Card
+        style={{
           width: 500,
           maxWidth: "100%",
+          borderRadius: 12,
+          boxShadow: "0px 4px 20px rgba(0, 0, 0, 0.05)",
+          padding: 24,
         }}
       >
-        <Typography
-          variant="h5"
-          align="center"
-          sx={{
-            fontWeight: 700,
-            color: "#115eaf",
-            mb: 2,
-          }}
-        >
+        <h2 style={{ textAlign: "center", fontWeight: 700, color: "#115eaf", marginBottom: 16 }}>
           Đổi mật khẩu
-        </Typography>
+        </h2>
 
-        <Typography
-          variant="body2"
-          align="center"
-          sx={{
+        <p
+          style={{
+            textAlign: "center",
             color: "#d32f2f",
             fontWeight: 500,
-            mb: 4,
-            px: 1,
+            marginBottom: 24,
             lineHeight: 1.6,
+            fontSize: 14,
           }}
         >
           Bạn cần thay đổi mật khẩu mặc định sau lần đăng nhập đầu tiên để đảm bảo an toàn cho tài khoản!
-        </Typography>
+        </p>
 
         <form onSubmit={handleSubmit(onSubmit)}>
           <PasswordField
@@ -240,46 +196,32 @@ const ForceChangePassword = () => {
             error={errors.confirmNewPassword?.message}
           />
 
-          <Button
+          <CustomButton
             type="submit"
             variant="contained"
             disabled={loading}
-            startIcon={<SaveIcon />}
-            sx={{
-              mt: 1,
-              py: "10px",
-              borderRadius: "8px",
-              fontWeight: 600,
-              backgroundColor: "#115eaf",
-              textTransform: "none",
-              fontSize: "15px",
-              width: "100%",
-              boxShadow: "none",
-              "&:hover": {
-                backgroundColor: "#0d4b8c",
-                boxShadow: "none",
-              },
-            }}
+            startIcon={<SaveOutlined />}
+            fullWidth
+            bgrColor="#115eaf"
+            style={{ marginTop: 16, height: 44 }}
           >
             Lưu
-          </Button>
+          </CustomButton>
         </form>
 
-        <Typography
-          variant="body2"
-          align="center"
-          sx={{
-            mt: 3,
+        <p
+          style={{
+            textAlign: "center",
+            marginTop: 24,
             cursor: "pointer",
             color: "#667085",
-            fontSize: "13px",
-            "&:hover": { color: "#115eaf", textDecoration: "underline" },
+            fontSize: 13,
           }}
           onClick={logoutUser}
         >
           Quay lại đăng nhập
-        </Typography>
-      </Box>
+        </p>
+      </Card>
 
       <Toast
         content={toast.current.content}
@@ -287,7 +229,7 @@ const ForceChangePassword = () => {
         open={openToast}
         onClose={() => setOpenToast(false)}
       />
-    </Box>
+    </div>
   );
 };
 

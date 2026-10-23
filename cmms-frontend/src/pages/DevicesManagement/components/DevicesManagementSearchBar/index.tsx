@@ -1,6 +1,6 @@
 import React from "react";
-import { TextField, Box } from "@mui/material";
-import AutorenewIcon from "@mui/icons-material/Autorenew";
+import { Input as AntdInput } from "antd";
+import { ReloadOutlined } from "@ant-design/icons";
 import { CustomButton } from "../../../../components/Button";
 
 interface DevicesManagementSearchBarProps {
@@ -15,31 +15,30 @@ const DevicesManagementSearchBar: React.FC<DevicesManagementSearchBarProps> = ({
   handleClearFilterData,
 }) => {
   return (
-    <Box
-      display="flex"
-      alignItems="center"
-      gap="12px"
-      paddingBottom="16px"
-      flexWrap="nowrap"
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        paddingBottom: "16px",
+      }}
     >
-      <TextField
-        label="Tìm kiếm người dùng"
-        variant="outlined"
-        size="small"
-        sx={{ flexGrow: 1 }}
+      <AntdInput
+        placeholder="Tìm kiếm thiết bị..."
+        size="large"
+        style={{ flex: 1, borderRadius: 8 }}
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
       <CustomButton
         variant="contained"
-        startIcon={<AutorenewIcon />}
+        startIcon={<ReloadOutlined />}
         bgrColor="#d32f2f"
-        sx={{ whiteSpace: "nowrap", height: "40px" }}
         onClick={handleClearFilterData}
       >
         Làm mới
       </CustomButton>
-    </Box>
+    </div>
   );
 };
 

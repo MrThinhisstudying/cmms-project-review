@@ -1,5 +1,6 @@
 import { IUser } from "./user.types";
 import { ReportData } from "./index.types";
+import { IDeviceGroup } from "../apis/device-groups";
 
 export interface IDevice {
   device_id?: number;
@@ -38,7 +39,7 @@ export interface IDevice {
   created_at?: Date;
   updated_at?: Date;
   users?: IUser[];
-  device_group?: { id: number; name: string };
+  device_group?: IDeviceGroup;
   deviceType?: { id: number; name: string; code?: string };
   deviceTypeId?: number;
 }

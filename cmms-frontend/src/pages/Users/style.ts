@@ -1,27 +1,29 @@
-import { styled } from "@mui/material/styles";
-import { Box, Paper } from "@mui/material";
+import styled from "styled-components";
 
-export const PageContainer = styled(Box)({
-  padding: "20px",
-});
+export const PageContainer = styled.div`
+  padding: 20px;
+`;
 
-export const Header = styled(Box)({
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "16px",
-  backgroundColor: "#fff",
-  boxShadow: "0px 2px 10px rgba(0, 0, 0, 0.1)",
-  borderRadius: "8px",
-});
+export const Header = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background-color: #fff;
+  box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+`;
 
-export const SearchBar = styled(Box)({
-  display: "flex",
-  gap: "10px",
-  marginTop: "16px",
-});
+export const SearchBar = styled.div`
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+`;
 
-export const StyledTableContainer = styled(Paper)({
-  padding: "16px",
-  marginTop: "16px",
-});
+export const StyledTableContainer = styled.div`
+  padding: 16px;
+  margin-top: 16px;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0px 2px 10px rgba(0, 0, 0, 0.05);
+`;

@@ -1,5 +1,4 @@
 import React from "react";
-import { Box, Stack, Typography } from "@mui/material";
 import { IMaintenanceTicket } from "../../../../types/maintenanceTicket.types";
 import TaskCard from "../TaskCard";
 
@@ -22,17 +21,20 @@ export default function TasksColumn({
   onComplete,
 }: Props) {
   return (
-    <Box sx={{ minWidth: 280 }}>
-      <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 700 }}>
-        {title}
-      </Typography>
-      <Stack
-        sx={{
+    <div style={{ minWidth: 280 }}>
+      <h3 style={{ marginBottom: 8, fontWeight: 700, fontSize: 15 }}>
+        {title} ({items.length})
+      </h3>
+      <div
+        style={{
           minHeight: 240,
-          p: 1,
-          borderRadius: 1,
-          bgcolor: "#fafafa",
+          padding: 8,
+          borderRadius: 8,
+          backgroundColor: "#fafafa",
           border: "1px solid #eee",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
         }}
       >
         {items.map((item) => (
@@ -45,7 +47,7 @@ export default function TasksColumn({
             onComplete={() => onComplete(item)}
           />
         ))}
-      </Stack>
-    </Box>
+      </div>
+    </div>
   );
 }

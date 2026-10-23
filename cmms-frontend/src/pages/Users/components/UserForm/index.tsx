@@ -1,26 +1,10 @@
-import React, { useEffect, useState } from "react";
-import {
-  TextField,
-  DialogActions,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
-  FormHelperText,
-  InputAdornment,
-  IconButton,
-} from "@mui/material";
+import React, { useEffect } from "react";
+import { Modal as AntdModal, Input as AntdInput, Select as AntdSelect } from "antd";
 import { useForm, Controller } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as yup from "yup";
 import { ICreateUser, IUser } from "../../../../types/user.types";
 import FileUploadComponent from "../../../../components/FileUpload";
-import {
-  DialogContainer,
-  DialogContentContainer,
-  DialogTitleContainer,
-} from "./style";
-import { Visibility, VisibilityOff } from "@mui/icons-material";
 import { CustomButton } from "../../../../components/Button";
 import { useDepartmentsContext } from "../../../../context/DepartmentsContext/DepartmentsContext";
 
@@ -71,12 +55,6 @@ const UserForm: React.FC<UserFormProps> = ({
   selectedUser,
 }) => {
   const isEdit = !!selectedUser;
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-
-  const toggleShowPassword = () => setShowPassword((prev) => !prev);
-  const toggleShowConfirm = () => setShowConfirm((prev) => !prev);
-
   const schema = getUserSchema(isEdit);
 
   const { departments } = useDepartmentsContext();
@@ -148,11 +126,22 @@ const UserForm: React.FC<UserFormProps> = ({
   };
 
   return (
-    <DialogContainer open={open} onClose={onClose}>
-      <DialogTitleContainer>
-        {isEdit ? "Chỉnh sửa người dùng" : "Thêm người dùng"}
-      </DialogTitleContainer>
-      <DialogContentContainer>
+    <AntdModal
+      open={open}
+      onCancel={onClose}
+      title={isEdit ? "Chỉnh sửa người dùng" : "Thêm người dùng"}
+      footer={[
+        <CustomButton key="cancel" onClick={onClose} variant="outlined">
+          Hủy
+        </CustomButton>,
+        <CustomButton key="submit" onClick={handleSubmit(onSubmit)} variant="contained" bgrColor="#1890ff">
+          Xác nhận
+        </CustomButton>,
+      ]}
+      centered
+      width={600}
+    >
+      <form onSubmit={handleSubmit(onSubmit)} style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 16 }}>
         <Controller
           name="avatar"
           control={control}
@@ -165,180 +154,117 @@ const UserForm: React.FC<UserFormProps> = ({
           )}
         />
 
-        <Controller
-          name="name"
-          control={control}
-          render={({ field }) => (
-            <TextField
-              {...field}
-              label="Tên"
-              fullWidth
-              error={!!errors.name}
-              helperText={errors.name?.message}
-            />
-          )}
-        />
+        <div>
+          <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>Tên *</label>
+          <Controller
+            name="name"
+            control={control}
+            render={({ field }) => (
+              <AntdInput {...field} status={errors.name ? "error" : ""} placeholder="Nhập tên..." />
+            )}
+          />
+          {errors.name && <span style={{ color: "#B42318", fontSize: 12 }}>{errors.name.message}</span>}
+        </div>
 
-        <Controller
-          name="email"
-          control={control}
-          render={({ field }) => (
-            <TextField
-              {...field}
-              label="Email"
-              fullWidth
-              error={!!errors.email}
-              helperText={errors.email?.message}
-            />
-          )}
-        />
+        <div>
+          <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>Email *</label>
+          <Controller
+            name="email"
+            control={control}
+            render={({ field }) => (
+              <AntdInput {...field} status={errors.email ? "error" : ""} placeholder="Nhập email..." />
+            )}
+          />
+          {errors.email && <span style={{ color: "#B42318", fontSize: 12 }}>{errors.email.message}</span>}
+        </div>
 
         {!isEdit && (
           <>
-            <Controller
-              name="password"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  label="Mật khẩu"
-                  fullWidth
-                  type={showPassword ? "text" : "password"}
-                  error={!!errors.password}
-                  helperText={errors.password?.message}
-                  InputProps={{
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton onClick={toggleShowPassword} edge="end">
-                          {showPassword ? <VisibilityOff /> : <Visibility />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              )}
-            />
+            <div>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>Mật khẩu *</label>
+              <Controller
+                name="password"
+                control={control}
+                render={({ field }) => (
+                  <AntdInput.Password {...field} status={errors.password ? "error" : ""} placeholder="Nhập mật khẩu..." />
+                )}
+              />
+              {errors.password && <span style={{ color: "#B42318", fontSize: 12 }}>{errors.password.message}</span>}
+            </div>
 
-            <Controller
-              name="confirmPassword"
-              control={control}
-              render={({ field }) => (
-                <TextField
-                  {...field}
-                  label="Xác nhận mật khẩu"
-                  fullWidth
-                  type={showConfirm ? "text" : "password"}
-                  error={!!errors.confirmPassword}
-                  helperText={errors.confirmPassword?.message}
-                  InputProps={{
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <IconButton onClick={toggleShowConfirm} edge="end">
-                          {showConfirm ? <VisibilityOff /> : <Visibility />}
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              )}
-            />
+            <div>
+              <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>Xác nhận mật khẩu *</label>
+              <Controller
+                name="confirmPassword"
+                control={control}
+                render={({ field }) => (
+                  <AntdInput.Password {...field} status={errors.confirmPassword ? "error" : ""} placeholder="Xác nhận mật khẩu..." />
+                )}
+              />
+              {errors.confirmPassword && <span style={{ color: "#B42318", fontSize: 12 }}>{errors.confirmPassword.message}</span>}
+            </div>
           </>
         )}
 
-        <Controller
-          name="citizen_identification_card"
-          control={control}
-          render={({ field }) => (
-            <TextField
-              {...field}
-              label="Số CCCD"
-              fullWidth
-              error={!!errors.citizen_identification_card}
-              helperText={errors.citizen_identification_card?.message}
-              onBeforeInput={(e) => {
-                const ev = e as unknown as React.FormEvent<HTMLInputElement> & {
-                  data: string;
-                };
-                if (!/^[0-9]$/.test(ev.data)) {
-                  e.preventDefault();
-                }
-              }}
-            />
-          )}
-        />
+        <div>
+          <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>Số CCCD *</label>
+          <Controller
+            name="citizen_identification_card"
+            control={control}
+            render={({ field }) => (
+              <AntdInput {...field} status={errors.citizen_identification_card ? "error" : ""} placeholder="Nhập số CCCD..." />
+            )}
+          />
+          {errors.citizen_identification_card && <span style={{ color: "#B42318", fontSize: 12 }}>{errors.citizen_identification_card.message}</span>}
+        </div>
 
-        <Controller
-          name="position"
-          control={control}
-          render={({ field }) => (
-            <TextField
-              {...field}
-              label="Chức vụ"
-              fullWidth
-              error={!!errors.position}
-              helperText={errors.position?.message}
-            />
-          )}
-        />
+        <div>
+          <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>Chức vụ *</label>
+          <Controller
+            name="position"
+            control={control}
+            render={({ field }) => (
+              <AntdInput {...field} status={errors.position ? "error" : ""} placeholder="Nhập chức vụ..." />
+            )}
+          />
+          {errors.position && <span style={{ color: "#B42318", fontSize: 12 }}>{errors.position.message}</span>}
+        </div>
 
-        <FormControl fullWidth error={!!errors.role}>
-          <InputLabel>Vai trò</InputLabel>
+        <div>
+          <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>Vai trò *</label>
           <Controller
             name="role"
             control={control}
             render={({ field }) => (
-              <Select {...field} label="Vai trò">
-                <MenuItem value="staff">Staff</MenuItem>
-                <MenuItem value="admin">Admin</MenuItem>
-                <MenuItem value="manager">Manager</MenuItem>
-              </Select>
+              <AntdSelect {...field} style={{ width: "100%" }} status={errors.role ? "error" : ""}>
+                <AntdSelect.Option value="staff">Staff</AntdSelect.Option>
+                <AntdSelect.Option value="admin">Admin</AntdSelect.Option>
+                <AntdSelect.Option value="manager">Manager</AntdSelect.Option>
+              </AntdSelect>
             )}
           />
-          {errors.role && (
-            <FormHelperText>{errors.role?.message}</FormHelperText>
-          )}
-        </FormControl>
+          {errors.role && <span style={{ color: "#B42318", fontSize: 12 }}>{errors.role.message}</span>}
+        </div>
 
-        <FormControl fullWidth error={!!errors.dept_id}>
-          <InputLabel>Phòng ban</InputLabel>
+        <div>
+          <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>Phòng ban *</label>
           <Controller
             name="dept_id"
             control={control}
             render={({ field }) => (
-              <Select {...field} label="Phòng ban">
+              <AntdSelect {...field} style={{ width: "100%" }} status={errors.dept_id ? "error" : ""}>
                 {departments.map((dept) => (
-                  <MenuItem key={dept.dept_id} value={dept.dept_id}>
+                  <AntdSelect.Option key={dept.dept_id} value={dept.dept_id}>
                     {dept.name}
-                  </MenuItem>
+                  </AntdSelect.Option>
                 ))}
-              </Select>
+              </AntdSelect>
             )}
           />
-          {errors.dept_id && (
-            <FormHelperText>{errors.dept_id.message}</FormHelperText>
-          )}
-        </FormControl>
-      </DialogContentContainer>
-
-      <DialogActions>
-        <CustomButton
-          onClick={onClose}
-          color="secondary"
-          variant="outlined"
-          padding="4px 12px"
-        >
-          Hủy
-        </CustomButton>
-        <CustomButton
-          onClick={handleSubmit(onSubmit)}
-          color="primary"
-          variant="contained"
-          padding="4px 12px"
-        >
-          Xác nhận
-        </CustomButton>
-      </DialogActions>
-    </DialogContainer>
+          {errors.dept_id && <span style={{ color: "#B42318", fontSize: 12 }}>{errors.dept_id.message}</span>}
+        </div>
+      </form>
+    </AntdModal>
   );
 };
 

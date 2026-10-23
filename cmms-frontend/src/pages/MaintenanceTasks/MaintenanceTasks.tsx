@@ -1,14 +1,13 @@
 import React from "react";
-import { Box, Typography } from "@mui/material";
 import TasksBoard from "./components/TasksBoard";
 
 export default function MaintenanceTasksPage() {
   return (
-    <Box sx={{ p: 2 }}>
-      <Typography variant="h6" sx={{ mb: 2 }}>
+    <div style={{ padding: 16 }}>
+      <h2 style={{ marginBottom: 16, fontSize: 20, fontWeight: 600 }}>
         Nhiệm vụ bảo dưỡng
-      </Typography>
+      </h2>
       <TasksBoard />
-    </Box>
+    </div>
   );
 }

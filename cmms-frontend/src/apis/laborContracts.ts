@@ -69,3 +69,25 @@ export const deleteLaborContract = async (id: number): Promise<void> => {
     });
     if (!response.ok) throw new Error('Lỗi xoá hợp đồng');
 };
+
+export interface BulkContractResult {
+    created: number;
+    updated: number;
+    failed: number;
+}
+
+export const createBulkLaborContracts = async (data: any[]): Promise<BulkContractResult> => {
+    const response = await fetchClient('/labor-contracts/bulk', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Lỗi nhập danh sách hợp đồng');
+    }
+    return response.json();
+};

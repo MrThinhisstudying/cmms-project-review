@@ -300,3 +300,27 @@ export const generateMaintenanceSeries = async (
   if (!res.ok) throw new Error(data.message || "Tạo chuỗi kế hoạch thất bại");
   return data;
 };
+
+// 4. Ghi nhận bảo dưỡng hàng loạt qua Excel
+export const batchCompleteMaintenance = async (
+  token: string | null,
+  items: Array<{
+    device_id: number;
+    maintenance_level: string;
+    execution_date: string;
+    arising_issues?: string;
+  }>
+) => {
+  const res = await fetch(`${BASE}/maintenance-tickets/batch-complete`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: token ? `Bearer ${token}` : "",
+    },
+    body: JSON.stringify({ items }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Ghi nhận bảo dưỡng hàng loạt thất bại");
+  return data.data || data;
+};
+

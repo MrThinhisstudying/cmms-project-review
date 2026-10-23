@@ -1,11 +1,18 @@
-import React, { useEffect, useState } from 'react';
-import { Drawer, Form, Input, Button, Upload, message, Avatar, Tag, Spin, Empty, Badge, Tooltip, Table, Space, Popconfirm, DatePicker, Modal, Descriptions } from 'antd';
+import React, { useEffect, useState, useRef } from 'react';
+import { 
+    Drawer, Form, Input, Button, Upload, message, Avatar, Tag, Spin, Empty, 
+    Badge, Tooltip, Table, Space, Popconfirm, DatePicker, Modal, Descriptions,
+    Select, Row, Col, Alert
+} from 'antd';
 import {
     UploadOutlined, UserOutlined, LockOutlined, WarningOutlined, PlusOutlined,
     SafetyCertificateOutlined, BookOutlined, CarOutlined, EditOutlined,
     PhoneOutlined, DeleteOutlined, CloseOutlined, FileTextOutlined,
     TrophyOutlined, CalendarOutlined, IdcardOutlined, MailOutlined,
-    TeamOutlined, ToolOutlined, GlobalOutlined, DesktopOutlined, EyeOutlined
+    TeamOutlined, GlobalOutlined, DesktopOutlined, EyeOutlined,
+    CheckCircleOutlined, HomeOutlined, EnvironmentOutlined, CrownOutlined,
+    SolutionOutlined, AuditOutlined, InfoCircleOutlined, CopyOutlined,
+    SaveOutlined
 } from '@ant-design/icons';
 import { IUser } from '../../../../types/user.types';
 import { uploadSignature, updateUser, uploadAvatar } from '../../../../apis/users';
@@ -21,7 +28,6 @@ import { useAuthContext } from '../../../../context/AuthContext/AuthContext';
 import { createProfileRequest, getMyRequests, IProfileRequest } from '../../../../apis/profileRequests';
 import { createLaborContract } from '../../../../apis/laborContracts';
 import { createRewardDiscipline } from '../../../../apis/rewardDisciplines';
-import { Select } from 'antd';
 
 // ─────────────────────────── Types ───────────────────────────
 interface ProfileModalProps {
@@ -120,38 +126,56 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
+    const prevOpenRef = useRef(false);
+    const prevUserIdRef = useRef<number | null>(null);
+    const loadedTabsRef = useRef<Record<string, boolean>>({});
+
     useEffect(() => {
-        if (open && user) {
-            infoForm.setFieldsValue({
-                name: user.name,
-                phone_number: user.phone_number,
-                citizen_identification_card: user.citizen_identification_card,
-                employee_code: user.employee_code,
-                position: user.position,
-                date_of_birth: user.date_of_birth ? dayjs(user.date_of_birth) : null,
-                place_of_birth: user.place_of_birth,
-                gender: user.gender,
-                ethnicity: user.ethnicity,
-                cccd_issue_date: user.cccd_issue_date ? dayjs(user.cccd_issue_date) : null,
-                permanent_address: user.permanent_address,
-                temporary_address: user.temporary_address,
-                hometown: user.hometown,
-            });
-            setSignatureUrl(user.signature_url);
+        if (!open || !user) {
+            prevOpenRef.current = false;
+            return;
+        }
+
+        const isJustOpened = !prevOpenRef.current && open;
+        const isDifferentUser = prevUserIdRef.current !== user.user_id;
+
+        if (isJustOpened || isDifferentUser) {
+            prevOpenRef.current = true;
+            prevUserIdRef.current = user.user_id;
+            loadedTabsRef.current = {};
+            setLoadedTabs({});
             passForm.resetFields();
             setActiveSection(initialSection || 'info');
-            setLoadedTabs({});
-            fetchQuals();
-            fetchCccmCerts();
+            fetchQuals(user.user_id);
+            fetchCccmCerts(user.user_id);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, user, initialSection]);
 
-    // Lazy-load data per section
+        // Cập nhật giá trị form và chữ ký nếu có cập nhật từ cha mà không reset tab
+        infoForm.setFieldsValue({
+            name: user.name,
+            phone_number: user.phone_number,
+            citizen_identification_card: user.citizen_identification_card,
+            employee_code: user.employee_code,
+            position: user.position,
+            date_of_birth: user.date_of_birth ? dayjs(user.date_of_birth) : null,
+            place_of_birth: user.place_of_birth,
+            gender: user.gender,
+            ethnicity: user.ethnicity,
+            cccd_issue_date: user.cccd_issue_date ? dayjs(user.cccd_issue_date) : null,
+            permanent_address: user.permanent_address,
+            temporary_address: user.temporary_address,
+            hometown: user.hometown,
+        });
+        setSignatureUrl(user.signature_url);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, user?.user_id, initialSection]);
+
+    // Lazy-load data per section mà không trigger re-render cycle
     useEffect(() => {
         if (!open || !user) return;
         const loadData = async () => {
-            if (activeSection === 'contracts' && !loadedTabs.contracts) {
+            if (activeSection === 'contracts' && !loadedTabsRef.current.contracts) {
+                loadedTabsRef.current.contracts = true;
                 setHistoryLoading(true);
                 try {
                     const { getLaborContractsByUser } = await import('../../../../apis/laborContracts');
@@ -160,7 +184,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     setLoadedTabs(prev => ({ ...prev, contracts: true }));
                 } finally { setHistoryLoading(false); }
             }
-            if (activeSection === 'history' && !loadedTabs.history) {
+            if (activeSection === 'history' && !loadedTabsRef.current.history) {
+                loadedTabsRef.current.history = true;
                 setHistoryLoading(true);
                 try {
                     const { getRewardDisciplinesByUser } = await import('../../../../apis/rewardDisciplines');
@@ -169,7 +194,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     setLoadedTabs(prev => ({ ...prev, history: true }));
                 } finally { setHistoryLoading(false); }
             }
-            if (activeSection === 'leaves' && !loadedTabs.leaves) {
+            if (activeSection === 'leaves' && !loadedTabsRef.current.leaves) {
+                loadedTabsRef.current.leaves = true;
                 setHistoryLoading(true);
                 try {
                     const { getAnnualLeavesByUser, getLeaveHistoriesByUser } = await import('../../../../apis/annualLeaves');
@@ -182,15 +208,18 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     setLoadedTabs(prev => ({ ...prev, leaves: true }));
                 } finally { setHistoryLoading(false); }
             }
-            if (activeSection === 'cccm' && !loadedTabs.cccm) {
+            if (activeSection === 'cccm' && !loadedTabsRef.current.cccm) {
+                loadedTabsRef.current.cccm = true;
                 setHistoryLoading(true);
                 try {
                     const data = await certificatesApi.getUserCertificates(user.user_id, 'CCCM');
                     setEditCertificates(data);
+                    setCccmCerts(data);
                     setLoadedTabs(prev => ({ ...prev, cccm: true }));
                 } finally { setHistoryLoading(false); }
             }
-            if (activeSection === 'my_requests' && !loadedTabs.my_requests) {
+            if (activeSection === 'my_requests' && !loadedTabsRef.current.my_requests) {
+                loadedTabsRef.current.my_requests = true;
                 setHistoryLoading(true);
                 try {
                     const data = await getMyRequests().catch(() => []);
@@ -200,24 +229,27 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
             }
         };
         loadData();
-    }, [activeSection, open, user, loadedTabs]);
+    }, [activeSection, open, user]);
 
-    const fetchQuals = async () => {
-        if (!user) return;
+    const fetchQuals = async (targetUserId?: number) => {
+        const uid = targetUserId || user?.user_id;
+        if (!uid) return;
         setQualLoading(true);
         try {
-            const data = await certificatesApi.getUserCertificates(user.user_id, 'BANG_CAP');
+            const data = await certificatesApi.getUserCertificates(uid, 'BANG_CAP');
             setQualifications(data);
         } catch { message.error('Lỗi lấy danh sách chứng chỉ/bằng cấp'); }
         finally { setQualLoading(false); }
     };
 
-    const fetchCccmCerts = async () => {
-        if (!user) return;
+    const fetchCccmCerts = async (targetUserId?: number) => {
+        const uid = targetUserId || user?.user_id;
+        if (!uid) return;
         setCccmLoading(true);
         try {
-            const data = await certificatesApi.getUserCertificates(user.user_id, 'CCCM');
+            const data = await certificatesApi.getUserCertificates(uid, 'CCCM');
             setCccmCerts(data);
+            setEditCertificates(data);
         } catch { message.error('Lỗi lấy danh sách CCCM'); }
         finally { setCccmLoading(false); }
     };
@@ -231,6 +263,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
             const { getLaborContractsByUser } = await import('../../../../apis/laborContracts');
             const data = await getLaborContractsByUser(user.user_id).catch(() => []);
             setLaborContracts(data);
+            loadedTabsRef.current.contracts = true;
+            setLoadedTabs(prev => ({ ...prev, contracts: true }));
         } catch { /* silent */ }
     };
 
@@ -241,6 +275,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
             const { getRewardDisciplinesByUser } = await import('../../../../apis/rewardDisciplines');
             const data = await getRewardDisciplinesByUser(user.user_id).catch(() => []);
             setRewardDisciplines(data);
+            loadedTabsRef.current.history = true;
+            setLoadedTabs(prev => ({ ...prev, history: true }));
         } catch { /* silent */ }
     };
 
@@ -398,15 +434,6 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
 
     if (!user) return null;
 
-    const groupNames = user.user_device_groups?.map(g => g.device_group?.name).filter(Boolean).join(', ') || 'Chưa vào nhóm';
-    // Đơn vị tổ chức từ user_departments
-    const primaryDept = user.user_departments?.find(ud => ud.is_primary);
-    const primaryDeptName = primaryDept?.department?.name || user.department?.name || '-';
-    const otherDepts = user.user_departments
-        ?.filter(ud => !ud.is_primary)
-        ?.map(ud => ud.department?.name)
-        .filter(Boolean)
-        .join(', ') || '-';
     const degrees = qualifications.filter(c => c.qualification_type === 'BANG_CAP' || (!c.qualification_type && !c.license_class));
     const licenses = qualifications.filter(c => c.qualification_type === 'GIAY_PHEP_LAI_XE' || (!c.qualification_type && c.license_class));
     const englishCerts = qualifications.filter(c => c.qualification_type === 'CHUNG_CHI_NGOAI_NGU');
@@ -425,133 +452,270 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
     const renderInfoSection = () => (
         <div className="pf-section">
             <div className="pf-section-header">
-                <UserOutlined className="pf-section-icon" />
-                <span>Thông tin cá nhân</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div className="pf-header-icon-box">
+                        <UserOutlined style={{ fontSize: 22, color: '#2563eb' }} />
+                    </div>
+                    <div>
+                        <div className="pf-section-title">Hồ Sơ Cá Nhân & Định Danh Nhân Sự</div>
+                        <div className="pf-section-subtitle">
+                            Quản lý thông tin lý lịch cá nhân, thông tin định danh CCCD và liên hệ nơi cư trú
+                        </div>
+                    </div>
+                </div>
+                <div>
+                    {isAdminOrHR ? (
+                        <Tag color="success" icon={<CheckCircleOutlined />} style={{ padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500 }}>
+                            Quản trị viên (Cập nhật trực tiếp)
+                        </Tag>
+                    ) : (
+                        <Tag color="processing" icon={<InfoCircleOutlined />} style={{ padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500 }}>
+                            Nhân viên (Cần phê duyệt HR)
+                        </Tag>
+                    )}
+                </div>
             </div>
-            <Form form={infoForm} layout="vertical" disabled={!isOwnProfile && !isAdminOrHR} onFinish={async (vals) => {
-                setLoading(true);
-                try {
-                    const formatted = {
-                        ...vals,
-                        date_of_birth: vals.date_of_birth ? dayjs(vals.date_of_birth).format('YYYY-MM-DD') : null,
-                        cccd_issue_date: vals.cccd_issue_date ? dayjs(vals.cccd_issue_date).format('YYYY-MM-DD') : null,
-                    };
-                    if (isAdminOrHR) {
-                        const token = getToken();
-                        await updateUser(user.user_id, formatted, token);
-                        onUpdateSuccess({ ...user!, ...formatted });
-                        message.success('Cập nhật thông tin thành công');
-                    } else {
-                        // Tất cả thông tin đều phải gửi phê duyệt (trừ ADMIN/HR)
-                        const allFields: Record<string, any> = {
-                            name: formatted.name,
-                            phone_number: formatted.phone_number,
-                            date_of_birth: formatted.date_of_birth,
-                            place_of_birth: formatted.place_of_birth,
-                            gender: formatted.gender,
-                            ethnicity: formatted.ethnicity,
-                            citizen_identification_card: formatted.citizen_identification_card,
-                            cccd_issue_date: formatted.cccd_issue_date,
-                            position: formatted.position,
-                            permanent_address: formatted.permanent_address,
-                            temporary_address: formatted.temporary_address,
-                            hometown: formatted.hometown
+
+            {/* Workflow Alert */}
+            {!isAdminOrHR && (
+                <Alert
+                    type="info"
+                    showIcon
+                    icon={<InfoCircleOutlined style={{ color: '#2563eb' }} />}
+                    style={{ marginBottom: 20, borderRadius: 12, border: '1px solid #bfdbfe', background: '#eff6ff' }}
+                    message={<span style={{ fontWeight: 600, color: '#1e40af' }}>Quy trình cập nhật hồ sơ nhân sự</span>}
+                    description={
+                        <span style={{ color: '#1e3a8a', fontSize: 13 }}>
+                            Để bảo đảm tính toàn vẹn và chính xác của dữ liệu CMMS, mọi thay đổi từ tài khoản nhân viên sẽ tự động tạo một yêu cầu trình Ban Giám đốc và Phòng Nhân sự duyệt trước khi áp dụng chính thức.
+                        </span>
+                    }
+                />
+            )}
+
+            <Form 
+                form={infoForm} 
+                layout="vertical" 
+                disabled={!isOwnProfile && !isAdminOrHR} 
+                onFinish={async (vals) => {
+                    setLoading(true);
+                    try {
+                        const formatted = {
+                            ...vals,
+                            date_of_birth: vals.date_of_birth ? dayjs(vals.date_of_birth).format('YYYY-MM-DD') : null,
+                            cccd_issue_date: vals.cccd_issue_date ? dayjs(vals.cccd_issue_date).format('YYYY-MM-DD') : null,
                         };
+                        if (isAdminOrHR) {
+                            const token = getToken();
+                            await updateUser(user.user_id, formatted, token);
+                            onUpdateSuccess({ ...user!, ...formatted });
+                            message.success('Cập nhật thông tin thành công');
+                        } else {
+                            // Tất cả thông tin đều phải gửi phê duyệt (trừ ADMIN/HR)
+                            const allFields: Record<string, any> = {
+                                name: formatted.name,
+                                phone_number: formatted.phone_number,
+                                date_of_birth: formatted.date_of_birth,
+                                place_of_birth: formatted.place_of_birth,
+                                gender: formatted.gender,
+                                ethnicity: formatted.ethnicity,
+                                citizen_identification_card: formatted.citizen_identification_card,
+                                cccd_issue_date: formatted.cccd_issue_date,
+                                position: formatted.position,
+                                permanent_address: formatted.permanent_address,
+                                temporary_address: formatted.temporary_address,
+                                hometown: formatted.hometown
+                            };
 
-                        // Giá trị hiện tại để so sánh
-                        const oldValues: Record<string, any> = {
-                            name: user.name || '',
-                            phone_number: user.phone_number || '',
-                            date_of_birth: user.date_of_birth ? dayjs(user.date_of_birth).format('YYYY-MM-DD') : '',
-                            place_of_birth: user.place_of_birth || '',
-                            gender: user.gender || '',
-                            ethnicity: user.ethnicity || '',
-                            citizen_identification_card: user.citizen_identification_card || '',
-                            cccd_issue_date: user.cccd_issue_date ? dayjs(user.cccd_issue_date).format('YYYY-MM-DD') : '',
-                            position: user.position || '',
-                            permanent_address: user.permanent_address || '',
-                            temporary_address: user.temporary_address || '',
-                            hometown: user.hometown || '',
-                        };
+                            // Giá trị hiện tại để so sánh
+                            const oldValues: Record<string, any> = {
+                                name: user.name || '',
+                                phone_number: user.phone_number || '',
+                                date_of_birth: user.date_of_birth ? dayjs(user.date_of_birth).format('YYYY-MM-DD') : '',
+                                place_of_birth: user.place_of_birth || '',
+                                gender: user.gender || '',
+                                ethnicity: user.ethnicity || '',
+                                citizen_identification_card: user.citizen_identification_card || '',
+                                cccd_issue_date: user.cccd_issue_date ? dayjs(user.cccd_issue_date).format('YYYY-MM-DD') : '',
+                                position: user.position || '',
+                                permanent_address: user.permanent_address || '',
+                                temporary_address: user.temporary_address || '',
+                                hometown: user.hometown || '',
+                            };
 
-                        const changedFields: Record<string, any> = {};
-                        const changedOldValues: Record<string, any> = {};
+                            const changedFields: Record<string, any> = {};
+                            const changedOldValues: Record<string, any> = {};
 
-                        Object.keys(allFields).forEach((key) => {
-                            const normalizedNew = allFields[key] || '';
-                            const normalizedOld = oldValues[key] || '';
-                            if (normalizedNew !== normalizedOld) {
-                                changedFields[key] = allFields[key];
-                                changedOldValues[key] = oldValues[key] || null;
-                            }
-                        });
-
-                        if (Object.keys(changedFields).length > 0) {
-                            await createProfileRequest({
-                                request_type: 'UPDATE_INFO',
-                                data_payload: {
-                                    ...changedFields,
-                                    _old_values: changedOldValues,
+                            Object.keys(allFields).forEach((key) => {
+                                const normalizedNew = allFields[key] || '';
+                                const normalizedOld = oldValues[key] || '';
+                                if (normalizedNew !== normalizedOld) {
+                                    changedFields[key] = allFields[key];
+                                    changedOldValues[key] = oldValues[key] || null;
                                 }
                             });
-                            message.success('Yêu cầu thay đổi đã được gửi cho Quản lý nhân sự phê duyệt.');
-                        } else {
-                            message.info('Không có thông tin nào thay đổi.');
+
+                            if (Object.keys(changedFields).length > 0) {
+                                await createProfileRequest({
+                                    request_type: 'UPDATE_INFO',
+                                    data_payload: {
+                                        ...changedFields,
+                                        _old_values: changedOldValues,
+                                    }
+                                });
+                                message.success('Yêu cầu thay đổi đã được gửi cho Quản lý nhân sự phê duyệt.');
+                            } else {
+                                message.info('Không có thông tin nào thay đổi.');
+                            }
                         }
-                    }
-                } catch (e: any) { message.error(e.message || 'Lỗi cập nhật'); }
-                finally { setLoading(false); }
-            }}>
-                <div className="pf-form-grid">
-                    <Form.Item name="name" label="Họ và tên" rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}>
-                        <Input />
-                    </Form.Item>
-                    {isAdminOrHR && (
-                        <Form.Item name="employee_code" label="Mã NV (MSNV)">
-                            <Input />
-                        </Form.Item>
-                    )}
-                    <Form.Item name="position" label="Chức vụ">
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="phone_number" label="Số điện thoại" rules={[{ pattern: /^[0-9]{10,11}$/, message: 'SĐT không hợp lệ' }]}>
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="date_of_birth" label="Ngày sinh">
-                        <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày" />
-                    </Form.Item>
-                    <Form.Item name="place_of_birth" label="Nơi sinh">
-                        <Input placeholder="Ví dụ: TP. Hồ Chí Minh" />
-                    </Form.Item>
-                    <Form.Item name="gender" label="Giới tính">
-                        <Select placeholder="-- Chọn --" allowClear>
-                            <Select.Option value="Nam">Nam</Select.Option>
-                            <Select.Option value="Nữ">Nữ</Select.Option>
-                        </Select>
-                    </Form.Item>
-                    <Form.Item name="ethnicity" label="Dân tộc">
-                        <Input placeholder="Ví dụ: Kinh" />
-                    </Form.Item>
-                    <Form.Item name="citizen_identification_card" label="Số CCCD" rules={[{ pattern: /^[0-9]{12}$/, message: 'CCCD phải có 12 số' }]}>
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="cccd_issue_date" label="Ngày cấp CCCD">
-                        <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày" />
-                    </Form.Item>
+                    } catch (e: any) { message.error(e.message || 'Lỗi cập nhật'); }
+                    finally { setLoading(false); }
+                }}
+            >
+                {/* ── CARD 1: THÔNG TIN NHÂN SỰ & CHỨC DANH ── */}
+                <div className="pf-info-card">
+                    <div className="pf-card-header-bar">
+                        <div className="pf-card-icon-pill" style={{ background: '#eff6ff', color: '#2563eb' }}>
+                            <SolutionOutlined />
+                        </div>
+                        <div>
+                            <div className="pf-card-section-title">Thông tin nhân sự & Chức danh</div>
+                            <div className="pf-card-section-desc">Họ tên, mã số nhân viên và vị trí công tác tại đơn vị</div>
+                        </div>
+                    </div>
+                    <div className="pf-card-body">
+                        <Row gutter={[16, 8]}>
+                            <Col xs={24} sm={12} md={12}>
+                                <Form.Item name="name" label={<span className="pf-field-label">Họ và tên *</span>} rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}>
+                                    <Input prefix={<UserOutlined style={{ color: '#94a3b8' }} />} placeholder="Ví dụ: Nguyễn Văn A" size="large" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={12} md={12}>
+                                <Form.Item name="employee_code" label={<span className="pf-field-label">Mã số nhân viên (MSNV)</span>}>
+                                    <Input 
+                                        disabled={!isAdminOrHR} 
+                                        prefix={<IdcardOutlined style={{ color: '#94a3b8' }} />} 
+                                        placeholder="Mã nhân viên" 
+                                        size="large" 
+                                    />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={12} md={12}>
+                                <Form.Item name="position" label={<span className="pf-field-label">Chức vụ / Chức danh</span>}>
+                                    <Input prefix={<CrownOutlined style={{ color: '#94a3b8' }} />} placeholder="Ví dụ: Kỹ thuật viên bảo dưỡng..." size="large" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={12} md={12}>
+                                <Form.Item name="date_of_birth" label={<span className="pf-field-label">Ngày sinh</span>}>
+                                    <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày sinh" size="large" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={8} md={8}>
+                                <Form.Item name="gender" label={<span className="pf-field-label">Giới tính</span>}>
+                                    <Select placeholder="-- Chọn --" allowClear size="large">
+                                        <Select.Option value="Nam">Nam</Select.Option>
+                                        <Select.Option value="Nữ">Nữ</Select.Option>
+                                    </Select>
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={8} md={8}>
+                                <Form.Item name="ethnicity" label={<span className="pf-field-label">Dân tộc</span>}>
+                                    <Input placeholder="Ví dụ: Kinh" size="large" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={8} md={8}>
+                                <Form.Item name="place_of_birth" label={<span className="pf-field-label">Nơi sinh</span>}>
+                                    <Input prefix={<EnvironmentOutlined style={{ color: '#94a3b8' }} />} placeholder="Ví dụ: TP. Hồ Chí Minh" size="large" />
+                                </Form.Item>
+                            </Col>
+                        </Row>
+                    </div>
                 </div>
-                <Form.Item name="permanent_address" label="Nơi thường trú">
-                    <Input placeholder="Địa chỉ thường trú đầy đủ" />
-                </Form.Item>
-                <Form.Item name="temporary_address" label="Nơi tạm trú">
-                    <Input placeholder="Địa chỉ tạm trú (nếu có)" />
-                </Form.Item>
-                <Form.Item name="hometown" label="Quê quán">
-                    <Input placeholder="Ví dụ: TP. Hồ Chí Minh" />
-                </Form.Item>
+
+                {/* ── CARD 2: ĐỊNH DANH & CĂN CƯỚC CÔNG DÂN ── */}
+                <div className="pf-info-card">
+                    <div className="pf-card-header-bar">
+                        <div className="pf-card-icon-pill" style={{ background: '#ecfdf5', color: '#059669' }}>
+                            <AuditOutlined />
+                        </div>
+                        <div>
+                            <div className="pf-card-section-title">Định danh & Thẻ căn cước công dân</div>
+                            <div className="pf-card-section-desc">Số định danh cá nhân 12 số, ngày cấp thẻ và quê quán</div>
+                        </div>
+                    </div>
+                    <div className="pf-card-body">
+                        <Row gutter={[16, 8]}>
+                            <Col xs={24} sm={12} md={8}>
+                                <Form.Item 
+                                    name="citizen_identification_card" 
+                                    label={<span className="pf-field-label">Số CCCD (12 chữ số)</span>} 
+                                    rules={[{ pattern: /^[0-9]{12}$/, message: 'CCCD phải có đúng 12 chữ số' }]}
+                                >
+                                    <Input maxLength={12} prefix={<IdcardOutlined style={{ color: '#94a3b8' }} />} placeholder="001xxxxxxxx" size="large" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={12} md={8}>
+                                <Form.Item name="cccd_issue_date" label={<span className="pf-field-label">Ngày cấp CCCD</span>}>
+                                    <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày cấp" size="large" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={24} md={8}>
+                                <Form.Item name="hometown" label={<span className="pf-field-label">Quê quán</span>}>
+                                    <Input prefix={<HomeOutlined style={{ color: '#94a3b8' }} />} placeholder="Ví dụ: TP. Hồ Chí Minh" size="large" />
+                                </Form.Item>
+                            </Col>
+                        </Row>
+                    </div>
+                </div>
+
+                {/* ── CARD 3: LIÊN HỆ & NƠI CƯ TRÚ ── */}
+                <div className="pf-info-card">
+                    <div className="pf-card-header-bar">
+                        <div className="pf-card-icon-pill" style={{ background: '#fffbeb', color: '#d97706' }}>
+                            <PhoneOutlined />
+                        </div>
+                        <div>
+                            <div className="pf-card-section-title">Liên hệ & Nơi cư trú</div>
+                            <div className="pf-card-section-desc">Số điện thoại liên lạc trực tiếp và địa chỉ thường trú / tạm trú</div>
+                        </div>
+                    </div>
+                    <div className="pf-card-body">
+                        <Row gutter={[16, 8]}>
+                            <Col xs={24} sm={24} md={8}>
+                                <Form.Item 
+                                    name="phone_number" 
+                                    label={<span className="pf-field-label">Số điện thoại di động</span>} 
+                                    rules={[{ pattern: /^[0-9]{10,11}$/, message: 'SĐT không hợp lệ (10-11 số)' }]}
+                                >
+                                    <Input prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder="090xxxxxxx" size="large" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={24} md={16}>
+                                <Form.Item name="permanent_address" label={<span className="pf-field-label">Địa chỉ thường trú</span>}>
+                                    <Input prefix={<HomeOutlined style={{ color: '#94a3b8' }} />} placeholder="Địa chỉ thường trú đầy đủ theo hộ khẩu" size="large" />
+                                </Form.Item>
+                            </Col>
+                            <Col xs={24} sm={24} md={24}>
+                                <Form.Item name="temporary_address" label={<span className="pf-field-label">Địa chỉ nơi ở hiện tại (tạm trú)</span>}>
+                                    <Input prefix={<EnvironmentOutlined style={{ color: '#94a3b8' }} />} placeholder="Địa chỉ nơi ở hiện tại (nếu khác nơi thường trú)" size="large" />
+                                </Form.Item>
+                            </Col>
+                        </Row>
+                    </div>
+                </div>
+
                 {(isOwnProfile || isAdminOrHR) && (
-                    <Button type="primary" htmlType="submit" loading={loading} className="pf-submit-btn">
-                        Lưu thông tin cá nhân
-                    </Button>
+                    <div className="pf-action-bar">
+                        <Button 
+                            type="primary" 
+                            htmlType="submit" 
+                            size="large"
+                            loading={loading} 
+                            icon={<SaveOutlined />}
+                            className="pf-submit-btn-premium"
+                        >
+                            {isAdminOrHR ? 'Lưu thay đổi trực tiếp' : 'Gửi yêu cầu cập nhật hồ sơ'}
+                        </Button>
+                    </div>
                 )}
             </Form>
         </div>
@@ -1143,7 +1307,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                 placement="right"
                 open={open}
                 onClose={onCancel}
-                width={'min(960px, 95vw)'}
+                width={typeof window !== 'undefined' && window.innerWidth <= 768 ? '100vw' : 'min(1180px, 96vw)'}
                 styles={{ body: { padding: 0 } }}
                 destroyOnClose
             >
@@ -1170,59 +1334,98 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                                         }
                                     }}
                                 >
-                                    <Badge
-                                        count={<div style={{ width: 24, height: 24, background: '#1890ff', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', border: '2px solid #001529' }}><EditOutlined style={{ color: '#fff', fontSize: 12 }} /></div>}
-                                        offset={[-10, 60]}
-                                    >
-                                        <Avatar size={72} src={user.avatar ? getBackendImageUrl(user.avatar) : undefined} icon={<UserOutlined />} className="pf-avatar" style={{ cursor: 'pointer' }} />
-                                    </Badge>
+                                    <div className="pf-avatar-wrapper">
+                                        <Avatar size={84} src={user.avatar ? getBackendImageUrl(user.avatar) : undefined} icon={<UserOutlined />} className="pf-avatar" />
+                                        <div className="pf-avatar-edit-badge">
+                                            <EditOutlined style={{ color: '#fff', fontSize: 13 }} />
+                                        </div>
+                                    </div>
                                 </Upload>
                             ) : (
-                                <Avatar size={72} src={user.avatar ? getBackendImageUrl(user.avatar) : undefined} icon={<UserOutlined />} className="pf-avatar" />
+                                <div className="pf-avatar-wrapper">
+                                    <Avatar size={84} src={user.avatar ? getBackendImageUrl(user.avatar) : undefined} icon={<UserOutlined />} className="pf-avatar" />
+                                </div>
                             )}
                             <div className="pf-user-name">{user.name}</div>
-                            <Tag color={getRoleColor(user.role)} className="pf-user-role">{user.position || getRoleLabel(user.role)}</Tag>
+                            <div className="pf-role-badge">
+                                <span className="pf-role-dot"></span>
+                                {user.position || getRoleLabel(user.role)}
+                            </div>
                         </div>
 
-                        {/* Quick info */}
+                        {/* Quick info with copyable pills */}
                         <div className="pf-quick-info">
-                            {[
-                                { icon: <IdcardOutlined />, label: 'MSNV', value: user.employee_code || '-' },
-                                { icon: <MailOutlined />, label: 'Email', value: user.email },
-                                { icon: <PhoneOutlined />, label: 'SĐT', value: user.phone_number || '-' },
-                            ].map((item, i) => (
-                                <Tooltip key={i} title={`${item.label}: ${item.value}`} placement="right">
-                                    <div className="pf-quick-row">
-                                        <span className="pf-quick-icon">{item.icon}</span>
-                                        <span className="pf-quick-label">{item.label}:</span>
-                                        <span className="pf-quick-value">{item.value}</span>
-                                    </div>
-                                </Tooltip>
-                            ))}
+                            <Tooltip title="Nhấp để sao chép MSNV" placement="right">
+                                <div 
+                                    className="pf-quick-chip"
+                                    onClick={() => {
+                                        if (user.employee_code) {
+                                            navigator.clipboard.writeText(user.employee_code);
+                                            message.success(`Đã sao chép MSNV: ${user.employee_code}`);
+                                        }
+                                    }}
+                                >
+                                    <span className="pf-quick-chip-icon"><IdcardOutlined /></span>
+                                    <span className="pf-quick-chip-label">MSNV:</span>
+                                    <span className="pf-quick-chip-val">{user.employee_code || '-'}</span>
+                                    {user.employee_code && <CopyOutlined className="pf-quick-chip-copy" />}
+                                </div>
+                            </Tooltip>
+
+                            <Tooltip title="Nhấp để sao chép Email" placement="right">
+                                <div 
+                                    className="pf-quick-chip"
+                                    onClick={() => {
+                                        if (user.email) {
+                                            navigator.clipboard.writeText(user.email);
+                                            message.success(`Đã sao chép Email: ${user.email}`);
+                                        }
+                                    }}
+                                >
+                                    <span className="pf-quick-chip-icon"><MailOutlined /></span>
+                                    <span className="pf-quick-chip-label">Email:</span>
+                                    <span className="pf-quick-chip-val">{user.email || '-'}</span>
+                                    {user.email && <CopyOutlined className="pf-quick-chip-copy" />}
+                                </div>
+                            </Tooltip>
+
+                            <Tooltip title="Nhấp để sao chép Số điện thoại" placement="right">
+                                <div 
+                                    className="pf-quick-chip"
+                                    onClick={() => {
+                                        if (user.phone_number) {
+                                            navigator.clipboard.writeText(user.phone_number);
+                                            message.success(`Đã sao chép SĐT: ${user.phone_number}`);
+                                        }
+                                    }}
+                                >
+                                    <span className="pf-quick-chip-icon"><PhoneOutlined /></span>
+                                    <span className="pf-quick-chip-label">SĐT:</span>
+                                    <span className="pf-quick-chip-val">{user.phone_number || '-'}</span>
+                                    {user.phone_number && <CopyOutlined className="pf-quick-chip-copy" />}
+                                </div>
+                            </Tooltip>
                         </div>
 
                         {/* Đơn vị tổ chức */}
                         {user.user_departments && user.user_departments.length > 0 && (
                             <div className="pf-dept-section">
                                 <div className="pf-dept-title">
-                                    <TeamOutlined style={{ fontSize: 12 }} />
-                                    <span>Đơn vị tổ chức</span>
+                                    <TeamOutlined style={{ fontSize: 13, color: '#60a5fa' }} />
+                                    <span>Đơn vị công tác</span>
                                 </div>
                                 <div className="pf-dept-tags">
                                     {user.user_departments
                                         .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
                                         .map((ud, idx) => {
                                             const roleLabel = ud.role_in_dept === 'LEAD' ? 'Trưởng' : ud.role_in_dept === 'DEPUTY_LEAD' ? 'Phó' : '';
-                                            const tagColor = ud.role_in_dept === 'LEAD' ? 'gold' : ud.role_in_dept === 'DEPUTY_LEAD' ? 'blue' : 'default';
                                             const deptName = ud.department?.name || `Dept#${ud.dept_id}`;
                                             return (
-                                                <Tooltip key={idx} title={`${deptName}${roleLabel ? ' - ' + roleLabel : ''}${ud.is_primary ? ' (Chính)' : ''}`}>
-                                                    <Tag color={tagColor} className="pf-dept-tag">
-                                                        {ud.is_primary && <span style={{ marginRight: 2 }}>★</span>}
-                                                        {deptName}
-                                                        {roleLabel && <span style={{ opacity: 0.7, marginLeft: 3, fontSize: 10 }}>({roleLabel})</span>}
-                                                    </Tag>
-                                                </Tooltip>
+                                                <div key={idx} className={`pf-dept-chip ${ud.is_primary ? 'pf-dept-chip--primary' : ''}`}>
+                                                    {ud.is_primary && <span style={{ color: '#fbbf24', marginRight: 4 }}>★</span>}
+                                                    <span className="pf-dept-name">{deptName}</span>
+                                                    {roleLabel && <span className="pf-dept-role">({roleLabel})</span>}
+                                                </div>
                                             );
                                         })}
                                 </div>
@@ -1231,16 +1434,22 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
 
                         {/* Navigation */}
                         <nav className="pf-nav">
+                            <div className="pf-nav-label">DANH MỤC HỒ SƠ</div>
                             {visibleNav.map(item => (
                                 <button
                                     key={item.key}
+                                    type="button"
                                     className={`pf-nav-item ${activeSection === item.key ? 'pf-nav-item--active' : ''}`}
                                     onClick={() => setActiveSection(item.key)}
                                 >
-                                    {item.icon}
-                                    <span>{item.label}</span>
-                                    {item.key === 'certificates' && expiringCount > 0 && <Badge count={expiringCount} size="small" style={{ backgroundColor: '#faad14' }} />}
-                                    {item.key === 'cccm' && cccmExpiringCount > 0 && <Badge count={cccmExpiringCount} size="small" style={{ backgroundColor: '#ff4d4f' }} />}
+                                    <span className="pf-nav-icon">{item.icon}</span>
+                                    <span className="pf-nav-text">{item.label}</span>
+                                    {item.key === 'certificates' && expiringCount > 0 && (
+                                        <Badge count={expiringCount} size="small" style={{ backgroundColor: '#f59e0b', boxShadow: 'none' }} />
+                                    )}
+                                    {item.key === 'cccm' && cccmExpiringCount > 0 && (
+                                        <Badge count={cccmExpiringCount} size="small" style={{ backgroundColor: '#ef4444', boxShadow: 'none' }} />
+                                    )}
                                 </button>
                             ))}
                         </nav>
@@ -1249,29 +1458,39 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                         <div className="pf-sidebar-footer">
                             {/* Chữ ký */}
                             <div className="pf-sig-block">
-                                <span className="pf-sig-label">Chữ ký số</span>
+                                <div className="pf-sig-header">
+                                    <span className="pf-sig-label">Chữ ký điện tử</span>
+                                    {(isOwnProfile || isAdminOrHR) && (
+                                        <Upload showUploadList={false} customRequest={async (options) => {
+                                            try {
+                                                const token = getToken();
+                                                const res = await uploadSignature(user.user_id, options.file as File, token);
+                                                setSignatureUrl(res.signature_url);
+                                                message.success('Tải lên chữ ký thành công');
+                                                options.onSuccess?.(res);
+                                                onUpdateSuccess({ ...user, signature_url: res.signature_url });
+                                            } catch (err: any) { message.error(err.message || 'Tải lên thất bại'); options.onError?.(err); }
+                                        }}>
+                                            <Button size="small" type="link" icon={<UploadOutlined />} className="pf-sig-upload-link">
+                                                Cập nhật
+                                            </Button>
+                                        </Upload>
+                                    )}
+                                </div>
                                 {signatureUrl ? (
                                     <div className="pf-sig-img"><img src={getBackendImageUrl(signatureUrl)} alt="sig" /></div>
                                 ) : (
-                                    <div className="pf-sig-empty">Chưa có</div>
-                                )}
-                                {(isOwnProfile || isAdminOrHR) && (
-                                    <Upload showUploadList={false} customRequest={async (options) => {
-                                        try {
-                                            const token = getToken();
-                                            const res = await uploadSignature(user.user_id, options.file as File, token);
-                                            setSignatureUrl(res.signature_url);
-                                            message.success('Tải lên chữ ký thành công');
-                                            options.onSuccess?.(res);
-                                            onUpdateSuccess({ ...user, signature_url: res.signature_url });
-                                        } catch (err: any) { message.error(err.message || 'Tải lên thất bại'); options.onError?.(err); }
-                                    }}>
-                                        <Button size="small" type="text" icon={<UploadOutlined />} className="pf-sig-upload">Tải lên</Button>
-                                    </Upload>
+                                    <div className="pf-sig-empty">Chưa có chữ ký điện tử</div>
                                 )}
                             </div>
                             {(isOwnProfile || currentUser?.role === 'ADMIN') && (
-                                <Button danger size="small" icon={<LockOutlined />} onClick={() => setPasswordModalOpen(true)} className="pf-pass-btn">
+                                <Button 
+                                    danger 
+                                    block
+                                    icon={<LockOutlined />} 
+                                    onClick={() => setPasswordModalOpen(true)} 
+                                    className="pf-pass-btn"
+                                >
                                     Đổi mật khẩu
                                 </Button>
                             )}
@@ -1280,18 +1499,43 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
 
                     {/* ── Content ── */}
                     <main className="pf-content">
-                        <Button type="text" icon={<CloseOutlined />} onClick={onCancel} className="pf-close-btn" />
+                        <Tooltip title="Đóng cửa sổ">
+                            <button type="button" onClick={onCancel} className="pf-close-btn" aria-label="Đóng">
+                                <CloseOutlined />
+                            </button>
+                        </Tooltip>
+
+                        {/* Mobile User Header */}
+                        {user && (
+                            <div className="pf-mobile-header">
+                                <Avatar size={48} src={user.avatar ? getBackendImageUrl(user.avatar) : undefined} icon={<UserOutlined />} />
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontWeight: 700, fontSize: 16, color: '#001529', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {user.name}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
+                                        <Tag color={getRoleColor(user.role)} style={{ margin: 0, fontSize: 10 }}>
+                                            {user.position || getRoleLabel(user.role)}
+                                        </Tag>
+                                        <span style={{ fontSize: 11, color: '#888' }}>MSNV: {user.employee_code || '-'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Mobile nav */}
                         <div className="pf-mobile-nav">
                             {visibleNav.map(item => (
                                 <button
                                     key={item.key}
+                                    type="button"
                                     className={`pf-mobile-nav-item ${activeSection === item.key ? 'pf-mobile-nav-item--active' : ''}`}
                                     onClick={() => setActiveSection(item.key)}
                                 >
                                     {item.icon}
                                     <span>{item.label}</span>
+                                    {item.key === 'certificates' && expiringCount > 0 && <Badge count={expiringCount} size="small" style={{ backgroundColor: '#faad14' }} />}
+                                    {item.key === 'cccm' && cccmExpiringCount > 0 && <Badge count={cccmExpiringCount} size="small" style={{ backgroundColor: '#ff4d4f' }} />}
                                 </button>
                             ))}
                         </div>
@@ -1323,121 +1567,270 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
 
                 {/* ── Styles ── */}
                 <style>{`
-                    .pf-layout { display: flex; height: 100%; min-height: 0; }
+                    .pf-layout { display: flex; height: 100%; min-height: 0; background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
 
                     /* ──── Sidebar ──── */
                     .pf-sidebar {
-                        width: 260px; min-width: 260px; background: linear-gradient(180deg, #001529 0%, #002952 100%);
+                        width: 280px; min-width: 280px;
+                        background: linear-gradient(180deg, #091322 0%, #0f1e36 50%, #0d1b30 100%);
                         display: flex; flex-direction: column; color: #fff; overflow-y: auto;
+                        border-right: 1px solid rgba(255, 255, 255, 0.08);
                     }
-                    .pf-user-card { padding: 28px 20px 16px; text-align: center; border-bottom: 1px solid rgba(255,255,255,0.08); }
-                    .pf-avatar { border: 3px solid rgba(255,255,255,0.2) !important; }
-                    .pf-user-name { font-size: 17px; font-weight: 700; margin-top: 10px; }
-                    .pf-user-role { margin-top: 6px; font-size: 11px; }
+                    .pf-sidebar::-webkit-scrollbar { width: 4px; }
+                    .pf-sidebar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
 
-                    .pf-quick-info { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+                    .pf-user-card {
+                        padding: 28px 20px 20px; text-align: center;
+                        border-bottom: 1px solid rgba(255,255,255,0.08);
+                        position: relative;
+                        background: radial-gradient(circle at 50% 30%, rgba(37, 99, 235, 0.15) 0%, transparent 70%);
+                    }
+                    .pf-avatar-wrapper {
+                        position: relative; display: inline-block; cursor: pointer;
+                    }
+                    .pf-avatar {
+                        border: 3px solid rgba(255,255,255,0.85) !important;
+                        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4), 0 8px 20px rgba(0, 0, 0, 0.35);
+                        transition: transform 0.2s ease, box-shadow 0.2s ease;
+                    }
+                    .pf-avatar-wrapper:hover .pf-avatar {
+                        transform: scale(1.03);
+                        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.7), 0 10px 24px rgba(0, 0, 0, 0.45);
+                    }
+                    .pf-avatar-edit-badge {
+                        position: absolute; bottom: 2px; right: 2px; width: 26px; height: 26px;
+                        background: #2563eb; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+                        border: 2px solid #091322; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                        transition: background 0.2s;
+                    }
+                    .pf-avatar-wrapper:hover .pf-avatar-edit-badge { background: #1d4ed8; }
 
-                    .pf-dept-section { padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+                    .pf-user-name {
+                        font-size: 18px; font-weight: 700; color: #f8fafc; margin-top: 14px;
+                        letter-spacing: -0.2px; line-height: 1.3;
+                    }
+                    .pf-role-badge {
+                        display: inline-flex; align-items: center; gap: 6px; margin-top: 8px;
+                        padding: 3px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;
+                        background: rgba(37, 99, 235, 0.15); border: 1px solid rgba(59, 130, 246, 0.35);
+                        color: #93c5fd; letter-spacing: 0.2px;
+                    }
+                    .pf-role-dot { width: 6px; height: 6px; border-radius: 50%; background: #38bdf8; }
+
+                    /* Quick Info chips */
+                    .pf-quick-info {
+                        padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.08);
+                        display: flex; flex-direction: column; gap: 6px;
+                    }
+                    .pf-quick-chip {
+                        display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+                        background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.07);
+                        border-radius: 8px; font-size: 12px; color: #cbd5e1; cursor: pointer;
+                        transition: all 0.2s;
+                    }
+                    .pf-quick-chip:hover {
+                        background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.15);
+                        color: #fff;
+                    }
+                    .pf-quick-chip-icon { color: #60a5fa; font-size: 13px; flex-shrink: 0; width: 14px; }
+                    .pf-quick-chip-label { font-size: 11px; color: #94a3b8; font-weight: 500; min-width: 38px; }
+                    .pf-quick-chip-val { flex: 1; font-weight: 600; color: #f1f5f9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                    .pf-quick-chip-copy { font-size: 12px; color: rgba(255,255,255,0.3); transition: color 0.2s; }
+                    .pf-quick-chip:hover .pf-quick-chip-copy { color: #60a5fa; }
+
+                    /* Department section */
+                    .pf-dept-section { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
                     .pf-dept-title {
                         display: flex; align-items: center; gap: 6px; font-size: 11px;
-                        color: rgba(255,255,255,0.4); margin-bottom: 8px; text-transform: uppercase;
-                        letter-spacing: 0.5px; font-weight: 600;
+                        color: #94a3b8; margin-bottom: 8px; text-transform: uppercase;
+                        letter-spacing: 0.6px; font-weight: 700;
                     }
-                    .pf-dept-tags { display: flex; flex-wrap: wrap; gap: 4px; }
-                    .pf-dept-tag {
-                        font-size: 11px !important; border-radius: 4px !important;
-                        margin: 0 !important; line-height: 20px !important; cursor: default;
+                    .pf-dept-tags { display: flex; flex-direction: column; gap: 6px; }
+                    .pf-dept-chip {
+                        display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+                        background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08);
+                        border-radius: 6px; font-size: 12px; color: #e2e8f0;
                     }
-                    .pf-quick-row {
-                        display: flex; align-items: center; gap: 8px; padding: 5px 0;
-                        font-size: 12px; color: rgba(255,255,255,0.75);
+                    .pf-dept-chip--primary {
+                        background: rgba(37, 99, 235, 0.15); border-color: rgba(59, 130, 246, 0.3); color: #bfdbfe; font-weight: 600;
                     }
-                    .pf-quick-icon { color: rgba(255,255,255,0.4); font-size: 13px; flex-shrink: 0; width: 16px; text-align: center; }
-                    .pf-quick-label { width: 65px; flex-shrink: 0; }
-                    .pf-quick-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: #fff; flex: 1; }
+                    .pf-dept-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                    .pf-dept-role { font-size: 11px; opacity: 0.8; }
 
-                    .pf-nav { padding: 8px 8px; flex: 1; }
+                    /* Nav */
+                    .pf-nav { padding: 14px 12px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+                    .pf-nav-label {
+                        font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 0.8px;
+                        text-transform: uppercase; padding: 0 10px 6px;
+                    }
                     .pf-nav-item {
                         display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px;
-                        border: none; background: transparent; color: rgba(255,255,255,0.65); cursor: pointer;
-                        border-radius: 8px; font-size: 13px; text-align: left; transition: all 0.2s;
+                        border: none; background: transparent; color: #94a3b8; cursor: pointer;
+                        border-radius: 10px; font-size: 13px; text-align: left; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                        position: relative;
                     }
-                    .pf-nav-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
+                    .pf-nav-item:hover {
+                        background: rgba(255, 255, 255, 0.06); color: #f8fafc; transform: translateX(2px);
+                    }
                     .pf-nav-item--active {
-                        background: rgba(24,144,255,0.2) !important; color: #fff !important;
-                        border-left: 3px solid #1890ff; font-weight: 600;
+                        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+                        color: #ffffff !important; font-weight: 600;
+                        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+                    }
+                    .pf-nav-icon { font-size: 15px; display: flex; align-items: center; }
+                    .pf-nav-text { flex: 1; }
+
+                    /* Footer */
+                    .pf-sidebar-footer {
+                        padding: 14px 16px; border-top: 1px solid rgba(255,255,255,0.08); margin-top: auto;
+                        background: rgba(0, 0, 0, 0.15);
+                    }
+                    .pf-sig-block { margin-bottom: 12px; }
+                    .pf-sig-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+                    .pf-sig-label { font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+                    .pf-sig-upload-link { color: #60a5fa !important; font-size: 11px !important; padding: 0 !important; height: auto !important; }
+                    .pf-sig-img {
+                        background: #ffffff; border-radius: 8px; padding: 6px; text-align: center;
+                        border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+                    }
+                    .pf-sig-img img { max-height: 42px; max-width: 100%; object-fit: contain; }
+                    .pf-sig-empty {
+                        background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.15);
+                        border-radius: 8px; padding: 10px; text-align: center; color: #64748b; font-size: 11px;
+                    }
+                    .pf-pass-btn {
+                        border-radius: 8px !important; height: 36px !important; font-weight: 600 !important;
+                        background: rgba(239, 68, 68, 0.1) !important; border-color: rgba(239, 68, 68, 0.3) !important; color: #f87171 !important;
+                        transition: all 0.2s !important;
+                    }
+                    .pf-pass-btn:hover {
+                        background: #ef4444 !important; color: #ffffff !important; border-color: #ef4444 !important;
                     }
 
-                    .pf-sidebar-footer { padding: 12px 16px; border-top: 1px solid rgba(255,255,255,0.08); margin-top: auto; }
-                    .pf-sig-block { margin-bottom: 10px; }
-                    .pf-sig-label { font-size: 11px; color: rgba(255,255,255,0.4); }
-                    .pf-sig-img { background: #fff; border-radius: 6px; padding: 4px; text-align: center; margin-top: 4px; }
-                    .pf-sig-img img { max-height: 40px; max-width: 100%; }
-                    .pf-sig-empty { background: rgba(255,255,255,0.08); border-radius: 6px; padding: 8px; text-align: center; color: rgba(255,255,255,0.25); font-size: 11px; margin-top: 4px; }
-                    .pf-sig-upload { color: rgba(255,255,255,0.5) !important; font-size: 11px !important; width: 100%; margin-top: 4px; }
-                    .pf-pass-btn { width: 100%; background: rgba(255,77,79,0.1) !important; border-color: rgba(255,77,79,0.3) !important; color: #ff4d4f !important; }
+                    /* Content Area */
+                    .pf-content {
+                        flex: 1; overflow-y: auto; padding: 28px 36px 36px; background: #f8fafc;
+                        position: relative;
+                    }
+                    .pf-content::-webkit-scrollbar { width: 6px; }
+                    .pf-content::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
 
-                    /* ──── Content ──── */
-                    .pf-content { flex: 1; overflow-y: auto; padding: 24px 28px; background: #f7f8fa; position: relative; }
-                    .pf-close-btn { position: absolute; top: 16px; right: 16px; font-size: 18px; color: #999; z-index: 10; }
+                    .pf-close-btn {
+                        position: absolute; top: 20px; right: 24px; width: 36px; height: 36px;
+                        border-radius: 50%; border: 1px solid #e2e8f0; background: #ffffff;
+                        display: flex; align-items: center; justify-content: center;
+                        color: #64748b; font-size: 16px; cursor: pointer; z-index: 20;
+                        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05); transition: all 0.2s;
+                    }
+                    .pf-close-btn:hover {
+                        background: #f1f5f9; color: #0f172a; border-color: #cbd5e1; transform: scale(1.05);
+                    }
 
+                    /* Section Header */
                     .pf-section { }
                     .pf-section-header {
-                        display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 700; color: #001529;
-                        margin-bottom: 20px; padding-bottom: 12px; border-bottom: 2px solid #e8e8e8;
-                        padding-right: 30px;
+                        display: flex; align-items: flex-start; justify-content: space-between;
+                        margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;
+                        padding-right: 50px;
                     }
-                    .pf-section-icon { font-size: 20px; color: #1890ff; }
+                    .pf-header-icon-box {
+                        width: 44px; height: 44px; border-radius: 12px; background: #eff6ff;
+                        border: 1px solid #dbeafe; display: flex; align-items: center; justify-content: center;
+                        flex-shrink: 0;
+                    }
+                    .pf-section-title { font-size: 18px; font-weight: 700; color: #0f172a; line-height: 1.3; }
+                    .pf-section-subtitle { font-size: 13px; color: #64748b; margin-top: 2px; }
+
+                    /* Form Cards */
+                    .pf-info-card {
+                        background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 4px 12px rgba(0,0,0,0.02);
+                        margin-bottom: 20px; overflow: hidden; transition: all 0.2s;
+                    }
+                    .pf-info-card:hover {
+                        border-color: #cbd5e1; box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+                    }
+                    .pf-card-header-bar {
+                        display: flex; align-items: center; gap: 12px; padding: 14px 20px;
+                        background: #f8fafc; border-bottom: 1px solid #edf2f7;
+                    }
+                    .pf-card-icon-pill {
+                        width: 32px; height: 32px; border-radius: 8px; display: flex;
+                        align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;
+                    }
+                    .pf-card-section-title { font-size: 14px; font-weight: 700; color: #1e293b; }
+                    .pf-card-section-desc { font-size: 12px; color: #64748b; }
+                    .pf-card-body { padding: 18px 20px 6px; }
+                    .pf-field-label { font-size: 13px; font-weight: 600; color: #334155; }
+
+                    .pf-action-bar {
+                        display: flex; justify-content: flex-end; margin-top: 24px; padding-top: 16px;
+                        border-top: 1px solid #e2e8f0;
+                    }
+                    .pf-submit-btn-premium {
+                        height: 44px !important; padding: 0 28px !important; border-radius: 10px !important;
+                        font-size: 14px !important; font-weight: 600 !important;
+                        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+                        border: none !important; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35) !important;
+                        transition: all 0.2s !important;
+                    }
+                    .pf-submit-btn-premium:hover {
+                        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45) !important;
+                        transform: translateY(-1px);
+                    }
 
                     .pf-subsection { margin-bottom: 24px; }
                     .pf-subsection-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
 
                     .pf-card-list { display: flex; flex-direction: column; gap: 10px; }
-                    .pf-card { border: 1px solid #e8e8e8; border-radius: 10px; padding: 12px 16px; background: #fff; transition: box-shadow 0.2s; }
-                    .pf-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-                    .pf-card--warning { border-color: #faad14; border-left: 3px solid #faad14; background: #fffbe6; }
-                    .pf-card--expired { border-color: #ff4d4f; border-left: 3px solid #ff4d4f; background: #fff2f0; }
-                    .pf-card--reward { border-left: 4px solid #52c41a; background: #f6ffed; }
-                    .pf-card--discipline { border-left: 4px solid #ff4d4f; background: #fff1f0; }
+                    .pf-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; background: #fff; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+                    .pf-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); border-color: #cbd5e1; }
+                    .pf-card--warning { border-color: #fde68a; border-left: 4px solid #f59e0b; background: #fffbeb; }
+                    .pf-card--expired { border-color: #fecaca; border-left: 4px solid #ef4444; background: #fef2f2; }
+                    .pf-card--reward { border-left: 4px solid #10b981; background: #f0fdf4; }
+                    .pf-card--discipline { border-left: 4px solid #ef4444; background: #fef2f2; }
                     .pf-card-top { display: flex; justify-content: space-between; align-items: center; }
                     .pf-card-title { font-weight: 600; font-size: 14px; margin-top: 4px; }
-                    .pf-card-sub { font-size: 12px; color: #666; }
-                    .pf-card-date { font-size: 12px; color: #999; }
+                    .pf-card-sub { font-size: 12px; color: #64748b; }
+                    .pf-card-date { font-size: 12px; color: #94a3b8; }
                     .pf-card-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; color: #fff; margin-bottom: 6px; }
-                    .pf-card-badge--warning { background: #faad14; }
-                    .pf-card-badge--expired { background: #ff4d4f; }
+                    .pf-card-badge--warning { background: #f59e0b; }
+                    .pf-card-badge--expired { background: #ef4444; }
 
                     .pf-leave-stats { display: flex; gap: 16px; margin-top: 10px; }
-                    .pf-leave-stat { display: flex; flex-direction: column; align-items: center; flex: 1; padding: 8px; background: #f5f5f5; border-radius: 8px; }
-                    .pf-leave-stat-label { font-size: 11px; color: #999; }
-                    .pf-leave-stat-value { font-size: 20px; font-weight: 700; }
+                    .pf-leave-stat { display: flex; flex-direction: column; align-items: center; flex: 1; padding: 12px; background: #f1f5f9; border-radius: 10px; border: 1px solid #e2e8f0; }
+                    .pf-leave-stat-label { font-size: 11px; color: #64748b; font-weight: 500; }
+                    .pf-leave-stat-value { font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 2px; }
 
-                    .pf-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
-                    .pf-submit-btn { margin-top: 8px; }
                     .pf-loading { text-align: center; padding: 60px 0; }
 
-                    /* ──── Mobile Nav (hidden on desktop) ──── */
+                    /* ──── Mobile Nav & Header (hidden on desktop) ──── */
+                    .pf-mobile-header { display: none; }
                     .pf-mobile-nav { display: none; }
 
                     /* ──── Responsive ──── */
                     @media (max-width: 768px) {
                         .pf-layout { flex-direction: column; }
                         .pf-sidebar { display: none; }
-                        .pf-content { padding: 16px; }
-                        .pf-form-grid { grid-template-columns: 1fr; }
+                        .pf-content { padding: 16px 14px; }
                         .pf-leave-stats { flex-direction: row; gap: 8px; }
+                        .pf-mobile-header {
+                            display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+                            padding-right: 36px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0;
+                        }
                         .pf-mobile-nav {
-                            display: flex; overflow-x: auto; gap: 4px; padding: 8px 0 12px;
-                            border-bottom: 1px solid #e8e8e8; margin-bottom: 16px;
+                            display: flex; overflow-x: auto; gap: 6px; padding: 4px 0 12px;
+                            border-bottom: 1px solid #e8e8e8; margin-bottom: 14px;
                             -webkit-overflow-scrolling: touch;
                         }
                         .pf-mobile-nav-item {
-                            display: flex; align-items: center; gap: 6px; padding: 8px 14px;
+                            display: flex; align-items: center; gap: 6px; padding: 7px 12px;
                             border: 1px solid #d9d9d9; background: #fff; border-radius: 20px;
                             font-size: 12px; white-space: nowrap; cursor: pointer; color: #666;
+                            flex-shrink: 0;
                             transition: all 0.2s;
                         }
-                        .pf-mobile-nav-item--active { background: #1890ff; color: #fff; border-color: #1890ff; font-weight: 600; }
+                        .pf-mobile-nav-item--active { background: #2563eb; color: #fff; border-color: #2563eb; font-weight: 600; }
                     }
                 `}</style>
             </Drawer>

@@ -1,13 +1,12 @@
 import React, { useState } from "react";
-import { FormHelperText } from "@mui/material";
-import { Close } from "@mui/icons-material";
+import { CloseOutlined } from "@ant-design/icons";
 import PLUS from "../../assets/icons/plus.svg";
 import { BoxImage, ButtonUpload, IconButtonContainer } from "./style";
 
 interface FileUploadProps {
   onChange: (file: File | null) => void;
-  error: string | undefined;
-  value: string | undefined;
+  error?: string;
+  value?: string;
 }
 
 const FileUploadComponent: React.FC<FileUploadProps> = ({
@@ -46,7 +45,7 @@ const FileUploadComponent: React.FC<FileUploadProps> = ({
 
       {!preview ? (
         <label htmlFor="file-upload">
-          <ButtonUpload variant="outlined" component="span">
+          <ButtonUpload>
             <img src={PLUS} height={24} width={24} alt="Upload" />
           </ButtonUpload>
         </label>
@@ -63,12 +62,16 @@ const FileUploadComponent: React.FC<FileUploadProps> = ({
             }}
           />
           <IconButtonContainer onClick={handleClearPreview}>
-            <Close sx={{ width: "16px", height: "16px" }} />
+            <CloseOutlined style={{ fontSize: "12px" }} />
           </IconButtonContainer>
         </BoxImage>
       )}
 
-      {error && <FormHelperText>{error}</FormHelperText>}
+      {error && (
+        <span style={{ color: "#B42318", fontSize: "12px", marginTop: "4px", display: "block" }}>
+          {error}
+        </span>
+      )}
     </div>
   );
 };

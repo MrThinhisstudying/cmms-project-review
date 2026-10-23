@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, Select, DatePicker, Input, Button } from 'antd';
+import { Modal, Form, Select, DatePicker, Input } from 'antd';
 import { ITrainingProgram, IUserTrainingRequirement } from '../../../types/certificates.types';
 import dayjs from 'dayjs';
 

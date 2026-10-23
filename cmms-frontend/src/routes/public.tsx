@@ -1,6 +1,7 @@
 import { Navigate } from "react-router-dom";
 import Login from "../pages/Login";
 import ResetPasswordPage from "../pages/ResetPassword/ResetPassword";
+import DevicePassportPage from "../pages/DevicePassport";
 
 export const publicRoutes = [
   {
@@ -10,6 +11,10 @@ export const publicRoutes = [
   {
     path: "/dat_lai_mat_khau/*",
     element: <ResetPasswordPage />,
+  },
+  {
+    path: "/device-passport/:id",
+    element: <DevicePassportPage />,
   },
   {
     path: "/*",

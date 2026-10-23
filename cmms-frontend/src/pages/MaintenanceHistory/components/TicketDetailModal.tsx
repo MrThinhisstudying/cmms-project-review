@@ -1,382 +1,323 @@
 import React from "react";
-import { Modal, Descriptions, Table, Tag, Divider, Card, Row, Col, Alert, Typography } from "antd";
+import {
+  Modal,
+  Tag,
+  Card,
+  Alert,
+  Button,
+  Descriptions,
+} from "antd";
+import {
+  CarOutlined,
+  CalendarOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  UserOutlined,
+  ClockCircleOutlined,
+  StopOutlined,
+} from "@ant-design/icons";
 import dayjs from "dayjs";
-
-const { Title, Text } = Typography;
 
 interface Props {
   open: boolean;
   onCancel: () => void;
-  data: any; // Dữ liệu phiếu (Ticket)
+  data: any;
+  onCancelTicket?: (ticketId: number) => void;
 }
 
-const TicketDetailModal: React.FC<Props> = ({ open, onCancel, data }) => {
+const LEVEL_MAP: Record<string, { label: string; color: string }> = {
+  Tuần: { label: "Tuần", color: "blue" },
+  "1W": { label: "Tuần", color: "blue" },
+  "1M": { label: "01 Tháng", color: "cyan" },
+  "3M": { label: "03 Tháng", color: "geekblue" },
+  "6M": { label: "06 Tháng", color: "orange" },
+  "9M": { label: "09 Tháng", color: "purple" },
+  "1Y": { label: "01 Năm", color: "magenta" },
+  "2Y": { label: "02 Năm", color: "volcano" },
+};
+
+const TicketDetailModal: React.FC<Props> = ({
+  open,
+  onCancel,
+  data,
+  onCancelTicket,
+}) => {
   if (!data) return null;
 
-  // --- Helper: Làm sạch văn bản (Xóa dấu "-" đầu dòng) ---
-  const cleanText = (text: any) => {
-    if (!text) return "";
-    const s = String(text).trim();
-    if (s === "-" || s === "–") return "";
-    return s.replace(/-/g, " ");
-  };
-
-  // --- Helper: Map cấp độ sang tiếng Việt ---
-  const getLevelLabel = (level: string) => {
-    const map: any = {
-      "1M": "01 Tháng",
-      "3M": "03 Tháng",
-      "6M": "06 Tháng",
-      "9M": "09 Tháng",
-      "1Y": "01 Năm",
-      "2Y": "02 Năm",
-    };
-    return map[level] || level;
-  };
-
-  // --- Helper: Render Kết quả Checklist ---
-  const renderChecklistStatus = (record: any) => {
-    const reqNorm = record.req ? String(record.req).toUpperCase() : "";
-    
-    // Logic hiển thị (Đồng bộ với ChecklistExecutor):
-    // Chỉ hiện giá trị (Value) nếu là Input/M thuần (KHÔNG có I)
-    if (
-      (record.type === "input_number" || reqNorm.includes("M")) && 
-      !reqNorm.includes("I")
-    ) {
-      return <b>{cleanText(record.value) || "_"}</b>;
-    }
-    
-    // Các trường hợp khác (Checkbox, hoặc I, M) -> Hiện trạng thái Đạt/Không
-    if (record.status === "pass") return <Tag color="green">Đạt (✓)</Tag>;
-    if (record.status === "fail") return <Tag color="red">K.Đạt (X)</Tag>;
-    return <Tag>N/A</Tag>;
-  };
-
-  // --- Cấu hình cột cho bảng Checklist ---
-  const checklistColumns = [
-    {
-      title: "Hạng mục kiểm tra",
-      dataIndex: "task",
-      key: "task",
-      render: (text: string, record: any) => (
-        <div>
-          <div style={{ fontSize: 12, color: "#888" }}>
-            {cleanText(record.category)}
-          </div>
-          <div style={{ fontWeight: 500 }}>{cleanText(text)}</div>
-        </div>
-      ),
-    },
-    {
-      title: "Yêu cầu",
-      dataIndex: "req",
-      width: 100,
-      align: "center" as const,
-      render: (t: string) => {
-        const clean = cleanText(t);
-        return clean ? <Tag color="blue">{clean}</Tag> : "-";
-      },
-    },
-    {
-      title: "Kết quả",
-      key: "result",
-      width: 120,
-      align: "center" as const,
-      render: (_: any, record: any) => renderChecklistStatus(record),
-    },
-    {
-      title: "Ghi chú",
-      dataIndex: "note",
-      render: (t: string) => (
-        <span style={{ fontStyle: "italic", color: "#666" }}>
-          {cleanText(t)}
-        </span>
-      ),
-    },
-  ];
-
-  // --- Cấu hình cột cho bảng Nghiệm thu ---
-  const acceptanceColumns = [
-    {
-      title: "Nội dung nghiệm thu",
-      dataIndex: "item",
-      render: (text: string, record: any) => {
-        // Xử lý thụt đầu dòng nếu là mục con (dựa trên id có dấu chấm, vd: 3.1)
-        const isSub = record.id && record.id.includes(".");
-        return (
-          <span
-            style={{
-              paddingLeft: isSub ? 20 : 0,
-              fontWeight: isSub ? "normal" : 500,
-            }}
-          >
-            {cleanText(text)}
-          </span>
-        );
-      },
-    },
-    {
-      title: "Đánh giá",
-      dataIndex: "status",
-      width: 120,
-      align: "center" as const,
-      render: (status: string) =>
-        status === "pass" ? (
-          <Tag color="green">ĐẠT</Tag>
-        ) : (
-          <Tag color="red">KHÔNG ĐẠT</Tag>
-        ),
-    },
-    {
-      title: "Ghi chú",
-      dataIndex: "note",
-      render: (t: string) => cleanText(t),
-    },
-  ];
+  const rawLevel = data.maintenance_level || "Tuần";
+  const levelInfo = LEVEL_MAP[rawLevel] || { label: rawLevel, color: "blue" };
 
   return (
     <Modal
-      title={`Chi tiết Phiếu #${data.ticket_id}`}
+      title={
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 16, fontWeight: 700, color: "#002766" }}>
+            Chi Tiết Phiếu Bảo Dưỡng #{data.ticket_id}
+          </span>
+          {data.status === "done" ? (
+            <Tag color="success" icon={<CheckCircleOutlined />}>
+              Hoàn thành
+            </Tag>
+          ) : (
+            <Tag color="error" icon={<CloseCircleOutlined />}>
+              Đã hủy
+            </Tag>
+          )}
+        </div>
+      }
       open={open}
       onCancel={onCancel}
-      footer={null}
-      width={1000}
-      style={{ top: 20 }}
-    >
-      <div id="pdf-content">
-        <div style={{ padding: 24 }}>
-          <div style={{ textAlign: "center", marginBottom: 24 }}>
-            <Title level={3} style={{ marginBottom: 0 }}>
-              PHIẾU BẢO DƯỠNG THIẾT BỊ
-            </Title>
-            <Text type="secondary" style={{ fontSize: 16 }}>
-              (MAINTENANCE CHECKLIST)
-            </Text>
-          </div>
-
-          {/* --- CẢNH BÁO HỦY (MỚI THÊM) --- */}
-          {data.status === "canceled" && (
-            <Alert
-              message={<span style={{ fontWeight: "bold" }}>PHIẾU ĐÃ BỊ HỦY</span>}
-              description={
-                <div>
-                  <div>
-                    <b>Lý do hủy:</b> {data.cancel_reason || "Không có lý do"}
-                  </div>
-                  <div>
-                     {/* Cần kiểm tra kỹ data có cancelled_by không, nếu backend trả về relation cancelled_by */}
-                    <b>Người hủy:</b> {data.cancelled_by?.name || "N/A"}
-                  </div>
-                </div>
-              }
-              type="error"
-              showIcon
-              style={{ marginBottom: 24 }}
-            />
+      footer={
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+          {data.status !== "canceled" && onCancelTicket && (
+            <Button
+              danger
+              icon={<StopOutlined />}
+              onClick={() => {
+                onCancel();
+                onCancelTicket(data.ticket_id);
+              }}
+            >
+              Hủy phiếu
+            </Button>
           )}
+          <Button type="primary" onClick={onCancel}>
+            Đóng
+          </Button>
+        </div>
+      }
+      width={720}
+      centered
+      destroyOnClose
+    >
+      {/* Cảnh báo nếu phiếu đã bị hủy */}
+      {data.status === "canceled" && (
+        <Alert
+          message="Phiếu bảo dưỡng này đã bị hủy"
+          description={
+            <div>
+              <div>
+                <b>Lý do hủy:</b> {data.cancel_reason || "Không có lý do"}
+              </div>
+              {data.cancelled_by?.name && (
+                <div style={{ marginTop: 4 }}>
+                  <b>Người thực hiện hủy:</b> {data.cancelled_by.name}
+                </div>
+              )}
+            </div>
+          }
+          type="error"
+          showIcon
+          style={{ marginBottom: 16, borderRadius: 6 }}
+        />
+      )}
 
-          {/* 1. THÔNG TIN CHUNG */}
+      {/* THẺ XANH DƯƠNG CHUẨN FORM BẢO DƯỠNG */}
       <Card
         size="small"
-        title="1. TRANG THIẾT BỊ BẢO DƯỠNG / EQUIPMENT"
-        style={{ marginBottom: 16 }}
+        style={{
+          marginBottom: 16,
+          background: "linear-gradient(135deg, #e6f7ff 0%, #f0f5ff 100%)",
+          border: "1px solid #91d5ff",
+          borderRadius: 8,
+          boxShadow: "0 2px 8px rgba(24, 144, 255, 0.08)",
+        }}
+        styles={{ body: { padding: "16px 20px" } }}
       >
-        <Descriptions bordered size="small" column={2}>
-          <Descriptions.Item label="Thiết bị">
-            <b>{data.device?.name}</b>
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: 12,
+                color: "#1890ff",
+                fontWeight: 700,
+                textTransform: "uppercase",
+                letterSpacing: 0.5,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+              }}
+            >
+              <CarOutlined /> THÔNG TIN THIẾT BỊ BẢO DƯỠNG
+            </div>
+            <div
+              style={{
+                fontSize: 18,
+                fontWeight: 700,
+                color: "#002766",
+                marginTop: 4,
+              }}
+            >
+              {data.device?.name || "N/A"}
+            </div>
+            <div style={{ fontSize: 13, color: "#595959", marginTop: 2 }}>
+              Nhãn hiệu / Chủng loại:{" "}
+              <b>
+                {data.device?.brand ||
+                  data.device?.deviceType?.name ||
+                  "Nhật Bản"}
+              </b>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 10,
+              alignItems: "center",
+            }}
+          >
+            <div
+              style={{
+                background: "#fff",
+                padding: "6px 14px",
+                borderRadius: 6,
+                border: "1px solid #d9d9d9",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ fontSize: 11, color: "#8c8c8c" }}>
+                BIỂN SỐ / ĐĂNG KÝ
+              </div>
+              <Tag
+                color="cyan"
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  margin: "2px 0 0 0",
+                }}
+              >
+                {data.device?.reg_number ||
+                  data.device?.serial_number ||
+                  "Chưa có biển"}
+              </Tag>
+            </div>
+
+            <div
+              style={{
+                background: "#fff",
+                padding: "6px 14px",
+                borderRadius: 6,
+                border: "1px solid #d9d9d9",
+                textAlign: "center",
+              }}
+            >
+              <div style={{ fontSize: 11, color: "#8c8c8c" }}>
+                CẤP BẢO DƯỠNG
+              </div>
+              <Tag
+                color={levelInfo.color}
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  margin: "2px 0 0 0",
+                }}
+              >
+                {levelInfo.label}
+              </Tag>
+            </div>
+          </div>
+        </div>
+
+        {/* DÒNG NGÀY THỰC HIỆN BẢO DƯỠNG */}
+        <div
+          style={{
+            marginTop: 14,
+            paddingTop: 12,
+            borderTop: "1px dashed #91d5ff",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: 12,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <CalendarOutlined style={{ fontSize: 18, color: "#1890ff" }} />
+            <span style={{ fontWeight: 600, fontSize: 14, color: "#002766" }}>
+              Ngày thực hiện bảo dưỡng:
+            </span>
+          </div>
+
+          <Tag
+            color="blue"
+            style={{
+              fontSize: 14,
+              fontWeight: 700,
+              padding: "4px 12px",
+              borderRadius: 6,
+            }}
+          >
+            <CalendarOutlined style={{ marginRight: 6 }} />
+            {data.execution_date
+              ? dayjs(data.execution_date).format("DD/MM/YYYY")
+              : data.created_at
+              ? dayjs(data.created_at).format("DD/MM/YYYY")
+              : "-"}
+          </Tag>
+        </div>
+      </Card>
+
+      {/* THÔNG TIN HỆ THỐNG GHI NHẬN */}
+      <Card
+        size="small"
+        style={{
+          borderRadius: 8,
+          marginBottom: data.arising_issues ? 16 : 0,
+        }}
+        styles={{ body: { padding: 16 } }}
+      >
+        <Descriptions column={{ xs: 1, sm: 2 }} size="small" bordered>
+          <Descriptions.Item label="Mã phiếu">
+            <b style={{ color: "#1890ff" }}>#{data.ticket_id}</b>
           </Descriptions.Item>
-          <Descriptions.Item label="Biển số">
-            {data.device?.serial_number}
+          <Descriptions.Item label="Trạng thái">
+            {data.status === "done" ? (
+              <Tag color="success">Hoàn thành</Tag>
+            ) : (
+              <Tag color="error">Đã hủy</Tag>
+            )}
           </Descriptions.Item>
-          <Descriptions.Item label="Cấp bảo dưỡng">
-            {/* Đã sửa: Hiển thị tiếng Việt */}
-            <Tag color="orange">{getLevelLabel(data.maintenance_level)}</Tag>
+          <Descriptions.Item label="Người thực hiện / lập">
+            <span style={{ fontWeight: 600 }}>
+              <UserOutlined style={{ marginRight: 6, color: "#1890ff" }} />
+              {data.user?.name || "Hệ thống"}
+            </span>
           </Descriptions.Item>
-          <Descriptions.Item label="Số GHĐ/Km">
-            {data.working_hours ? data.working_hours.toLocaleString() : "..."}
-          </Descriptions.Item>
-          <Descriptions.Item label="Ngày thực hiện">
-            {dayjs(data.execution_date).format("DD/MM/YYYY")}
-          </Descriptions.Item>
-          <Descriptions.Item label="Người lập phiếu">
-            {data.user?.name}
+          <Descriptions.Item label="Thời gian ghi nhận">
+            <span style={{ color: "#666" }}>
+              <ClockCircleOutlined
+                style={{ marginRight: 6, color: "#8c8c8c" }}
+              />
+              {data.created_at
+                ? dayjs(data.created_at).format("DD/MM/YYYY HH:mm")
+                : "-"}
+            </span>
           </Descriptions.Item>
         </Descriptions>
       </Card>
 
-      {/* 2. NGƯỜI THỰC HIỆN */}
-      <Card
-        size="small"
-        title="2. NGƯỜI THỰC HIỆN / CHECKED BY"
-        style={{ marginBottom: 16 }}
-      >
-        {Array.isArray(data.execution_team) &&
-        data.execution_team.length > 0 ? (
-          <ul style={{ marginBottom: 0, paddingLeft: 20 }}>
-            {data.execution_team.map((p: any, idx: number) => (
-              <li key={idx}>
-                <b>{p.name}</b> - Ngày: {dayjs(p.date).format("DD/MM/YYYY")}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <span style={{ color: "#999" }}>Chưa cập nhật</span>
-        )}
-      </Card>
-
-      {/* 3. CHECKLIST CHI TIẾT */}
-      <Card
-        size="small"
-        title="3. NỘI DUNG BẢO DƯỠNG (ĐÍNH KÈM)"
-        style={{ marginBottom: 16 }}
-      >
-        <Table
-          dataSource={(data.checklist_result || []).filter((item: any) => {
-             // Filter: Only show items that have a requirement string and it's not "-"
-             return item.req && item.req !== "-" && item.req !== "–";
-          })}
-          columns={checklistColumns}
-          rowKey="code"
-          pagination={false}
+      {/* Ghi chú phát sinh nếu có */}
+      {data.arising_issues && (
+        <Card
           size="small"
-          scroll={{ y: 400 }}
-          bordered
-        />
-      </Card>
-
-      {/* 4. PHÁT SINH */}
-      <Card size="small" title="4. PHÁT SINH KHÁC" style={{ marginBottom: 16 }}>
-        <div style={{ whiteSpace: "pre-wrap" }}>
-          {cleanText(data.arising_issues) || "Không có"}
-        </div>
-      </Card>
-
-      {/* 5. NGHIỆM THU & KẾT LUẬN (ĐÃ CẬP NHẬT CẤU TRÚC) */}
-      <Card
-        size="small"
-        title="5. NGHIỆM THU & KẾT LUẬN / CHECK AND TAKE OVER"
-        style={{ marginBottom: 16 }}
-      >
-        {/* 5.1 Người thực hiện (Lấy từ mục 2) */}
-        <div
-          style={{
-            marginBottom: 15,
-            background: "#fafafa",
-            padding: 10,
-            borderRadius: 4,
-          }}
+          title="Ghi chú / Phát sinh"
+          style={{ borderRadius: 8, marginTop: 16 }}
         >
-          <div style={{ fontWeight: "bold", marginBottom: 5 }}>
-            5.1. Người thực hiện / Checked by (Ký/ Signature):
+          <div style={{ whiteSpace: "pre-wrap", color: "#555" }}>
+            {data.arising_issues}
           </div>
-          <div
-            style={{ marginLeft: 20, fontStyle: "italic", fontSize: "15px" }}
-          >
-            {/* Hiển thị danh sách tên ngăn cách bởi dấu phẩy */}
-            {Array.isArray(data.execution_team) &&
-            data.execution_team.length > 0
-              ? data.execution_team.map((p: any) => p.name).join(", ")
-              : "(Chưa có thông tin)"}
-          </div>
-        </div>
-
-        {/* 5.2 Bảng xác nhận */}
-        <div style={{ fontWeight: "bold", marginBottom: 10 }}>
-          5.2. Xác nhận của đơn vị sử dụng / Approved by using unit:
-        </div>
-
-        <Table
-          dataSource={data.acceptance_result || []}
-          columns={acceptanceColumns}
-          rowKey="id"
-          pagination={false}
-          size="small"
-          bordered
-          style={{ marginBottom: 16 }}
-        />
-
-        {/* Kết luận */}
-        <div
-          style={{
-            padding: 10,
-            background: data.final_conclusion ? "#f6ffed" : "#fff1f0",
-            border: "1px solid #d9d9d9",
-            borderRadius: 4,
-          }}
-        >
-          <strong>KẾT LUẬN CUỐI CÙNG: </strong>
-          {data.final_conclusion ? (
-            <span>
-              <b style={{ color: "green" }}>ĐẠT YCKT</b> - Đưa vào khai thác{" "}
-              <i style={{ color: "#666" }}>(Ready)</i>
-            </span>
-          ) : (
-            <span>
-              <b style={{ color: "red" }}>KHÔNG ĐẠT</b>{" "}
-              <i style={{ color: "#666" }}>(Not good)</i>
-            </span>
-          )}
-        </div>
-
-        <Divider />
-
-        {/* 6. Chữ ký */}
-        <Row gutter={16} style={{ textAlign: "center" }}>
-          <Col span={12}>
-            <div>
-              <b>ĐƠN VỊ BẢO DƯỠNG, SỬA CHỮA</b>
-              <br />
-              <b>
-                <i>TECHNICAL TEAM</i>
-              </b>
-            </div>
-            <div style={{ fontStyle: "italic", fontSize: 12, color: "#888" }}>
-              (Ký tên / Signature)
-            </div>
-            <div
-              style={{
-                marginTop: 40,
-                fontWeight: 600,
-                borderBottom: "1px dotted #ccc",
-                display: "inline-block",
-                minWidth: 200, // Tăng chiều rộng chỗ ký
-                paddingBottom: 5,
-                fontSize: 16, // Tăng cỡ chữ tên
-              }}
-            >
-              {data.leader_user?.name || ""}
-            </div>
-          </Col>
-          <Col span={12}>
-            <div>
-              <b>ĐƠN VỊ QUẢN LÝ SỬ DỤNG</b>
-              <br />
-              <b>
-                <i>GSE OPERATIONAL TEAM</i>
-              </b>
-            </div>
-            <div style={{ fontStyle: "italic", fontSize: 12, color: "#888" }}>
-              (Ký tên / Signature)
-            </div>
-            <div
-              style={{
-                marginTop: 40,
-                fontWeight: 600,
-                borderBottom: "1px dotted #ccc",
-                display: "inline-block",
-                minWidth: 200,
-                paddingBottom: 5,
-                fontSize: 16,
-              }}
-            >
-              {data.operator_user?.name || ""}
-            </div>
-          </Col>
-        </Row>
-      </Card>
-      </div>
-      </div>
+        </Card>
+      )}
     </Modal>
   );
 };

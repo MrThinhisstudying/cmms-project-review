@@ -82,17 +82,22 @@ export interface IDepartment {
   dept_id: number;
   name: string;
   permissions?: string[];
-  manager?: { user_id: number; name: string };
+  manager?: { user_id: number; name: string; email?: string; phone_number?: string };
   manager_id?: number;
+  deputy?: { user_id: number; name: string; email?: string; phone_number?: string };
+  deputy_id?: number;
   description?: string;
   scope?: 'PERSONAL' | 'GROUP' | 'DEPARTMENT' | 'ALL';
-  level?: 'PHONG_BAN' | 'DOI' | 'TO';
+  level?: 'PHONG_BAN' | 'DOI' | 'TO' | 'NHOM' | 'UNASSIGNED';
   is_technical?: boolean;
+  member_count?: number;
+  devices_count?: number;
+  device_groups?: any[];
   created_at?: string;
   updated_at?: string;
   parent_id?: number;
   parent?: IDepartment;
-  children?: IDepartment[];
+  children?: any[];
 }
 
 export interface IUserDepartment {

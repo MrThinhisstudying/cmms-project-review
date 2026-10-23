@@ -1,5 +1,5 @@
 import React from "react";
-import { Card, CardContent, Typography, Stack, Button, Chip, Tooltip } from "@mui/material";
+import { Card, Tag, Button, Tooltip, Space } from "antd";
 import { IMaintenanceTicket } from "../../../../types/maintenanceTicket.types";
 import { fmt } from "../../../../utils/maintenanceDue";
 
@@ -11,9 +11,9 @@ type Props = {
   onComplete: () => void;
 };
 
-const STATUS_COLOR: Record<string, "default" | "warning" | "info" | "success" | "error"> = {
+const TAG_COLOR: Record<string, string> = {
   open: "warning",
-  in_progress: "info",
+  in_progress: "processing",
   done: "success",
   canceled: "default",
 };
@@ -28,70 +28,64 @@ export default function TaskCard({
   const { status } = item;
 
   return (
-    <Card sx={{ mb: 1, userSelect: "none" }}>
-      <CardContent sx={{ p: 1.5 }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-          <Typography variant="subtitle2" noWrap>
-            {item.device?.name || item.maintenance?.device?.name || "—"}
-          </Typography>
-          <Chip size="small" color={STATUS_COLOR[status] || "default"} label={
-            status === "open" ? "Chờ xử lý" :
-            status === "in_progress" ? "Đang thực hiện" :
-            status === "done" ? "Hoàn thành" : "Đã hủy"
-          } />
-        </Stack>
+    <Card size="small" style={{ borderRadius: 8, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontWeight: 600, fontSize: 14, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {item.device?.name || item.maintenance?.device?.name || "—"}
+        </span>
+        <Tag color={TAG_COLOR[status] || "default"}>
+          {status === "open" ? "Chờ xử lý" :
+           status === "in_progress" ? "Đang thực hiện" :
+           status === "done" ? "Hoàn thành" : "Đã hủy"}
+        </Tag>
+      </div>
 
-        <Typography variant="caption" color="text.secondary" noWrap>
-          Chu kỳ: {item.maintenance?.level ?? "—"} • Lịch: {fmt(item.scheduled_at || undefined)}
-        </Typography>
+      <div style={{ fontSize: 12, color: "#667085", marginBottom: 12 }}>
+        Chu kỳ: {item.maintenance?.level ?? "—"} • Lịch: {fmt(item.scheduled_at || undefined)}
+      </div>
 
-        <Stack direction="row" spacing={1} mt={1} flexWrap="wrap">
-          {status === "open" && (
-            <>
-              <Button size="small" variant="contained" onClick={onStart}>
-                Bắt đầu
-              </Button>
-              <Button size="small" color="inherit" variant="outlined" onClick={onCancel}>
-                Hủy
-              </Button>
-            </>
-          )}
+      <Space size={8} wrap style={{ marginBottom: 8 }}>
+        {status === "open" && (
+          <>
+            <Button size="small" type="primary" onClick={onStart}>
+              Bắt đầu
+            </Button>
+            <Button size="small" onClick={onCancel}>
+              Hủy
+            </Button>
+          </>
+        )}
 
-          {status === "in_progress" && (
-            <>
-              <Button size="small" variant="contained" onClick={onComplete}>
-                Hoàn tất
-              </Button>
-              <Button size="small" color="inherit" variant="outlined" onClick={onCancel}>
-                Hủy
-              </Button>
-            </>
-          )}
+        {status === "in_progress" && (
+          <>
+            <Button size="small" type="primary" onClick={onComplete}>
+              Hoàn tất
+            </Button>
+            <Button size="small" onClick={onCancel}>
+              Hủy
+            </Button>
+          </>
+        )}
 
-          {status === "canceled" && (
-            <Button size="small" color="primary" variant="outlined" onClick={onReopen}>
+        {status === "canceled" && (
+          <Button size="small" onClick={onReopen}>
+            Mở lại
+          </Button>
+        )}
+
+        {status === "done" && (
+          <Tooltip title={item.review || ""}>
+            <Button size="small" onClick={onReopen}>
               Mở lại
             </Button>
-          )}
+          </Tooltip>
+        )}
+      </Space>
 
-          {status === "done" && (
-            <Tooltip title={item.review || ""}>
-              <Button size="small" color="primary" variant="outlined" onClick={onReopen}>
-                Mở lại
-              </Button>
-            </Tooltip>
-          )}
-        </Stack>
-
-        <Stack direction="row" spacing={2} mt={1}>
-          <Typography variant="caption" color="text.secondary">
-            BĐ: {fmt(item.started_at || undefined)}
-          </Typography>
-          <Typography variant="caption" color="text.secondary">
-            KT: {fmt(item.completed_at || undefined)}
-          </Typography>
-        </Stack>
-      </CardContent>
+      <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#98A2B3" }}>
+        <span>BĐ: {fmt(item.started_at || undefined)}</span>
+        <span>KT: {fmt(item.completed_at || undefined)}</span>
+      </div>
     </Card>
   );
 }

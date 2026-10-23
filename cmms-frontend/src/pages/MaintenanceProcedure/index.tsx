@@ -33,7 +33,6 @@ import ImportTemplateModal from "./components/ImportTemplateModal";
 import DeviceTypeManagerModal from "./components/DeviceTypeManagerModal";
 import { getAllDeviceTypes } from "../../apis/device-types";
 import ChecklistExecutor from "../MaintenanceManagement/components/ChecklistExecutor"; // Đảm bảo đường dẫn này đúng
-import { DEVICE_TYPES } from "../../constants/device-types";
 import { EditOutlined, UnorderedListOutlined } from "@ant-design/icons"; // Sửa icon logic
 
 const { Option } = Select;

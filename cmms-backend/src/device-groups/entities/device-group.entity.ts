@@ -1,6 +1,8 @@
-import { Entity, PrimaryGeneratedColumn, Column, OneToMany, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, OneToMany, ManyToOne, JoinColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
 import { Device } from '../../devices/entities/device.entity';
 import { UserDeviceGroup } from './user-device-group.entity';
+import { Department } from '../../departments/department.entity';
+import { User } from '../../user/user.entity';
 import { ApiProperty } from '@nestjs/swagger';
 
 @Entity()
@@ -16,6 +18,22 @@ export class DeviceGroup {
     @ApiProperty()
     @Column({ nullable: true })
     description: string;
+
+    @ApiProperty({ required: false })
+    @Column({ nullable: true })
+    dept_id?: number;
+
+    @ManyToOne(() => Department, (dept) => dept.device_groups, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'dept_id' })
+    department?: Department;
+
+    @ApiProperty({ required: false })
+    @Column({ nullable: true })
+    leader_id?: number;
+
+    @ManyToOne(() => User, { nullable: true, onDelete: 'SET NULL' })
+    @JoinColumn({ name: 'leader_id' })
+    leader?: User;
 
     @CreateDateColumn()
     created_at: Date;

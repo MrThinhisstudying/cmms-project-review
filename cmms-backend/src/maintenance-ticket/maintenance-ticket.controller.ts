@@ -36,6 +36,21 @@ export class MaintenanceTicketController {
         }
     }
 
+    // --- API GHI NHẬN BẢO DƯỠNG HÀNG LOẠT QUA EXCEL ---
+    @Post('batch-complete')
+    @UseGuards(JWTAuthGuard)
+    async batchComplete(@Body() body: { items: any[] }, @CurrentUser() user: User) {
+        try {
+            if (!body?.items || !Array.isArray(body.items)) {
+                throw new HttpException('Danh sách thiết bị không hợp lệ', HttpStatus.BAD_REQUEST);
+            }
+            const data = await this.ticketService.batchComplete(body.items, user);
+            return { message: 'Xử lý bảo dưỡng hàng loạt hoàn tất', data };
+        } catch (error: any) {
+            throw new HttpException(error.message || 'Lỗi xử lý bảo dưỡng hàng loạt', HttpStatus.BAD_REQUEST);
+        }
+    }
+
     @Get()
     @UseGuards(JWTAuthGuard)
     async list(@CurrentUser() user?: User, @Query('userId') userId?: string, @Query('deptId') deptId?: string) {

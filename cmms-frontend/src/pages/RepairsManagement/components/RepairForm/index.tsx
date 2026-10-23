@@ -10,7 +10,6 @@ import {
 } from "antd";
 import { IRepair, RepairUpsertPayload, BulkRepairUpsertPayload } from "../../../../types/repairs.types";
 import { useDevicesContext } from "../../../../context/DevicesContext/DevicesContext";
-import { useAuthContext } from "../../../../context/AuthContext/AuthContext";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;

@@ -1,8 +1,7 @@
-import React, { useRef } from 'react';
-import { useDrag, useDrop } from 'react-dnd';
-import { Box } from '@mui/material';
+import React, { useRef } from "react";
+import { useDrag, useDrop } from "react-dnd";
 
-const ItemType = 'CATEGORY';
+const ItemType = "CATEGORY";
 
 export default function CategoryItem({ category, index, moveCategory, children }: any) {
   const ref = useRef<HTMLDivElement>(null);
@@ -35,8 +34,8 @@ export default function CategoryItem({ category, index, moveCategory, children }
   drag(drop(ref));
 
   return (
-    <Box ref={ref} style={{ opacity: isDragging ? 0.5 : 1, cursor: 'move', width: '100%' }}>
+    <div ref={ref} style={{ opacity: isDragging ? 0.5 : 1, cursor: "move", width: "100%" }}>
       {children}
-    </Box>
+    </div>
   );
 }

@@ -44,6 +44,29 @@ export const createRewardDiscipline = async (data: Partial<IRewardDiscipline>): 
     return response.json();
 };
 
+export const createBatchRewardDisciplines = async (records: Array<{
+    user_id: number;
+    record_type: 'REWARD' | 'DISCIPLINE';
+    decision_number: string;
+    content: string;
+    effective_date: string;
+    file_url?: string;
+}>): Promise<IRewardDiscipline[]> => {
+    const response = await fetchClient('/reward-disciplines/batch', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ records }),
+    });
+    if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.message || 'Lỗi thêm mới danh sách quyết định');
+    }
+    return response.json();
+};
+
 export const updateRewardDiscipline = async (id: number, data: Partial<IRewardDiscipline>): Promise<IRewardDiscipline> => {
     const response = await fetchClient(`/reward-disciplines/${id}`, {
         method: 'PATCH',

@@ -1,11 +1,9 @@
-import { LoginContainer } from "./styles";
+import { LoginContainer, LoginFormContainer } from "./styles";
 import { yupResolver } from "@hookform/resolvers/yup";
-import { Box, Typography } from "@mui/material";
 import { useRef, useState } from "react";
 import { useForm, Resolver } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 import * as yup from "yup";
-import { LoginFormContainer } from "./styles";
 import Toast from "./../../components/Toast";
 import ACV_LOGO from "../../assets/images/acv-logo.png";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
@@ -127,44 +125,51 @@ const Login = () => {
   };
   return (
     <LoginContainer>
-      <Box
-        display="flex"
-        flexDirection="column"
-        justifyContent="space-between"
-        minHeight="100vh"
-        width="100%"
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          minHeight: "100vh",
+          width: "100%",
+        }}
       >
-        <Box
-          flexGrow={1}
-          display="flex"
-          justifyContent="center"
-          alignItems="center"
-          px={2}
+        <div
+          style={{
+            flexGrow: 1,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: "0 16px",
+          }}
         >
-          <Box
-            bgcolor="white"
-            p={4}
-            borderRadius={2}
-            boxShadow={3}
-            width={400}
-            maxWidth="100%"
-            zIndex={1}
+          <div
+            style={{
+              backgroundColor: "white",
+              padding: "32px",
+              borderRadius: "8px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              width: "400px",
+              maxWidth: "100%",
+              zIndex: 1,
+            }}
           >
-            <Box mb={3} textAlign="center">
+            <div style={{ marginBottom: "24px", textAlign: "center" }}>
               <img src={ACV_LOGO} height={50} width={250} alt="ACV Logo" />
-              <Typography
-                variant="body2"
-                color="textSecondary"
-                mt={1}
-                fontSize={16}
-                fontWeight="bold"
+              <p
+                style={{
+                  color: "#667085",
+                  marginTop: "8px",
+                  fontSize: "16px",
+                  fontWeight: "bold",
+                }}
               >
                 Tổng công ty Cảng hàng không Việt Nam - CTCP
-              </Typography>
-            </Box>
+              </p>
+            </div>
 
             <LoginFormContainer onSubmit={handleSubmit(handleLogin)}>
-              <Box display="flex" flexDirection="column" gap="14px">
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 <Input
                   control={control}
                   error={errors?.email?.message || ""}
@@ -180,52 +185,54 @@ const Login = () => {
                   name="password"
                   placeholder="Mật khẩu"
                 />
-              </Box>
-              <Box
-                display="flex"
-                alignItems="center"
-                justifyContent="space-between"
-                mt={2}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginTop: "16px",
+                }}
               >
                 <CheckBox
                   control={control}
                   name="remember"
                   label={
-                    <Typography color="#1D2939" fontWeight={500} fontSize={14}>
+                    <span style={{ color: "#1D2939", fontWeight: 500, fontSize: 14 }}>
                       Ghi nhớ đăng nhập
-                    </Typography>
+                    </span>
                   }
                 />
-                <Typography
-                  color="#115eaf"
-                  fontWeight={500}
-                  fontSize={14}
-                  sx={{
+                <span
+                  style={{
+                    color: "#115eaf",
+                    fontWeight: 500,
+                    fontSize: 14,
                     cursor: "pointer",
-                    "&:hover": { textDecoration: "underline" },
                   }}
                   onClick={handleOpenForgotPassword}
                 >
                   Tôi quên mật khẩu
-                </Typography>
-              </Box>
-              <CustomButton variant="contained" type="submit">
+                </span>
+              </div>
+              <CustomButton variant="contained" type="submit" fullWidth style={{ marginTop: 16 }}>
                 Đăng nhập
               </CustomButton>
             </LoginFormContainer>
-          </Box>
-        </Box>
+          </div>
+        </div>
 
-        <Box textAlign="center" p={2}>
-          <Typography
-            variant="body2"
-            color="white"
-            fontSize={14}
-            fontWeight="bold"
+        <div style={{ textAlign: "center", padding: "16px" }}>
+          <p
+            style={{
+              color: "white",
+              fontSize: 14,
+              fontWeight: "bold",
+            }}
           >
             Tổng công ty Cảng hàng không Việt Nam - CTCP
-          </Typography>
-        </Box>
+          </p>
+        </div>
 
         <ForgotPasswordDialog
           open={openForgotPasswordDialog}
@@ -238,7 +245,7 @@ const Login = () => {
           open={openToast}
           onClose={() => setOpenToast(false)}
         />
-      </Box>
+      </div>
     </LoginContainer>
   );
 };

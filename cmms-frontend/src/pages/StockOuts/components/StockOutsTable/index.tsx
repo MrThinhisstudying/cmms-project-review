@@ -4,7 +4,6 @@ import {
   EyeOutlined,
   CheckOutlined,
   CloseOutlined,
-  InfoCircleOutlined,
   UserOutlined
 } from "@ant-design/icons";
 import dayjs from "dayjs";

@@ -1,5 +1,5 @@
 import React from "react";
-import { Table, Tag, Tooltip, Space, Typography } from "antd";
+import { Table, Tag } from "antd";
 import { IRepair } from "../../../../types/repairs.types";
 import dayjs from "dayjs";
 

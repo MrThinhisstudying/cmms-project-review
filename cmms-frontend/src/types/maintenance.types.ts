@@ -105,9 +105,9 @@ export interface ChecklistResultEntry {
 // 5. Payload gửi lên API để tạo phiếu (Create Ticket)
 export interface CreateTicketPayload {
   device_id: number;
-  template_id: number;
+  template_id?: number | null;
   maintenance_level: string; // "1M", "3M", "6M"...
-  checklist_result: ChecklistResultEntry[];
+  checklist_result?: ChecklistResultEntry[];
   arising_issues?: string;
   // --- THÊM MỚI ---
   working_hours?: number;
@@ -115,4 +115,6 @@ export interface CreateTicketPayload {
   acceptance_result?: any[];
   final_conclusion?: boolean;
   execution_date?: string;
+  status?: string;
 }
+

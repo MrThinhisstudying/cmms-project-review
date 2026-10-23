@@ -1,6 +1,6 @@
 import React from 'react';
 import { Table, Button, Space, Tag, Popconfirm, Tooltip } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, WarningOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined, WarningOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { IDevice, DeviceStatus } from '../../../../types/devicesManagement.types';
 import dayjs from 'dayjs';
 
@@ -10,8 +10,11 @@ interface DevicesTableProps {
   onEdit: (device: IDevice) => void;
   onDelete: (id?: number) => void;
   onView: (device: IDevice) => void;
+  onShowQR: (device: IDevice) => void;
   canEdit: boolean;
   canDelete: boolean;
+  selectedRowKeys?: React.Key[];
+  onSelectChange?: (selectedRowKeys: React.Key[], selectedRows: IDevice[]) => void;
 }
 
 const DevicesTable: React.FC<DevicesTableProps> = ({
@@ -20,8 +23,11 @@ const DevicesTable: React.FC<DevicesTableProps> = ({
   onEdit,
   onDelete,
   onView,
+  onShowQR,
   canEdit,
-  canDelete
+  canDelete,
+  selectedRowKeys,
+  onSelectChange,
 }) => {
   // Helpers
   const isExpiringSoon = (dateStr?: string) => {
@@ -108,6 +114,24 @@ const DevicesTable: React.FC<DevicesTableProps> = ({
        }
     },
     {
+        title: 'Mã QR',
+        key: 'qr_code',
+        width: 80,
+        align: 'center' as const,
+        render: (_: any, record: IDevice) => (
+            <Tooltip title="Xem & In tem mã QR">
+                <Button 
+                    icon={<QrcodeOutlined />} 
+                    size="small" 
+                    style={{ color: '#003a8c', borderColor: '#91caff' }}
+                    onClick={() => onShowQR(record)} 
+                >
+                    QR
+                </Button>
+            </Tooltip>
+        )
+    },
+    {
         title: 'Hành động',
         key: 'action',
         width: 100,
@@ -147,8 +171,16 @@ const DevicesTable: React.FC<DevicesTableProps> = ({
     }
   ];
 
+  const rowSelection = onSelectChange
+    ? {
+        selectedRowKeys,
+        onChange: onSelectChange,
+      }
+    : undefined;
+
   return (
     <Table
+      rowSelection={rowSelection}
       columns={columns}
       dataSource={dataSource}
       loading={loading}

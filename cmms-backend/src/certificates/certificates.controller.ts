@@ -44,12 +44,22 @@ export class CertificatesController {
         return { success: true, affected };
     }
 
+    @Get('all')
+    async getAllCertificates(@Query('type') type?: CertificateType) {
+        return this.certificatesService.getAllCertificates(type);
+    }
+
     @Get('user/:userId')
     async getUserCertificates(
         @Param('userId') userId: string,
         @Query('type') type?: CertificateType,
     ) {
         return this.certificatesService.getCertificatesByUser(parseInt(userId), type);
+    }
+
+    @Post('bulk')
+    async createBulk(@Body() items: any[]) {
+        return this.certificatesService.createBulk(items);
     }
 
     @Post('user/:userId')

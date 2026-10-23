@@ -1,17 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useForm, Resolver, SubmitHandler } from "react-hook-form";
 import { yupResolver } from "@hookform/resolvers/yup";
 import * as Yup from "yup";
-import {
-  TextField,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  InputAdornment,
-} from "@mui/material";
-import { Visibility, VisibilityOff } from "@mui/icons-material";
+import { Modal as AntdModal, Input as AntdInput } from "antd";
 import { IUpdatePassword, IUpdatePasswordForm } from "../../../../types/user.types";
 import { CustomButton } from "../../../../components/Button";
 
@@ -46,12 +37,6 @@ const EditPasswordForm: React.FC<{
     },
   });
 
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-
-  const toggleShowPassword = () => setShowPassword((prev) => !prev);
-  const toggleShowConfirm = () => setShowConfirm((prev) => !prev);
-
   const handleFormSubmit: SubmitHandler<IUpdatePasswordForm> = (data) => {
     const { password } = data;
     onSave({ password });
@@ -69,65 +54,47 @@ const EditPasswordForm: React.FC<{
   }, [open, reset]);
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle>Đặt lại mật khẩu</DialogTitle>
-      <DialogContent>
-        <TextField
-          {...register("password")}
-          label="Mật khẩu mới"
-          type={showPassword ? "text" : "password"}
-          fullWidth
-          margin="normal"
-          error={!!errors.password}
-          helperText={errors.password?.message}
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton onClick={toggleShowPassword} edge="end">
-                  {showPassword ? <VisibilityOff /> : <Visibility />}
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-        />
-        <TextField
-          {...register("confirmPassword")}
-          label="Xác nhận mật khẩu"
-          type={showConfirm ? "text" : "password"}
-          fullWidth
-          margin="normal"
-          error={!!errors.confirmPassword}
-          helperText={errors.confirmPassword?.message}
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                <IconButton onClick={toggleShowConfirm} edge="end">
-                  {showConfirm ? <VisibilityOff /> : <Visibility />}
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-        />
-      </DialogContent>
-      <DialogActions>
-        <CustomButton
-          onClick={onClose}
-          variant="outlined"
-          color="secondary"
-          padding="4px 12px"
-        >
+    <AntdModal
+      open={open}
+      onCancel={onClose}
+      title="Đặt lại mật khẩu"
+      footer={[
+        <CustomButton key="cancel" onClick={onClose} variant="outlined">
           Hủy
-        </CustomButton>
+        </CustomButton>,
         <CustomButton
+          key="submit"
           onClick={handleSubmit(handleFormSubmit)}
           variant="contained"
-          color="primary"
-          padding="4px 12px"
+          bgrColor="#1890ff"
         >
           Cập nhật
-        </CustomButton>
-      </DialogActions>
-    </Dialog>
+        </CustomButton>,
+      ]}
+      centered
+    >
+      <form onSubmit={handleSubmit(handleFormSubmit)} style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 16 }}>
+        <div>
+          <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>Mật khẩu mới *</label>
+          <AntdInput.Password
+            {...register("password")}
+            placeholder="Nhập mật khẩu mới..."
+            status={errors.password ? "error" : ""}
+          />
+          {errors.password && <span style={{ color: "#B42318", fontSize: 12 }}>{errors.password.message}</span>}
+        </div>
+
+        <div>
+          <label style={{ display: "block", marginBottom: 6, fontWeight: 500 }}>Xác nhận mật khẩu *</label>
+          <AntdInput.Password
+            {...register("confirmPassword")}
+            placeholder="Xác nhận mật khẩu..."
+            status={errors.confirmPassword ? "error" : ""}
+          />
+          {errors.confirmPassword && <span style={{ color: "#B42318", fontSize: 12 }}>{errors.confirmPassword.message}</span>}
+        </div>
+      </form>
+    </AntdModal>
   );
 };
 
