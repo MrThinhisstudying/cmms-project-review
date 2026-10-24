@@ -327,11 +327,19 @@ BACKUP_FILE="$BACKUP_DIR/cmms_db_$TIMESTAMP.sql.gz"
 
 echo "💾 Đang sao lưu Database PostgreSQL..."
 docker exec -t cmms_db pg_dump -U "${POSTGRES_USER:-postgres}" "${POSTGRES_DB:-cmms_db}" | gzip > "$BACKUP_FILE"
-if [ ! -s "$BACKUP_FILE" ]; then
+if [ -s "$BACKUP_FILE" ]; then
+    echo "✅ Backup Database hoàn tất: $BACKUP_FILE"
+else
     echo "❌ LỖI: Backup rỗng! Dừng tiến trình."
     exit 1
 fi
-echo "✅ Backup Database hoàn tất: $BACKUP_FILE"
+
+echo "💾 Đang sao lưu thư mục uploads..."
+if [ -d "cmms-backend/uploads" ]; then
+    tar -czf "$BACKUP_DIR/cmms_uploads_$TIMESTAMP.tar.gz" -C cmms-backend uploads || true
+elif [ -d "uploads" ]; then
+    tar -czf "$BACKUP_DIR/cmms_uploads_$TIMESTAMP.tar.gz" uploads || true
+fi
 
 # 5. KÉO CODE MỚI
 echo "📥 Đang kéo mã nguồn mới nhất từ origin/main..."
