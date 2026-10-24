@@ -6,6 +6,7 @@ import dayjs from 'dayjs';
 import {NotificationService} from 'src/notification/notification.service';
 import {MaintenanceTicket} from 'src/maintenance-ticket/entities/maintenance-ticket.entity';
 import {TicketStatus} from 'src/maintenance-ticket/enum/ticket.enum';
+import {getMaintenanceCycleDeadline} from './enum/maintenance.enum';
 
 @Injectable()
 export class MaintenanceScheduler {
@@ -27,7 +28,9 @@ export class MaintenanceScheduler {
             const slot = dayjs(t.scheduled_at);
             const preWindowStart = slot.subtract(MaintenanceScheduler.PRE_NOTIFY_DAYS, 'day');
             const inPreWindow = now.isAfter(preWindowStart) && now.isBefore(slot);
-            const overdueBy = now.diff(slot, 'day');
+            const deadline = getMaintenanceCycleDeadline(slot, t.maintenance?.level ?? t.maintenance_level);
+            const isOverdue = now.isAfter(deadline);
+            const overdueBy = now.diff(deadline, 'day');
             let shouldNotify = false;
             let type = '';
             if (inPreWindow) {
@@ -35,7 +38,7 @@ export class MaintenanceScheduler {
                     shouldNotify = true;
                     type = 'pre';
                 }
-            } else if (overdueBy >= MaintenanceScheduler.OVERDUE_DAYS) {
+            } else if (isOverdue && overdueBy >= MaintenanceScheduler.OVERDUE_DAYS) {
                 if (!t.last_notified_slot || !dayjs(t.last_notified_slot).isSame(slot)) {
                     shouldNotify = true;
                     type = 'overdue';

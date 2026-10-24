@@ -29,7 +29,7 @@ export class AuthService {
         try {
             user = await this.userService.findOneSignup({
                 where: {email},
-                relations: ['department'],
+                relations: ['department', 'department.parent', 'user_departments', 'user_departments.department', 'user_departments.department.parent'],
             });
 
             if (!user || !(await user.checkPassword(password))) {
@@ -41,7 +41,20 @@ export class AuthService {
         }
 
         delete user.password;
-        const departmentPermissions = user.department?.permissions || [];
+        const resolveDeptPermissions = (dept: any): string[] => {
+            if (!dept) return [];
+            const direct = dept.permissions || [];
+            if (dept.parent && (dept.inherit_parent_permissions !== false)) {
+                return [...new Set([...(dept.parent.permissions || []), ...direct])];
+            }
+            return direct;
+        };
+
+        const primaryPerms = resolveDeptPermissions(user.department);
+        const multiDeptPerms = (user.user_departments || []).flatMap(
+            (ud: any) => resolveDeptPermissions(ud?.department)
+        );
+        const departmentPermissions = [...new Set([...primaryPerms, ...multiDeptPerms])];
 
         const payload = {
             email: user.email,
@@ -71,7 +84,7 @@ export class AuthService {
         try {
             user = await this.userService.findOneSignup({
                 where: {email: payload.email},
-                relations: ['department', 'user_departments', 'user_departments.department'],
+                relations: ['department', 'department.parent', 'user_departments', 'user_departments.department', 'user_departments.department.parent'],
             });
         } catch (error) {
             throw new UnauthorizedException(`Không có người dùng nào có email:: ${payload.email}`);

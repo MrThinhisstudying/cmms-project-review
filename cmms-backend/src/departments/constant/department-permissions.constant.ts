@@ -25,6 +25,16 @@ export const DEPARTMENT_PERMISSIONS = [
         description: 'Cho phép đơn vị trực tiếp thực hiện công việc bảo dưỡng theo kế hoạch hoặc yêu cầu được phê duyệt.',
     },
     {
+        code: 'UPDATE_MAINTENANCE_DATE',
+        name: 'Được sửa ngày bảo dưỡng',
+        description: 'Cho phép điều chỉnh, cập nhật lại ngày dự kiến hoặc ngày hoàn thành bảo dưỡng của thiết bị.',
+    },
+    {
+        code: 'VIEW_REPORTS',
+        name: 'Được xem báo cáo thống kê',
+        description: 'Cho phép truy cập và xem các báo cáo tổng hợp, thống kê hoạt động thiết bị và kỹ thuật.',
+    },
+    {
         code: 'CREATE_REPAIR',
         name: 'Được lập phiếu yêu cầu sửa chữa',
         description: 'Cho phép lập phiếu yêu cầu sửa chữa khi thiết bị hư hỏng, gặp sự cố hoặc cần thay thế linh kiện.',

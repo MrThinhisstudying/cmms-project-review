@@ -105,6 +105,7 @@ export interface ChecklistResultEntry {
 // 5. Payload gửi lên API để tạo phiếu (Create Ticket)
 export interface CreateTicketPayload {
   device_id: number;
+  maintenance_id?: number | null;
   template_id?: number | null;
   maintenance_level: string; // "1M", "3M", "6M"...
   checklist_result?: ChecklistResultEntry[];

@@ -213,9 +213,9 @@ const DeviceQRModal: React.FC<DeviceQRModalProps> = ({ open, onClose, device }) 
                     : `<div style="font-size: 9px; color: #888; margin-bottom: 2px;">Chưa có biển số</div>`
                 }
                 <div class="decal-meta">
-                  <div><strong>Mã TTB:</strong> ${device.device_code || `TTB-${device.device_id}`}</div>
+                  <div><strong>Nhãn hiệu:</strong> ${device.brand || '—'}</div>
                   <div><strong>Loại xe:</strong> ${device.deviceType?.name || 'NIL'}</div>
-                  <div><strong>Đơn vị QL:</strong> ${device.using_department || device.device_group?.name || 'Chưa gán'}</div>
+                  <div><strong>Năm đưa vào sử dụng:</strong> ${device.usage_start_year || device.manufacture_year || '—'}</div>
                 </div>
               </div>
             </div>
@@ -246,29 +246,66 @@ const DeviceQRModal: React.FC<DeviceQRModalProps> = ({ open, onClose, device }) 
     <Modal
       open={open}
       onCancel={onClose}
-      width={560}
+      width={580}
+      centered
+      maskClosable={false}
       title={
-        <Space>
-          <QrcodeOutlined style={{ color: '#1890ff', fontSize: 20 }} />
-          <span>Mã QR & Tem Nhãn Phương Tiện</span>
-        </Space>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 10,
+              background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontSize: 18,
+              boxShadow: '0 2px 8px rgba(22, 119, 255, 0.3)',
+            }}
+          >
+            <QrcodeOutlined />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>
+              Mã QR & Tem Nhãn Phương Tiện
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 400 }}>
+              {device.name} {device.reg_number ? `(${device.reg_number})` : ''}
+            </div>
+          </div>
+        </div>
       }
       footer={[
-        <Button key="close" onClick={onClose}>
+        <Button key="close" onClick={onClose} style={{ borderRadius: 8 }}>
           Đóng
         </Button>,
-        <Button key="open" icon={<ExportOutlined />} onClick={openPassportDirectly}>
+        <Button key="open" icon={<ExportOutlined />} onClick={openPassportDirectly} style={{ borderRadius: 8 }}>
           Mở hồ sơ số
         </Button>,
-        <Button key="download" icon={<DownloadOutlined />} onClick={handleDownload}>
+        <Button key="download" icon={<DownloadOutlined />} onClick={handleDownload} style={{ borderRadius: 8 }}>
           Tải ảnh QR
         </Button>,
-        <Button key="print" type="primary" icon={<PrinterOutlined />} onClick={handlePrint}>
+        <Button
+          key="print"
+          type="primary"
+          icon={<PrinterOutlined />}
+          onClick={handlePrint}
+          style={{
+            borderRadius: 8,
+            fontWeight: 600,
+            background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)',
+            border: 'none',
+            boxShadow: '0 4px 12px rgba(22, 119, 255, 0.25)',
+          }}
+        >
           In tem nhãn decal
         </Button>,
       ]}
       styles={{ body: { padding: '16px 20px' } }}
     >
+      <Divider style={{ margin: '14px 0' }} />
       {/* Printable Decal Container (Also serves as Live Preview) */}
       <div style={{ textAlign: 'center', marginBottom: 12 }}>
         <Text type="secondary" style={{ fontSize: 13 }}>
@@ -401,9 +438,9 @@ const DeviceQRModal: React.FC<DeviceQRModalProps> = ({ open, onClose, device }) 
               )}
 
               <div className="decal-meta" style={{ fontSize: 11, color: '#444', lineHeight: 1.4 }}>
-                <div><strong>Mã TTB:</strong> {device.device_code || `TTB-${device.device_id}`}</div>
+                <div><strong>Nhãn hiệu:</strong> {device.brand || '—'}</div>
                 <div><strong>Loại xe:</strong> {device.deviceType?.name || 'NIL'}</div>
-                <div><strong>Đơn vị QL:</strong> {device.using_department || device.device_group?.name || 'Chưa gán'}</div>
+                <div><strong>Năm đưa vào sử dụng:</strong> {device.usage_start_year || device.manufacture_year || '—'}</div>
               </div>
             </div>
           </div>

@@ -176,6 +176,14 @@ export class DepartmentService {
             const directGroups = groupsByDept.get(d.dept_id) || [];
             const directDevicesCount = directGroups.reduce((acc, curr) => acc + (curr.devices_count || 0), 0);
             
+            const parentDept = d.parent_id ? allDepts.find(p => p.dept_id === d.parent_id) : null;
+            const isInherit = d.inherit_parent_permissions ?? (d.level === 'TO');
+            const parentPerms = parentDept?.permissions || [];
+            const directPerms = d.permissions || [];
+            const effectivePermissions = (isInherit && parentDept)
+                ? [...new Set([...parentPerms, ...directPerms])]
+                : directPerms;
+
             deptMap.set(d.dept_id, {
                 dept_id: d.dept_id,
                 name: d.name,
@@ -183,6 +191,9 @@ export class DepartmentService {
                 level: d.level,
                 is_technical: d.is_technical,
                 permissions: d.permissions,
+                inherit_parent_permissions: isInherit,
+                effective_permissions: effectivePermissions,
+                parent_permissions: parentPerms,
                 scope: d.scope,
                 manager_id: d.manager_id,
                 manager: d.manager ? {
@@ -201,6 +212,11 @@ export class DepartmentService {
                     position: d.deputy.position,
                 } : null,
                 parent_id: d.parent_id,
+                parent: d.parent ? {
+                    dept_id: d.parent.dept_id,
+                    name: d.parent.name,
+                    permissions: d.parent.permissions,
+                } : null,
                 member_count: deptCountMap.get(d.dept_id) || 0,
                 devices_count: directDevicesCount,
                 device_groups: directGroups,

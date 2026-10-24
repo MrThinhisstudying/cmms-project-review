@@ -16,10 +16,21 @@ export class PermissionsGuard implements CanActivate {
 
         if (user.role === 'admin' || user.role === 'ADMIN') return true;
 
-        // Tổng hợp permissions từ department chính (legacy) + tất cả user_departments (mới)
-        const primaryPermissions: string[] = user?.department?.permissions || [];
-        const multiDeptPermissions: string[] = (user?.user_departments || []).flatMap(
-            (ud: any) => ud?.department?.permissions || []
+        // Helper hàm resolve quyền thực tế (kế thừa từ Đội cấp trên nếu có)
+        const resolveDeptPermissions = (dept: any): string[] => {
+            if (!dept) return [];
+            const directPerms = dept.permissions || [];
+            if (dept.parent && (dept.inherit_parent_permissions !== false)) {
+                const parentPerms = dept.parent.permissions || [];
+                return [...new Set([...parentPerms, ...directPerms])];
+            }
+            return directPerms;
+        };
+
+        // Tổng hợp permissions từ department chính + tất cả user_departments
+        const primaryPermissions = resolveDeptPermissions(user?.department);
+        const multiDeptPermissions = (user?.user_departments || []).flatMap(
+            (ud: any) => resolveDeptPermissions(ud?.department)
         );
         const allPermissions = [...new Set([...primaryPermissions, ...multiDeptPermissions])];
 

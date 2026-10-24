@@ -4,7 +4,7 @@ import {Repository, In, IsNull, LessThan, ILike, Between, MoreThan} from 'typeor
 import {Device} from 'src/devices/entities/device.entity';
 import {User} from 'src/user/user.entity';
 import {Department} from 'src/departments/department.entity';
-import {MaintenanceLevel, MaintenanceStatus} from './enum/maintenance.enum';
+import {MaintenanceLevel, MaintenanceStatus, normalizeMaintenanceLevel, isMatchLevel, getMaintenanceCycleDeadline} from './enum/maintenance.enum';
 import {Maintenance} from './entities/maintenance.entity';
 import {CreateMaintenanceDto} from './dto/create-maintenance.dto';
 import {UpdateMaintenanceDto} from './dto/update-maintenance.dto';
@@ -40,20 +40,31 @@ export class MaintenanceService {
         if (s === 'n/a' || s === '-' || s === '') return null;
 
         if (typeof serial === 'number') {
+            try {
+                const parsed = XLSX.SSF.parse_date_code(serial);
+                if (parsed && parsed.y && parsed.m && parsed.d) {
+                    return new Date(parsed.y, parsed.m - 1, parsed.d, 12, 0, 0);
+                }
+            } catch {}
             const utc_days = Math.floor(serial - 25569);
             const utc_value = utc_days * 86400;
             const date_info = new Date(utc_value * 1000);
+            date_info.setHours(12, 0, 0, 0);
             return date_info;
         }
         if (typeof serial === 'string') {
             const parts = serial.split('/');
             if (parts.length === 3) {
-                const d = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+                const d = new Date(+parts[2], +parts[1] - 1, +parts[0], 12, 0, 0);
                 if (!isNaN(d.getTime())) return d;
             }
         }
         const d = new Date(serial);
-        return isNaN(d.getTime()) ? null : d;
+        if (!isNaN(d.getTime())) {
+            d.setHours(12, 0, 0, 0);
+            return d;
+        }
+        return null;
     }
 
     private levelToMonths(level: MaintenanceLevel | string): number {
@@ -157,17 +168,24 @@ export class MaintenanceService {
         const m = await this.findOne(id);
         if (!m) throw new NotFoundException('Maintenance not found');
 
-        if (m.status === MaintenanceStatus.INACTIVE || m.status === MaintenanceStatus.CANCELED) {
-            throw new ForbiddenException('Không thể sửa kế hoạch đã đóng');
+        if (m.status === MaintenanceStatus.CANCELED) {
+            throw new ForbiddenException('Không thể sửa kế hoạch đã bị hủy');
         }
 
-        if (dto.scheduled_date) {
-            const d = this.toDateOrNull(dto.scheduled_date);
+        if (dto.scheduled_date || dto.next_maintenance_date) {
+            const dateStr = dto.scheduled_date || dto.next_maintenance_date;
+            const d = this.toDateOrNull(dateStr);
             m.scheduled_date = d;
             m.next_maintenance_date = d;
         }
+
+        if (dto.last_maintenance_date !== undefined) {
+            m.last_maintenance_date = dto.last_maintenance_date ? this.toDateOrNull(dto.last_maintenance_date) : null;
+        }
+
         if (dto.level) m.level = dto.level;
         if (dto.status) m.status = dto.status;
+        if (dto.description !== undefined) m.description = dto.description;
 
         return await this.maintenanceRepo.save(m);
     }
@@ -189,9 +207,10 @@ export class MaintenanceService {
     // 3. LOGIC HOÀN THÀNH & TỰ ĐỘNG KÍCH HOẠT (Rolling Wave)
     // =================================================================
 
-    // --- CẬP NHẬT: THÊM THAM SỐ actualDate ---
+    // --- CẬP NHẬT: THÊM THAM SỐ actualDate VÀ PHÂN TÁCH CHU KỲ (TUẦN RIÊNG, THÁNG RIÊNG) ---
     async markCompletedAndSpawnNext(maintenanceId: number, actualDate: Date) {
         const current = await this.findOne(maintenanceId);
+        if (!current) return;
 
         // 1. Đánh dấu kế hoạch hiện tại là ĐÃ XONG
         current.status = MaintenanceStatus.INACTIVE;
@@ -201,27 +220,33 @@ export class MaintenanceService {
 
         await this.maintenanceRepo.save(current);
 
-        // 2. Tìm kế hoạch DỰ KIẾN tiếp theo
-        const nextPlan = await this.maintenanceRepo.findOne({
-            where: {
-                device: {device_id: current.device.device_id},
-                status: MaintenanceStatus.INACTIVE,
-                last_maintenance_date: IsNull(),
-            },
-            order: {next_maintenance_date: 'ASC'},
-        });
+        // 2. Tìm kế hoạch DỰ KIẾN tiếp theo CÙNG CHU KỲ (Tuần riêng biệt, Định kỳ tháng/năm riêng biệt)
+        const isWeekly = normalizeMaintenanceLevel(current.level) === 'Tuần';
 
-        // 3. Kích hoạt nó lên
+        let query = this.maintenanceRepo.createQueryBuilder('m')
+            .where('m.device_id = :deviceId', { deviceId: current.device.device_id })
+            .andWhere('m.status = :status', { status: MaintenanceStatus.INACTIVE })
+            .andWhere('m.last_maintenance_date IS NULL')
+            .andWhere('m.maintenance_id != :currentId', { currentId: current.maintenance_id });
+
+        if (isWeekly) {
+            query = query.andWhere("(LOWER(m.level) LIKE '%tuần%' OR LOWER(m.level) LIKE '%week%' OR m.level = 'Tuần')");
+        } else {
+            query = query.andWhere("(LOWER(m.level) NOT LIKE '%tuần%' AND LOWER(m.level) NOT LIKE '%week%' AND m.level != 'Tuần')");
+        }
+
+        const nextPlan = await query.orderBy('m.next_maintenance_date', 'ASC').getOne();
+
+        // 3. Kích hoạt kế hoạch tiếp theo trong cùng chu kỳ
         if (nextPlan) {
             nextPlan.status = MaintenanceStatus.ACTIVE;
             // FIX: Không gán last_maintenance_date cho phiếu tiếp theo
-            // Nếu gán, hệ thống sẽ hiểu là phiếu đó ĐÃ hoàn thành
             nextPlan.last_maintenance_date = null;
             await this.maintenanceRepo.save(nextPlan);
         }
     }
 
-    // --- HÀM KHÔI PHỤC Khi Hủy Phiếu ---
+    // --- HÀM KHÔI PHỤC Khi Hủy Phiếu (Tách theo chu kỳ Tuần / Tháng) ---
     async revertCompletion(maintenanceId: number) {
         const current = await this.findOne(maintenanceId);
         if (!current) return;
@@ -231,17 +256,22 @@ export class MaintenanceService {
         current.last_maintenance_date = null; // Xóa ngày hoàn thành
         await this.maintenanceRepo.save(current);
 
-        // 2. Tìm kế hoạch ĐÃ ĐƯỢC KÍCH HOẠT TIẾP THEO (nếu có) và DEACTIVATE nó
-        // Logic: Cùng thiết bị, trạng thái ACTIVE, ngày > ngày của current, chưa làm
-        const nextActive = await this.maintenanceRepo.findOne({
-            where: {
-                device: { device_id: current.device.device_id },
-                status: MaintenanceStatus.ACTIVE,
-                last_maintenance_date: IsNull(),
-                next_maintenance_date: MoreThan(current.next_maintenance_date)
-            } as any, // Cast any để tránh lỗi type MoreThan nếu chưa import
-            order: { next_maintenance_date: 'ASC' }
-        });
+        // 2. Tìm kế hoạch ĐÃ ĐƯỢC KÍCH HOẠT TIẾP THEO trong cùng chu kỳ (nếu có) và DEACTIVATE nó
+        const isWeekly = normalizeMaintenanceLevel(current.level) === 'Tuần';
+
+        let query = this.maintenanceRepo.createQueryBuilder('m')
+            .where('m.device_id = :deviceId', { deviceId: current.device.device_id })
+            .andWhere('m.status = :status', { status: MaintenanceStatus.ACTIVE })
+            .andWhere('m.last_maintenance_date IS NULL')
+            .andWhere('m.next_maintenance_date > :currDate', { currDate: current.next_maintenance_date });
+
+        if (isWeekly) {
+            query = query.andWhere("(LOWER(m.level) LIKE '%tuần%' OR LOWER(m.level) LIKE '%week%' OR m.level = 'Tuần')");
+        } else {
+            query = query.andWhere("(LOWER(m.level) NOT LIKE '%tuần%' AND LOWER(m.level) NOT LIKE '%week%' AND m.level != 'Tuần')");
+        }
+
+        const nextActive = await query.orderBy('m.next_maintenance_date', 'ASC').getOne();
 
         if (nextActive) {
             nextActive.status = MaintenanceStatus.INACTIVE;
@@ -655,10 +685,15 @@ export class MaintenanceService {
 
         activePlans.forEach((p) => {
             if (p.next_maintenance_date) {
-                const diff = dayjs(p.next_maintenance_date).diff(today, 'day');
-                if (diff < -3) overdue++;
-                else if (diff <= 3) warning++; // Trong khoảng ân hạn 3 ngày tính là Warning/Doing
-                else monitoring++;
+                const start = dayjs(p.next_maintenance_date).startOf('day');
+                const deadline = getMaintenanceCycleDeadline(p.next_maintenance_date, p.level).startOf('day');
+                if (today.isAfter(deadline)) {
+                    overdue++;
+                } else if (today.isSame(start) || today.isAfter(start)) {
+                    warning++; // Đang trong kỳ bảo dưỡng
+                } else {
+                    monitoring++; // Chưa tới ngày
+                }
             }
         });
 
@@ -907,7 +942,9 @@ export class MaintenanceService {
             if (config.has2Y) jobCycles.push('2Y');
 
             const plansToSave = [];
-            let hasSetFirstActive = false; // Cờ để đánh dấu phiếu đầu tiên là Active
+            // Tách cờ Active riêng biệt cho 2 chu kỳ: Chu kỳ Tuần và Chu kỳ Tháng/Năm
+            let hasSetFirstActiveWeekly = false;
+            let hasSetFirstActiveMonthly = false;
 
             // VÒNG LẶP CHÍNH: DUYỆT 24 THÁNG (2 NĂM)
             for (let m = 0; m < 24; m++) {
@@ -920,13 +957,13 @@ export class MaintenanceService {
                 if (config.hasWeekly) {
                     const days = [1, 8, 15, 22];
                     for (const d of days) {
-                        const wDate = currentMonth.date(d).toDate();
+                        const wDate = currentMonth.date(d).hour(12).minute(0).second(0).toDate();
                         
-                        // Xác định status: Nếu chưa có phiếu Active nào -> Phiếu này Active
+                        // Xác định status: Phiếu Tuần đầu tiên luôn Active
                         let status = MaintenanceStatus.INACTIVE;
-                        if (!hasSetFirstActive) {
+                        if (!hasSetFirstActiveWeekly) {
                             status = MaintenanceStatus.ACTIVE;
-                            hasSetFirstActive = true;
+                            hasSetFirstActiveWeekly = true;
                         }
 
                         plansToSave.push(this.maintenanceRepo.create({
@@ -944,31 +981,15 @@ export class MaintenanceService {
 
                 // 1.2 Monthly (Luôn sinh 1 phiếu cuối tháng)
                 if (config.has1M) {
-                    const mDate = currentMonth.endOf('month').toDate();
+                    const mDate = currentMonth.endOf('month').hour(12).minute(0).second(0).toDate();
                     
+                    // Xác định status: Phiếu Tháng đầu tiên luôn Active độc lập với Tuần
                     let status = MaintenanceStatus.INACTIVE;
-                    // Nếu chưa có active (ví dụ không có Weekly), thì Monthly đầu tiên sẽ Active
-                    // Tuy nhiên nếu có Weekly rồi, thì Monthly vẫn cứ Inactive, chờ đến lượt (Rolling Wave)
-                    // Hoặc nếu muốn Monthly ưu tiên hơn?
-                    // Theo logic "Sắp tới" thì ngày nào đến trước sẽ Active.
-                    // Ở đây ta cứ gán active cho phiếu ĐẦU TIÊN được tạo ra trong hệ thống.
-                    if (!hasSetFirstActive) {
+                    if (!hasSetFirstActiveMonthly) {
                         status = MaintenanceStatus.ACTIVE;
-                        hasSetFirstActive = true;
+                        hasSetFirstActiveMonthly = true;
                     }
 
-                    // Fix: Truyền excelDate nếu status là ACTIVE để hiển thị trên bảng View
-                    const lastDate = (status === MaintenanceStatus.ACTIVE && excelDate) ? excelDate : null;
-                    
-                    // Note: createPlanEntity có logic riêng, nhưng ta sẽ override last_maintenance_date ở đây nếu cần thiết
-                    // Tuy nhiên createPlanEntity đang dùng tham số cuối isFirstActive để set.
-                    // Ta cần update createPlanEntity để nhận param lastDate cụ thể hoặc tự xử lý.
-                    // NHƯNG để an toàn và nhanh, ta sửa trực tiếp createPlanEntity hoặc sửa cách gọi.
-                    // Ở đây gọi createPlanEntity với isFirstActive=true sẽ gán date hiện tại làm last_date.
-                    // Cần sửa createPlanEntity để hỗ trợ custom lastDate.
-                    
-                    // Thay vì sửa createPlanEntity (ảnh hưởng chỗ khác), ta copy logic ra hoặc sửa createPlanEntity.
-                    // Phương án: Sửa createPlanEntity để nhận lastMaintenanceDate optional.
                     plansToSave.push(this.createPlanEntity(device, '1M', mDate, jobCycles, status === MaintenanceStatus.ACTIVE, status === MaintenanceStatus.ACTIVE ? excelDate : null));
                 }
 
@@ -988,17 +1009,14 @@ export class MaintenanceService {
                 }
 
                 if (priorityLevel) {
-                    const pDate = currentMonth.endOf('month').toDate(); // Trùng ngày với Monthly
+                    const pDate = currentMonth.endOf('month').hour(12).minute(0).second(0).toDate(); // Trùng ngày với Monthly
                     // Đây là phiếu riêng biệt theo yêu cầu "2 dòng riêng biệt"
 
                     let status = MaintenanceStatus.INACTIVE;
-                    // Nếu trùng ngày với Monthly, ta có 2 phiếu cùng ngày.
-                    // Phiếu nào Active? Thường là phiếu to hơn quan trọng hơn?
-                    // Nhưng ở đây logic simple: Cái nào đến lượt thì Active. 
-                    // Nếu chưa set Active thì cái này Active.
-                    if (!hasSetFirstActive) {
+                    // Nếu xe không có gói 1M mà có gói priority này thì kích hoạt phiếu đầu tiên
+                    if (!config.has1M && !hasSetFirstActiveMonthly) {
                         status = MaintenanceStatus.ACTIVE;
-                        hasSetFirstActive = true;
+                        hasSetFirstActiveMonthly = true;
                     }
 
                     plansToSave.push(this.createPlanEntity(device, priorityLevel, pDate, jobCycles, status === MaintenanceStatus.ACTIVE, status === MaintenanceStatus.ACTIVE ? excelDate : null));

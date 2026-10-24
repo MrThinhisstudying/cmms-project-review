@@ -563,29 +563,46 @@ const BatchLicenseModal: React.FC<BatchLicenseModalProps> = ({
   return (
     <Modal
       title={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <SafetyCertificateOutlined style={{ color: '#52c41a', fontSize: 20 }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              background: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontSize: 20,
+              boxShadow: '0 4px 12px rgba(82, 196, 26, 0.3)',
+            }}
+          >
+            <SafetyCertificateOutlined />
+          </div>
           <div>
-            <span style={{ fontSize: 16, fontWeight: 700, color: '#002766' }}>
-              Cập nhật Giấy phép & Đăng kiểm hàng loạt
-            </span>
-            <div style={{ fontSize: 12, fontWeight: 400, color: '#888' }}>
-              Hỗ trợ nhập ma trận trực tiếp hoặc tải file Excel để gia hạn cho nhiều phương tiện
+            <div style={{ fontSize: 17, fontWeight: 700, color: '#0f172a' }}>
+              Cập Nhật Giấy Phép & Đăng Kiểm Hàng Loạt
+            </div>
+            <div style={{ fontSize: 12, fontWeight: 400, color: '#64748b' }}>
+              Hỗ trợ nhập ma trận trực tiếp hoặc tải file Excel để gia hạn hàng loạt phương tiện
             </div>
           </div>
         </div>
       }
       open={open}
       onCancel={onClose}
-      width={1200}
+      width={1220}
+      centered
+      maskClosable={false}
       footer={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ fontSize: 12, color: '#595959' }}>
+          <div style={{ fontSize: 13, color: '#475569' }}>
             Tổng số thiết bị trong đợt này:{' '}
-            <strong style={{ color: '#1890ff', fontSize: 14 }}>{rows.length}</strong> thiết bị
+            <strong style={{ color: '#1677ff', fontSize: 15 }}>{rows.length}</strong> thiết bị
           </div>
           <Space>
-            <Button onClick={onClose} disabled={saving}>
+            <Button onClick={onClose} disabled={saving} style={{ borderRadius: 8 }}>
               Đóng
             </Button>
             <Button
@@ -594,7 +611,13 @@ const BatchLicenseModal: React.FC<BatchLicenseModalProps> = ({
               onClick={handleSaveAll}
               loading={saving}
               disabled={rows.length === 0}
-              style={{ background: '#52c41a', borderColor: '#52c41a', fontWeight: 600 }}
+              style={{
+                borderRadius: 8,
+                background: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)',
+                border: 'none',
+                fontWeight: 600,
+                boxShadow: '0 4px 12px rgba(82, 196, 26, 0.25)',
+              }}
             >
               Lưu cập nhật ({rows.length} xe)
             </Button>

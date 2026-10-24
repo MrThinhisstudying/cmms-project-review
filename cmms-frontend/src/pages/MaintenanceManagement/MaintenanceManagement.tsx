@@ -7,11 +7,13 @@ import {
   Input,
   Select,
   DatePicker,
+  Button,
   message,
 } from "antd";
 import {
   SearchOutlined,
   FilterOutlined,
+  ToolFilled,
 } from "@ant-design/icons";
 import MaintenanceHeader from "./components/MaintenanceHeader";
 import MaintenanceTable from "./components/MaintenanceTable";
@@ -149,12 +151,43 @@ const MaintenanceManagement: React.FC = () => {
     setIsEditOpen(true);
   };
 
+  // --- THỐNG KÊ NHANH CHO KPI CARDS ---
+  const kpiStats = React.useMemo(() => {
+    const today = moment().startOf("day");
+    let overdue = 0;
+    let warning = 0;
+    let normal = 0;
+
+    allData.forEach((item) => {
+      if (!item.next_maintenance_date) return;
+      const nextDate = moment(item.next_maintenance_date).startOf("day");
+      const diffDays = nextDate.diff(today, "days");
+      if (diffDays < 0) overdue++;
+      else if (diffDays <= 5) warning++;
+      else normal++;
+    });
+
+    return {
+      total: allData.length,
+      overdue,
+      warning,
+      normal,
+    };
+  }, [allData]);
+
+  const handleResetFilters = () => {
+    setSearchText("");
+    setFilterLevel(undefined);
+    setFilterStatus(undefined);
+    setDateRange(null);
+  };
+
   return (
     <div
       style={{
         width: "100%",
         padding: "24px",
-        background: "#f0f2f5",
+        background: "#f4f6f9",
         minHeight: "100vh",
       }}
     >
@@ -167,28 +200,234 @@ const MaintenanceManagement: React.FC = () => {
         onBatchMaintenance={() => setIsBatchOpen(true)}
       />
 
-      {/* Filter Bar */}
+      {/* KPI Statistic Cards (Click để lọc nhanh) */}
+      <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
+        {/* Card 1: Tổng số thiết bị */}
+        <Col xs={24} sm={12} lg={6}>
+          <Card
+            hoverable
+            onClick={() => setFilterStatus(undefined)}
+            style={{
+              borderRadius: 12,
+              border: !filterStatus ? "2px solid #1677ff" : "1px solid #e8e8e8",
+              boxShadow: !filterStatus
+                ? "0 4px 16px rgba(22, 119, 255, 0.18)"
+                : "0 2px 8px rgba(0,0,0,0.04)",
+              background: "linear-gradient(135deg, #ffffff 0%, #f6faff 100%)",
+              transition: "all 0.3s ease",
+              cursor: "pointer",
+            }}
+            styles={{ body: { padding: "16px 20px" } }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 13, color: "#64748b", fontWeight: 500, marginBottom: 4 }}>
+                  Tổng Thiết Bị Theo Dõi
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: "#0f172a" }}>
+                  {kpiStats.total}
+                </div>
+                <div style={{ fontSize: 12, color: "#1677ff", marginTop: 4 }}>
+                  {filterStatus === undefined ? "● Đang xem tất cả" : "Bấm để xem tất cả"}
+                </div>
+              </div>
+              <div
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 14,
+                  background: "#e6f4ff",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 24,
+                  color: "#1677ff",
+                }}
+              >
+                🚚
+              </div>
+            </div>
+          </Card>
+        </Col>
+
+        {/* Card 2: Quá hạn cần bảo dưỡng */}
+        <Col xs={24} sm={12} lg={6}>
+          <Card
+            hoverable
+            onClick={() => setFilterStatus(filterStatus === "overdue" ? undefined : "overdue")}
+            style={{
+              borderRadius: 12,
+              border: filterStatus === "overdue" ? "2px solid #ff4d4f" : "1px solid #e8e8e8",
+              boxShadow: filterStatus === "overdue"
+                ? "0 4px 16px rgba(255, 77, 79, 0.2)"
+                : "0 2px 8px rgba(0,0,0,0.04)",
+              background: "linear-gradient(135deg, #ffffff 0%, #fff8f8 100%)",
+              transition: "all 0.3s ease",
+              cursor: "pointer",
+            }}
+            styles={{ body: { padding: "16px 20px" } }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 13, color: "#ff4d4f", fontWeight: 600, marginBottom: 4 }}>
+                  Quá Hạn Cần Làm Gấp
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: "#cf1322" }}>
+                  {kpiStats.overdue}
+                </div>
+                <div style={{ fontSize: 12, color: "#ff4d4f", marginTop: 4 }}>
+                  {filterStatus === "overdue" ? "● Đang lọc quá hạn" : "Bấm để lọc danh sách"}
+                </div>
+              </div>
+              <div
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 14,
+                  background: "#fff1f0",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 24,
+                  color: "#ff4d4f",
+                }}
+              >
+                ⚠️
+              </div>
+            </div>
+          </Card>
+        </Col>
+
+        {/* Card 3: Sắp đến hạn */}
+        <Col xs={24} sm={12} lg={6}>
+          <Card
+            hoverable
+            onClick={() => setFilterStatus(filterStatus === "warning" ? undefined : "warning")}
+            style={{
+              borderRadius: 12,
+              border: filterStatus === "warning" ? "2px solid #faad14" : "1px solid #e8e8e8",
+              boxShadow: filterStatus === "warning"
+                ? "0 4px 16px rgba(250, 173, 20, 0.2)"
+                : "0 2px 8px rgba(0,0,0,0.04)",
+              background: "linear-gradient(135deg, #ffffff 0%, #fffdf5 100%)",
+              transition: "all 0.3s ease",
+              cursor: "pointer",
+            }}
+            styles={{ body: { padding: "16px 20px" } }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 13, color: "#d48806", fontWeight: 600, marginBottom: 4 }}>
+                  Sắp Đến Hạn (≤ 5 ngày)
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: "#d46b08" }}>
+                  {kpiStats.warning}
+                </div>
+                <div style={{ fontSize: 12, color: "#faad14", marginTop: 4 }}>
+                  {filterStatus === "warning" ? "● Đang lọc sắp đến hạn" : "Bấm để lọc danh sách"}
+                </div>
+              </div>
+              <div
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 14,
+                  background: "#fffbe6",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 24,
+                  color: "#faad14",
+                }}
+              >
+                ⏱️
+              </div>
+            </div>
+          </Card>
+        </Col>
+
+        {/* Card 4: Đang theo dõi ổn định */}
+        <Col xs={24} sm={12} lg={6}>
+          <Card
+            hoverable
+            onClick={() => setFilterStatus(filterStatus === "active" ? undefined : "active")}
+            style={{
+              borderRadius: 12,
+              border: filterStatus === "active" ? "2px solid #52c41a" : "1px solid #e8e8e8",
+              boxShadow: filterStatus === "active"
+                ? "0 4px 16px rgba(82, 196, 26, 0.2)"
+                : "0 2px 8px rgba(0,0,0,0.04)",
+              background: "linear-gradient(135deg, #ffffff 0%, #f7fff4 100%)",
+              transition: "all 0.3s ease",
+              cursor: "pointer",
+            }}
+            styles={{ body: { padding: "16px 20px" } }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 13, color: "#389e0d", fontWeight: 600, marginBottom: 4 }}>
+                  Đang Theo Dõi Ổn Định
+                </div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: "#237804" }}>
+                  {kpiStats.normal}
+                </div>
+                <div style={{ fontSize: 12, color: "#52c41a", marginTop: 4 }}>
+                  {filterStatus === "active" ? "● Đang lọc ổn định" : "Bấm để lọc danh sách"}
+                </div>
+              </div>
+              <div
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 14,
+                  background: "#f6ffed",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 24,
+                  color: "#52c41a",
+                }}
+              >
+                🛡️
+              </div>
+            </div>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Filter Bar (Bộ lọc thông minh) */}
       <Card
-        styles={{ body: { padding: "16px" } }}
-        style={{ marginBottom: 16, borderRadius: 8 }}
+        styles={{ body: { padding: "18px 20px" } }}
+        style={{
+          marginBottom: 16,
+          borderRadius: 12,
+          border: "1px solid #e2e8f0",
+          boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
+          background: "#ffffff",
+        }}
       >
-        <Row gutter={[16, 16]}>
-          <Col xs={24} md={6}>
+        <Row gutter={[16, 16]} align="middle">
+          <Col xs={24} md={7}>
             <Input
-              placeholder="🔍 Tìm thiết bị, biển số..."
-              prefix={<SearchOutlined style={{ color: "#bfbfbf" }} />}
+              placeholder="🔍 Tìm theo tên xe, biển số, số khung..."
+              prefix={<SearchOutlined style={{ color: "#94a3b8" }} />}
+              value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
               allowClear
+              size="middle"
+              style={{ borderRadius: 8 }}
             />
           </Col>
           <Col xs={12} md={4}>
             <Select
-              placeholder="Cấp độ"
+              placeholder="Cấp bảo dưỡng"
               style={{ width: "100%" }}
+              value={filterLevel}
               allowClear
+              size="middle"
               onChange={setFilterLevel}
             >
-              <Option value="Tuần">1 tuần</Option>
+              <Option value="Tuần">Tuần</Option>
               <Option value="1M">01 Tháng</Option>
               <Option value="3M">03 Tháng</Option>
               <Option value="6M">06 Tháng</Option>
@@ -201,7 +440,9 @@ const MaintenanceManagement: React.FC = () => {
             <Select
               placeholder="Trạng thái"
               style={{ width: "100%" }}
+              value={filterStatus}
               allowClear
+              size="middle"
               onChange={setFilterStatus}
             >
               <Option value="overdue">🔴 Quá hạn</Option>
@@ -209,36 +450,83 @@ const MaintenanceManagement: React.FC = () => {
               <Option value="active">🔵 Đang theo dõi</Option>
             </Select>
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={16} md={5}>
             <RangePicker
-              style={{ width: "100%" }}
+              style={{ width: "100%", borderRadius: 8 }}
+              size="middle"
               format="DD/MM/YYYY"
+              value={dateRange}
               onChange={(dates) => setDateRange(dates)}
             />
           </Col>
-          <Col xs={24} md={4} style={{ textAlign: "right" }}>
-            <div style={{ lineHeight: "32px", color: "#888" }}>
-              <FilterOutlined /> <b>{filteredData.length}</b> xe
+          <Col xs={8} md={4} style={{ textAlign: "right" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
+              {(searchText || filterLevel || filterStatus || dateRange) && (
+                <Button size="small" onClick={handleResetFilters} style={{ borderRadius: 6, fontSize: 12 }}>
+                  Xóa lọc
+                </Button>
+              )}
+              <div
+                style={{
+                  background: "#f1f5f9",
+                  padding: "4px 12px",
+                  borderRadius: 20,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#475569",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                <FilterOutlined style={{ color: "#1677ff" }} />
+                <span>{filteredData.length} xe</span>
+              </div>
             </div>
           </Col>
         </Row>
       </Card>
 
-      {/* BẢNG DỮ LIỆU (Đã sửa props cho khớp với con) */}
+      {/* BẢNG DỮ LIỆU */}
       <MaintenanceTable
-        loading={loading} // Truyền loading
-        dataSource={filteredData} // Truyền data đã lọc
+        loading={loading}
+        dataSource={filteredData}
         onCreateTicket={handlePerformMaintenance}
         onEdit={handleEditPlan}
         onRefresh={fetchData}
       />
 
-      {/* Modal Lập phiếu */}
+      {/* Modal Lập phiếu / Thực hiện bảo dưỡng */}
       <Modal
         title={
-          initialData
-            ? "Thực Hiện Bảo Dưỡng Định Kỳ"
-            : "Lập Phiếu Bảo Dưỡng Mới"
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 10,
+                background: "linear-gradient(135deg, #1677ff 0%, #0958d9 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                fontSize: 18,
+                boxShadow: "0 2px 8px rgba(22, 119, 255, 0.3)",
+              }}
+            >
+              <ToolFilled />
+            </div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 16, color: "#0f172a" }}>
+                {initialData ? "Thực Hiện Bảo Dưỡng Định Kỳ" : "Lập Phiếu Bảo Dưỡng Mới"}
+              </div>
+              <div style={{ fontSize: 12, color: "#64748b", fontWeight: 400 }}>
+                {initialData
+                  ? "Ghi nhận kết quả bảo dưỡng và tự động chuyển sang chu kỳ kế tiếp"
+                  : "Khởi tạo phiếu bảo dưỡng mới cho phương tiện thiết bị"}
+              </div>
+            </div>
+          </div>
         }
         open={isModalOpen}
         onCancel={() => setIsModalOpen(false)}

@@ -43,6 +43,7 @@ import certificatesApi from '../../apis/certificates';
 import { getPendingRequests, IProfileRequest } from '../../apis/profileRequests';
 import { getLaborContracts, ILaborContract } from '../../apis/laborContracts';
 import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
+import { isMaintenanceOverdue, getMaintenanceStatusInfo } from '../../utils/maintenanceDue';
 import { useSocket } from '../../hooks/useSocket';
 import RepairDetailDrawer from '../RepairsManagement/components/RepairDetailDrawer';
 import { IDevice, DeviceStatus } from '../../types/devicesManagement.types';
@@ -287,16 +288,13 @@ const HybridDashboard: React.FC = () => {
   // --- 3. THỐNG KÊ BẢO DƯỠNG ---
   const maintenanceStats = useMemo(() => {
     const now = dayjs();
-    const overdue = maintenances.filter((m) => {
-      if (!m.next_maintenance_date) return false;
-      return dayjs(m.next_maintenance_date).isBefore(now, 'day');
-    });
+    const overdue = maintenances.filter((m) => isMaintenanceOverdue(m));
 
     const upcoming = maintenances
       .filter((m) => {
         if (!m.next_maintenance_date) return false;
-        const d = dayjs(m.next_maintenance_date);
-        return d.isSame(now, 'day') || (d.isAfter(now) && d.diff(now, 'day') <= 7);
+        const info = getMaintenanceStatusInfo(m, now);
+        return info.type === 'near_due' || info.type === 'in_cycle' || info.type === 'in_cycle_last_day';
       })
       .sort((a, b) => dayjs(a.next_maintenance_date).valueOf() - dayjs(b.next_maintenance_date).valueOf());
 

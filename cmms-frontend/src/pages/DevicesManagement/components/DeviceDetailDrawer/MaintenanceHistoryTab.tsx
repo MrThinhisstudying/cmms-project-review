@@ -1,12 +1,15 @@
 import React, { useState } from "react";
-import { Table, Tag, Button, Modal, Typography, DatePicker, message, Card } from "antd";
+import { Table, Tag, Button, Modal, Typography, DatePicker, message, Card, Space } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { IMaintenance } from "../../../../types/maintenance.types";
 import { IDevice } from "../../../../types/devicesManagement.types";
 import dayjs from "dayjs";
-import { CheckCircleOutlined, ClockCircleOutlined, ToolOutlined, ExclamationCircleOutlined, TableOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, ClockCircleOutlined, ToolOutlined, ExclamationCircleOutlined, TableOutlined, CalendarOutlined } from "@ant-design/icons";
 import { createMaintenanceTicket } from "../../../../apis/maintenance";
 import { getToken } from "../../../../utils/auth";
+import { renderMaintenanceStatusTag } from "../../../../utils/maintenanceDue";
+import { useAuthContext } from "../../../../context/AuthContext/AuthContext";
+import EditMaintenanceDateModal from "../../../../components/EditMaintenanceDateModal";
 
 const { Text } = Typography;
 
@@ -27,12 +30,19 @@ export default function MaintenanceHistoryTab({
   device,
   onRefresh
 }: Props) {
+  const { user } = useAuthContext();
+  const canEditDate = user?.role === 'ADMIN' || user?.permissions?.includes('UPDATE_MAINTENANCE_DATE');
+
   // --- STATE FOR PERFORM MAINTENANCE ---
   const [isPerformOpen, setIsPerformOpen] = useState(false);
   const [performRecord, setPerformRecord] = useState<any>(null);
   const [performDate, setPerformDate] = useState<dayjs.Dayjs | null>(dayjs());
   const [minDate, setMinDate] = useState<dayjs.Dayjs | null>(null);
   const [creating, setCreating] = useState(false);
+
+  // --- STATE FOR EDIT MAINTENANCE DATE ---
+  const [isEditDateOpen, setIsEditDateOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<any>(null);
   // ------------------------------------
 
   const handleOpenPerform = (record: any) => {
@@ -70,9 +80,10 @@ export default function MaintenanceHistoryTab({
       try {
            const payload = {
             device_id: deviceId,
+            maintenance_id: performRecord?.maintenance_id,
             template_id: null, // Disable template
             maintenance_level: performRecord.level,
-            execution_date: performDate.toISOString(),
+            execution_date: performDate.hour(12).minute(0).second(0).toISOString(),
             checklist_result: [], 
             working_hours: 0,
             execution_team: [], 
@@ -91,9 +102,7 @@ export default function MaintenanceHistoryTab({
   };
 
   const disabledDate = (current: dayjs.Dayjs) => {
-      if (current > dayjs().endOf('day')) return true;
-      if (minDate && current < minDate.startOf('day')) return true;
-      return false;
+      return current > dayjs().endOf('day');
   };
 
   const columns: ColumnsType<IMaintenance> = [
@@ -133,46 +142,42 @@ export default function MaintenanceHistoryTab({
     {
         title: 'Trạng thái',
         key: 'status',
-        render: (_, r: any) => {
-            if (r.status === 'inactive' && r.last_maintenance_date) {
-                return <Tag color="green"><CheckCircleOutlined /> Hoàn thành</Tag>;
-            }
-            
-            if (r.status === 'active') {
-                 const today = dayjs().startOf("day");
-                 const nextDate = dayjs(r.next_maintenance_date).startOf("day");
-                 const diff = nextDate.diff(today, "day");
-
-                 if (diff < 0) return <Tag color="red" icon={<ClockCircleOutlined />}>Đã quá hạn {Math.abs(diff)} ngày</Tag>;
-                 if (diff <= 5) return <Tag color="orange" icon={<ClockCircleOutlined />}>Sắp đến hạn ({diff} ngày)</Tag>;
-                 return <Tag color="processing" icon={<ClockCircleOutlined />}>Đang tiến hành</Tag>;
-            }
-            
-            return <Tag color="default">Chưa tới ngày</Tag>;
-        }
+        render: (_, r: any) => renderMaintenanceStatusTag(r),
     },
     {
         title: 'Thao tác',
         key: 'action',
         align: 'right',
         render: (_, r, index) => {
-            if (r.status === 'inactive' && r.last_maintenance_date) {
-                return <Tag color="green"><CheckCircleOutlined /> Đã xong</Tag>;
-            }
-
-            if (r.status !== 'active') {
-                return <Button size="small" disabled>Thực hiện</Button>;
-            }
-            
             return (
-                 <Button 
+              <Space size={6}>
+                {canEditDate && (
+                  <Button
+                    size="small"
+                    icon={<CalendarOutlined />}
+                    onClick={() => {
+                      setEditingRecord({ ...r, device_name: deviceName });
+                      setIsEditDateOpen(true);
+                    }}
+                  >
+                    Sửa ngày
+                  </Button>
+                )}
+                {r.status === 'inactive' && r.last_maintenance_date ? (
+                  <Tag color="green"><CheckCircleOutlined /> Đã xong</Tag>
+                ) : r.status !== 'active' ? (
+                  <Button size="small" disabled>Thực hiện</Button>
+                ) : (
+                  <Button 
                     type="primary" 
                     size="small" 
                     icon={<ToolOutlined />}
                     onClick={() => handleOpenPerform(r)}
-                >
+                  >
                     Thực hiện
-                </Button>
+                  </Button>
+                )}
+              </Space>
             );
         }
     }
@@ -369,6 +374,16 @@ export default function MaintenanceHistoryTab({
               </Text>
           </div>
       </Modal>
+
+      <EditMaintenanceDateModal
+        open={isEditDateOpen}
+        record={editingRecord}
+        onClose={() => {
+          setIsEditDateOpen(false);
+          setEditingRecord(null);
+        }}
+        onSuccess={onRefresh}
+      />
     </div>
   );
 }

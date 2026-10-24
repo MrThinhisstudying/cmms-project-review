@@ -10,6 +10,7 @@ import dayjs from "dayjs";
 import { getMaintenancesByDevice } from "../../../apis/maintenance";
 import MaintenanceForm from "./MaintenanceForm";
 import { getToken } from "../../../utils/auth";
+import { renderMaintenanceStatusTag } from "../../../utils/maintenanceDue";
 
 interface Props {
   open: boolean;
@@ -143,50 +144,7 @@ const DeviceMaintenanceDetail: React.FC<Props> = ({
       title: "Trạng thái",
       key: "status_display",
       render: (_, record: any) => {
-        // --- LOGIC FIX TRẠNG THÁI ---
-
-        // 1. Chỉ tính là HOÀN THÀNH nếu status đã đóng (inactive) VÀ có ngày làm
-        if (record.status === "inactive" && record.last_maintenance_date) {
-          return (
-            <Tag icon={<CheckCircleOutlined />} color="success">
-              Hoàn thành
-            </Tag>
-          );
-        }
-
-        // 2. Nếu status đóng mà chưa có ngày -> DỰ KIẾN
-        if (record.status === "inactive" && !record.last_maintenance_date) {
-          return <Tag color="default">Dự kiến</Tag>;
-        }
-
-        // 3. Nếu status là ACTIVE -> BẮT BUỘC phải tính toán ngày (Không được hiện hoàn thành)
-        if (record.status === "active") {
-          if (!record.next_maintenance_date)
-            return <Tag color="default">Lỗi ngày</Tag>;
-
-          const today = dayjs().startOf("day");
-          const nextDate = dayjs(record.next_maintenance_date).startOf("day");
-          const diff = nextDate.diff(today, "day");
-
-          if (diff < -3)
-            return (
-              <Tag icon={<WarningOutlined />} color="error">
-                Quá hạn {Math.abs(diff)} ngày
-              </Tag>
-            );
-          if (diff >= -3 && diff <= 3)
-            return (
-              <Tag icon={<ClockCircleOutlined />} color="volcano">
-                Đang diễn ra
-              </Tag>
-            );
-          if (diff > 3 && diff <= 7)
-            return <Tag color="warning">Sắp đến ({diff} ngày)</Tag>;
-
-          return <Tag color="processing">Đang theo dõi</Tag>;
-        }
-
-        return <Tag>Không xác định</Tag>;
+        return renderMaintenanceStatusTag(record);
       },
     },
     {

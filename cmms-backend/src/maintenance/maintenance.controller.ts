@@ -1,4 +1,4 @@
-import {Controller, Get, Post, Body, Param, Put, Delete, ParseIntPipe, HttpException, HttpStatus, Query} from '@nestjs/common';
+import {Controller, Get, Post, Body, Param, Put, Patch, Delete, ParseIntPipe, HttpException, HttpStatus, Query} from '@nestjs/common';
 import {ApiTags} from '@nestjs/swagger';
 import {MaintenanceService} from './maintenance.service';
 import {CreateMaintenanceDto} from './dto/create-maintenance.dto';
@@ -69,8 +69,18 @@ export class MaintenanceController {
         try {
             const data = await this.maintenanceService.update(id, dto);
             return {message: 'Cập nhật lịch bảo dưỡng thành công', data};
-        } catch (error) {
-            throw new HttpException('Cập nhật thất bại', HttpStatus.BAD_REQUEST);
+        } catch (error: any) {
+            throw new HttpException(error.message || 'Cập nhật thất bại', HttpStatus.BAD_REQUEST);
+        }
+    }
+
+    @Patch(':id')
+    async patchUpdate(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateMaintenanceDto) {
+        try {
+            const data = await this.maintenanceService.update(id, dto);
+            return {message: 'Cập nhật lịch bảo dưỡng thành công', data};
+        } catch (error: any) {
+            throw new HttpException(error.message || 'Cập nhật thất bại', HttpStatus.BAD_REQUEST);
         }
     }
 

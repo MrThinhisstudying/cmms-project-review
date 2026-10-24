@@ -87,11 +87,11 @@ const MaintenanceForm: React.FC<Props> = ({
 
     const execDate = values.execution_date
       ? dayjs.isDayjs(values.execution_date)
-        ? values.execution_date.toISOString()
-        : dayjs(values.execution_date).toISOString()
+        ? values.execution_date.hour(12).minute(0).second(0).toISOString()
+        : dayjs(values.execution_date).hour(12).minute(0).second(0).toISOString()
       : initialData?.scheduled_date
-      ? dayjs(initialData.scheduled_date).toISOString()
-      : new Date().toISOString();
+      ? dayjs(initialData.scheduled_date).hour(12).minute(0).second(0).toISOString()
+      : dayjs().hour(12).minute(0).second(0).toISOString();
 
     const level =
       initialData?.maintenance_level ||
@@ -101,6 +101,7 @@ const MaintenanceForm: React.FC<Props> = ({
 
     const payload = {
       device_id: devId,
+      maintenance_id: initialData?.maintenance_id,
       maintenance_level: level,
       execution_date: execDate,
       template_id: null,
@@ -368,11 +369,13 @@ const MaintenanceForm: React.FC<Props> = ({
             display: "flex",
             justifyContent: "flex-end",
             gap: 12,
-            marginTop: 16,
+            marginTop: 20,
+            paddingTop: 16,
+            borderTop: "1px solid #f1f5f9",
           }}
         >
-          <Button size="large" onClick={onCancel} disabled={loading}>
-            Hủy
+          <Button size="large" onClick={onCancel} disabled={loading} style={{ borderRadius: 8 }}>
+            Hủy bỏ
           </Button>
           <Button
             type="primary"
@@ -382,14 +385,16 @@ const MaintenanceForm: React.FC<Props> = ({
             loading={loading}
             disabled={!displayDevice}
             style={{
-              background: "#1890ff",
-              borderColor: "#1890ff",
+              borderRadius: 8,
+              background: "linear-gradient(135deg, #1677ff 0%, #0958d9 100%)",
+              border: "none",
               fontWeight: 600,
               paddingLeft: 24,
               paddingRight: 24,
+              boxShadow: "0 4px 14px rgba(22, 119, 255, 0.25)",
             }}
           >
-            Hoàn thành bảo dưỡng
+            Hoàn Thành Bảo Dưỡng
           </Button>
         </div>
       </Form>

@@ -9,6 +9,7 @@ import {
   PhoneOutlined,
   MailOutlined,
   UserOutlined,
+  CarOutlined,
 } from "@ant-design/icons";
 
 import { getToken } from "../../../../utils/auth";
@@ -581,7 +582,34 @@ export default function DeviceDetailDrawer({
 
   return (
     <Drawer
-      title={`Hồ sơ thiết bị: ${device.name.toUpperCase()}`}
+      title={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 10,
+              background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontSize: 18,
+              boxShadow: '0 2px 8px rgba(22, 119, 255, 0.3)',
+            }}
+          >
+            <CarOutlined />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>
+              Hồ Sơ Thiết Bị: {device.name?.toUpperCase()}
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 400 }}>
+              Biển số: {device.reg_number || 'Chưa có'} | Mã TTB: {device.device_code || `#${device.device_id}`}
+            </div>
+          </div>
+        </div>
+      }
       width={1200}
       onClose={onClose}
       open={open}

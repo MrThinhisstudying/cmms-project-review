@@ -56,4 +56,9 @@ export class CreateDepartmentDto {
     @IsOptional()
     @IsBoolean()
     is_technical?: boolean;
+
+    @ApiProperty({ description: 'Kế thừa quyền từ đơn vị cấp trên (Đội)', default: true, required: false })
+    @IsOptional()
+    @IsBoolean()
+    inherit_parent_permissions?: boolean;
 }

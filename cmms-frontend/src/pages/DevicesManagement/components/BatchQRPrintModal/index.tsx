@@ -70,9 +70,9 @@ const BatchQRPrintModal: React.FC<BatchQRPrintModalProps> = ({ open, onClose, de
               <div class="sticker-name">${dev.name}</div>
               <div class="sticker-plate">${dev.reg_number || 'NIL'}</div>
               <div class="sticker-meta">
-                <div>Mã: ${dev.device_code || `TTB-${dev.device_id}`}</div>
+                <div>Nhãn hiệu: ${dev.brand || '—'}</div>
                 <div>Loại: ${dev.deviceType?.name || 'NIL'}</div>
-                <div>Đơn vị: ${dev.using_department || dev.device_group?.name || 'Chưa gán'}</div>
+                <div>Năm đưa vào sử dụng: ${dev.usage_start_year || dev.manufacture_year || '—'}</div>
               </div>
             </div>
           </div>
@@ -254,15 +254,39 @@ const BatchQRPrintModal: React.FC<BatchQRPrintModalProps> = ({ open, onClose, de
     <Modal
       open={open}
       onCancel={onClose}
-      width={780}
+      width={820}
+      centered
+      maskClosable={false}
       title={
-        <Space>
-          <PrinterOutlined style={{ color: '#1890ff', fontSize: 20 }} />
-          <span>In Tem Nhãn QR Hàng Loạt (Khổ A4)</span>
-        </Space>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 10,
+              background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontSize: 18,
+              boxShadow: '0 2px 8px rgba(22, 119, 255, 0.3)',
+            }}
+          >
+            <PrinterOutlined />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>
+              In Tem Nhãn QR Hàng Loạt (Khổ A4)
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 400 }}>
+              Tự động dàn trang in 2 cột tem decal chuẩn nhận diện cho phương tiện
+            </div>
+          </div>
+        </div>
       }
       footer={[
-        <Button key="close" onClick={onClose}>
+        <Button key="close" onClick={onClose} style={{ borderRadius: 8 }}>
           Đóng
         </Button>,
         <Button
@@ -271,20 +295,38 @@ const BatchQRPrintModal: React.FC<BatchQRPrintModalProps> = ({ open, onClose, de
           icon={<PrinterOutlined />}
           onClick={handlePrint}
           disabled={selectedDevices.length === 0}
+          style={{
+            borderRadius: 8,
+            fontWeight: 600,
+            background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)',
+            border: 'none',
+            boxShadow: '0 4px 12px rgba(22, 119, 255, 0.25)',
+          }}
         >
           In {selectedDevices.length} tem nhãn đã chọn
         </Button>,
       ]}
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <Text>
-          Đã chọn: <strong style={{ color: '#1890ff' }}>{selectedDevices.length}</strong> / {devices.length} phương tiện
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: 12,
+          padding: '10px 14px',
+          background: '#f8fafc',
+          borderRadius: 8,
+          border: '1px solid #e2e8f0',
+        }}
+      >
+        <Text style={{ fontSize: 13 }}>
+          Đã chọn: <strong style={{ color: '#1677ff' }}>{selectedDevices.length}</strong> / {devices.length} phương tiện
         </Text>
         <Space size="small">
-          <Button size="small" icon={<CheckSquareOutlined />} onClick={handleSelectAll}>
+          <Button size="small" icon={<CheckSquareOutlined />} onClick={handleSelectAll} style={{ borderRadius: 6 }}>
             Chọn tất cả
           </Button>
-          <Button size="small" icon={<ClearOutlined />} onClick={handleDeselectAll}>
+          <Button size="small" icon={<ClearOutlined />} onClick={handleDeselectAll} style={{ borderRadius: 6 }}>
             Bỏ chọn
           </Button>
         </Space>
@@ -296,10 +338,11 @@ const BatchQRPrintModal: React.FC<BatchQRPrintModalProps> = ({ open, onClose, de
         rowKey="device_id"
         size="small"
         pagination={{ pageSize: 8 }}
+        style={{ borderRadius: 8, overflow: 'hidden' }}
       />
 
-      <div style={{ background: '#f0f7ff', border: '1px solid #bae0ff', borderRadius: 6, padding: '8px 12px', marginTop: 12, fontSize: 12 }}>
-        💡 Định dạng in: Hệ thống sẽ xếp mỗi trang A4 thành lưới 2 cột tem nhãn tiêu chuẩn. Thích hợp in trên giấy Decal A4 đã bế sẵn hoặc giấy decal dán thường.
+      <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', marginTop: 12, fontSize: 12, color: '#166534' }}>
+        💡 <b>Định dạng in:</b> Hệ thống sẽ xếp mỗi trang A4 thành lưới 2 cột tem nhãn tiêu chuẩn. Thích hợp in trên giấy Decal A4 đã bế sẵn hoặc giấy decal dán thường.
       </div>
     </Modal>
   );

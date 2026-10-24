@@ -20,6 +20,7 @@ import DepartmentFormModal from "../DepartmentFormModal";
 import DeviceGroupFormModal from "../DeviceGroupFormModal";
 import { deleteDeviceGroup } from "../../../../apis/device-groups";
 import { getToken } from "../../../../utils/auth";
+import { DEPARTMENT_PERMISSIONS } from "../../../../constants/user";
 
 const { Text } = Typography;
 const BASE_URL = process.env.REACT_APP_BASE_URL || 'http://localhost:3000/api';
@@ -337,6 +338,56 @@ const DepartmentModal: React.FC<{
         return (
           <Popover content={content} title="Danh sách thành viên" trigger="hover">
             <Badge count={count} style={{ backgroundColor: record.level === 'NHOM' ? '#722ed1' : '#52c41a', cursor: 'pointer' }} overflowCount={99} />
+          </Popover>
+        );
+      },
+    },
+    {
+      title: 'Quyền chức năng',
+      key: 'permissions',
+      width: 155,
+      align: 'center' as const,
+      render: (_: any, record: any) => {
+        if (record.level === 'NHOM' || record.level === 'UNASSIGNED') {
+          return (
+            <Tooltip title="Nhóm Kỹ thuật tự động áp dụng các quyền theo Tổ trực thuộc trên phạm vi thiết bị của Nhóm">
+              <Tag color="default" style={{ fontSize: 11 }}>
+                Theo Tổ
+              </Tag>
+            </Tooltip>
+          );
+        }
+
+        const effectivePerms: string[] = record.effective_permissions || record.permissions || [];
+        const isInheriting = record.level === 'TO' && record.inherit_parent_permissions !== false;
+        const count = effectivePerms.length;
+
+        if (count === 0) {
+          return <Tag color="default" style={{ fontSize: 11 }}>0 quyền</Tag>;
+        }
+
+        const permDetails = DEPARTMENT_PERMISSIONS.filter(p => effectivePerms.includes(p.code));
+        const content = (
+          <div style={{ maxWidth: 280, maxHeight: 220, overflowY: 'auto' }}>
+            <div style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, color: '#1890ff' }}>
+              {record.name} ({count} quyền hiệu lực):
+            </div>
+            {permDetails.map(p => (
+              <div key={p.code} style={{ fontSize: 11, marginBottom: 4 }}>
+                • <strong>{p.name}</strong>
+              </div>
+            ))}
+          </div>
+        );
+
+        return (
+          <Popover content={content} title="Danh sách quyền được cấp" trigger="hover">
+            <Tag
+              color={record.level === 'DOI' ? 'blue' : isInheriting ? 'cyan' : 'purple'}
+              style={{ cursor: 'pointer', fontSize: 11, fontWeight: 500 }}
+            >
+              {isInheriting ? `Kế thừa: ${count} quyền` : `${count} quyền`}
+            </Tag>
           </Popover>
         );
       },

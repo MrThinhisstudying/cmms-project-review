@@ -58,50 +58,194 @@ interface ParsedRow {
 const normalizeStr = (s: string) =>
   s ? s.replace(/[^a-zA-Z0-9]/g, "").toLowerCase() : "";
 
+const LEVEL_DISPLAY_MAP: Record<string, { label: string; color: string }> = {
+  Tuần: { label: "Tuần", color: "blue" },
+  "1M": { label: "01 Tháng", color: "cyan" },
+  "3M": { label: "03 Tháng", color: "geekblue" },
+  "6M": { label: "06 Tháng", color: "purple" },
+  "9M": { label: "09 Tháng", color: "magenta" },
+  "1Y": { label: "01 Năm", color: "magenta" },
+  "2Y": { label: "02 Năm", color: "volcano" },
+};
+
 const normalizeLevel = (lvl: string): string => {
   if (!lvl) return "Tuần";
   const lower = lvl.trim().toLowerCase();
-  if (lower.includes("tuần") || lower === "1w" || lower === "w") return "Tuần";
-  if (lower.includes("1 tháng") || lower.includes("01 tháng") || lower === "1m")
-    return "1M";
-  if (lower.includes("3 tháng") || lower.includes("03 tháng") || lower === "3m")
-    return "3M";
-  if (lower.includes("6 tháng") || lower.includes("06 tháng") || lower === "6m")
-    return "6M";
-  if (lower.includes("9 tháng") || lower.includes("09 tháng") || lower === "9m")
-    return "9M";
-  if (lower.includes("1 năm") || lower.includes("01 năm") || lower === "1y")
-    return "1Y";
-  if (lower.includes("2 năm") || lower.includes("02 năm") || lower === "2y")
+  if (
+    lower.includes("tuần") ||
+    lower.includes("tuan") ||
+    lower === "1w" ||
+    lower === "w" ||
+    lower.includes("week")
+  )
+    return "Tuần";
+  if (
+    lower.includes("2 năm") ||
+    lower.includes("02 năm") ||
+    lower.includes("2 nam") ||
+    lower.includes("02 nam") ||
+    lower.includes("24 tháng") ||
+    lower.includes("24 thang") ||
+    lower === "2y" ||
+    lower === "24_month"
+  )
     return "2Y";
+  if (
+    lower.includes("1 năm") ||
+    lower.includes("01 năm") ||
+    lower.includes("1 nam") ||
+    lower.includes("01 nam") ||
+    lower.includes("12 tháng") ||
+    lower.includes("12 thang") ||
+    lower === "1y" ||
+    lower === "12_month"
+  )
+    return "1Y";
+  if (
+    lower.includes("9 tháng") ||
+    lower.includes("09 tháng") ||
+    lower.includes("9 thang") ||
+    lower.includes("09 thang") ||
+    lower === "9m" ||
+    lower === "9_month"
+  )
+    return "9M";
+  if (
+    lower.includes("6 tháng") ||
+    lower.includes("06 tháng") ||
+    lower.includes("6 thang") ||
+    lower.includes("06 thang") ||
+    lower === "6m" ||
+    lower === "6_month"
+  )
+    return "6M";
+  if (
+    lower.includes("3 tháng") ||
+    lower.includes("03 tháng") ||
+    lower.includes("3 thang") ||
+    lower.includes("03 thang") ||
+    lower === "3m" ||
+    lower === "3_month"
+  )
+    return "3M";
+  if (
+    lower.includes("1 tháng") ||
+    lower.includes("01 tháng") ||
+    lower.includes("1 thang") ||
+    lower.includes("01 thang") ||
+    lower === "1m" ||
+    lower === "1_month" ||
+    lower === "tháng" ||
+    lower === "thang"
+  )
+    return "1M";
   return lvl.trim();
 };
 
 const parseExcelDate = (val: any): dayjs.Dayjs | null => {
-  if (!val) return null;
-  if (val instanceof Date) return dayjs(val);
+  if (val === null || val === undefined || val === "") return null;
 
-  if (typeof val === "number") {
-    // Excel numeric date
-    const d = new Date((val - (25567 + 2)) * 86400 * 1000);
-    return dayjs(d);
+  // 1. Nếu là Date object (SheetJS hoặc JS Date)
+  if (val instanceof Date) {
+    if (isNaN(val.getTime())) return null;
+    const compensated = new Date(val.getTime() + 10 * 60 * 1000);
+    return dayjs(
+      new Date(
+        compensated.getFullYear(),
+        compensated.getMonth(),
+        compensated.getDate(),
+        12,
+        0,
+        0
+      )
+    );
   }
 
+  // 2. Nếu là số serial từ Excel (e.g. 46029)
+  if (typeof val === "number") {
+    try {
+      const parsed = XLSX.SSF.parse_date_code(val);
+      if (parsed && parsed.y && parsed.m && parsed.d) {
+        return dayjs(new Date(parsed.y, parsed.m - 1, parsed.d, 12, 0, 0));
+      }
+    } catch {
+      const jsDate = new Date(Math.round((val - 25569) * 86400 * 1000));
+      const compensated = new Date(jsDate.getTime() + 10 * 60 * 1000);
+      return dayjs(
+        new Date(
+          compensated.getFullYear(),
+          compensated.getMonth(),
+          compensated.getDate(),
+          12,
+          0,
+          0
+        )
+      );
+    }
+  }
+
+  // 3. Nếu là chuỗi ký tự (String)
   const s = String(val).trim();
+  if (!s) return null;
+
+  // Nếu là chuỗi số Excel serial (e.g. "46029")
+  if (!isNaN(Number(s)) && Number(s) > 30000 && Number(s) < 100000) {
+    try {
+      const parsed = XLSX.SSF.parse_date_code(Number(s));
+      if (parsed && parsed.y && parsed.m && parsed.d) {
+        return dayjs(new Date(parsed.y, parsed.m - 1, parsed.d, 12, 0, 0));
+      }
+    } catch {}
+  }
+
+  // Ưu tiên 1: Chuẩn ngày Việt Nam: DD/MM/YYYY, D/M/YYYY, D/M/YY, DD/MM/YY (ngăn cách bằng / hoặc - hoặc .)
+  // Ví dụ: 7/1/26, 07/01/2026, 14/1/26, 7-1-26, 07.01.2026
+  const vnMatch = s.match(/^(\d{1,2})[/\-. ](\d{1,2})[/\-. ](\d{2,4})$/);
+  if (vnMatch) {
+    const day = parseInt(vnMatch[1], 10);
+    const month = parseInt(vnMatch[2], 10);
+    let year = parseInt(vnMatch[3], 10);
+    if (year < 100) year += 2000;
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return dayjs(new Date(year, month - 1, day, 12, 0, 0));
+    }
+  }
+
+  // Ưu tiên 2: Chuẩn ISO YYYY-MM-DD hoặc YYYY/MM/DD
+  const isoMatch = s.match(/^(\d{4})[/\-. ](\d{1,2})[/\-. ](\d{1,2})$/);
+  if (isoMatch) {
+    const year = parseInt(isoMatch[1], 10);
+    const month = parseInt(isoMatch[2], 10);
+    const day = parseInt(isoMatch[3], 10);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return dayjs(new Date(year, month - 1, day, 12, 0, 0));
+    }
+  }
+
+  // Fallback qua Dayjs nếu có định dạng đặc thù khác
   const formats = [
     "DD/MM/YYYY",
     "D/M/YYYY",
     "YYYY-MM-DD",
     "DD-MM-YYYY",
-    "MM/DD/YYYY",
+    "D/M/YY",
+    "DD/MM/YY",
   ];
   for (const f of formats) {
     const parsed = dayjs(s, f, true);
-    if (parsed.isValid()) return parsed;
+    if (parsed.isValid()) {
+      return parsed.hour(12).minute(0).second(0).millisecond(0);
+    }
   }
+
   const relaxed = dayjs(s);
-  return relaxed.isValid() ? relaxed : null;
+  if (relaxed.isValid()) {
+    return relaxed.hour(12).minute(0).second(0).millisecond(0);
+  }
+
+  return null;
 };
+
 
 const BatchMaintenanceModal: React.FC<Props> = ({
   open,
@@ -192,10 +336,11 @@ const BatchMaintenanceModal: React.FC<Props> = ({
     reader.onload = (e) => {
       try {
         const buffer = e.target?.result;
-        const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+        const workbook = XLSX.read(buffer, { type: "array", cellDates: false });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         const rawJson: any[] = XLSX.utils.sheet_to_json(worksheet, {
+          raw: true,
           defval: "",
         });
 
@@ -205,50 +350,129 @@ const BatchMaintenanceModal: React.FC<Props> = ({
         }
 
         const rows: ParsedRow[] = rawJson.map((item, idx) => {
-          // Lấy biển số
-          const rawReg = String(
-            item["Biển Số Xe (*)"] ||
-              item["Biển Số Xe"] ||
-              item["Biển số"] ||
-              item["Số đăng ký"] ||
-              item["reg_number"] ||
-              ""
-          ).trim();
+          // Lấy biển số xe một cách linh hoạt
+          let rawReg = "";
+          for (const key of Object.keys(item)) {
+            const kl = key.toLowerCase().trim();
+            if (
+              kl.includes("biển số") ||
+              kl.includes("bien so") ||
+              kl.includes("số đăng ký") ||
+              kl.includes("so dang ky") ||
+              kl.includes("reg_number")
+            ) {
+              rawReg = String(item[key] || "").trim();
+              break;
+            }
+          }
+          if (!rawReg) {
+            rawReg = String(
+              item["Biển Số Xe (*)"] ||
+                item["Biển Số Xe"] ||
+                item["Biển số"] ||
+                item["Số đăng ký"] ||
+                item["reg_number"] ||
+                ""
+            ).trim();
+          }
 
-          // Lấy tên xe
-          const rawName = String(
-            item["Tên Thiết Bị / Xe"] ||
-              item["Tên Thiết Bị"] ||
-              item["Tên xe"] ||
-              item["name"] ||
-              ""
-          ).trim();
+          // Lấy tên xe một cách linh hoạt
+          let rawName = "";
+          for (const key of Object.keys(item)) {
+            const kl = key.toLowerCase().trim();
+            if (
+              kl.includes("tên thiết bị") ||
+              kl.includes("ten thiet bi") ||
+              kl.includes("tên xe") ||
+              kl.includes("ten xe") ||
+              kl === "name"
+            ) {
+              rawName = String(item[key] || "").trim();
+              break;
+            }
+          }
+          if (!rawName) {
+            rawName = String(
+              item["Tên Thiết Bị / Xe"] ||
+                item["Tên Thiết Bị"] ||
+                item["Tên xe"] ||
+                item["name"] ||
+                ""
+            ).trim();
+          }
 
-          // Lấy cấp
-          const rawLvl = String(
-            item["Cấp Bảo Dưỡng"] ||
-              item["Cấp BD"] ||
-              item["level"] ||
-              item["Cấp độ"] ||
-              ""
-          ).trim();
+          // Lấy cấp bảo dưỡng một cách linh hoạt
+          let rawLvl = "";
+          for (const key of Object.keys(item)) {
+            const kl = key.toLowerCase().trim();
+            if (
+              kl.includes("cấp bảo dưỡng") ||
+              kl.includes("cap bao duong") ||
+              kl.includes("cấp bd") ||
+              kl.includes("cap bd") ||
+              kl === "level"
+            ) {
+              rawLvl = String(item[key] || "").trim();
+              break;
+            }
+          }
+          if (!rawLvl) {
+            rawLvl = String(
+              item["Cấp Bảo Dưỡng"] ||
+                item["Cấp BD"] ||
+                item["level"] ||
+                item["Cấp độ"] ||
+                ""
+            ).trim();
+          }
 
-          // Lấy ngày
-          const rawDate =
-            item["Ngày Thực Hiện (DD/MM/YYYY) (*)"] ||
-            item["Ngày Thực Hiện"] ||
-            item["Ngày thực hiện"] ||
-            item["execution_date"] ||
-            "";
+          // Lấy ngày thực hiện một cách linh hoạt
+          let rawDate: any = "";
+          for (const key of Object.keys(item)) {
+            const kl = key.toLowerCase().trim();
+            if (
+              kl.includes("ngày thực hiện") ||
+              kl.includes("ngay thuc hien") ||
+              kl.includes("execution_date") ||
+              kl.includes("ngày làm") ||
+              kl.includes("ngay lam")
+            ) {
+              rawDate = item[key];
+              break;
+            }
+          }
+          if (!rawDate) {
+            rawDate =
+              item["Ngày Thực Hiện (DD/MM/YYYY) (*)"] ||
+              item["Ngày Thực Hiện"] ||
+              item["Ngày thực hiện"] ||
+              item["execution_date"] ||
+              "";
+          }
 
-          // Lấy ghi chú
-          const notes = String(
-            item["Ghi Chú Phát Sinh"] ||
-              item["Ghi Chú"] ||
-              item["Ghi chu"] ||
-              item["arising_issues"] ||
-              ""
-          ).trim();
+          // Lấy ghi chú phát sinh một cách linh hoạt
+          let notes = "";
+          for (const key of Object.keys(item)) {
+            const kl = key.toLowerCase().trim();
+            if (
+              kl.includes("ghi chú") ||
+              kl.includes("ghi chu") ||
+              kl.includes("phát sinh") ||
+              kl.includes("arising_issues")
+            ) {
+              notes = String(item[key] || "").trim();
+              break;
+            }
+          }
+          if (!notes) {
+            notes = String(
+              item["Ghi Chú Phát Sinh"] ||
+                item["Ghi Chú"] ||
+                item["Ghi chu"] ||
+                item["arising_issues"] ||
+                ""
+            ).trim();
+          }
 
           // Đối soát với danh mục thiết bị
           const normReg = normalizeStr(rawReg);
@@ -281,6 +505,10 @@ const BatchMaintenanceModal: React.FC<Props> = ({
           }
 
           const finalLevel = normalizeLevel(rawLvl);
+          if (!LEVEL_DISPLAY_MAP[finalLevel]) {
+            isValid = false;
+            errorReason = `Cấp bảo dưỡng không nhận diện được ("${rawLvl}")`;
+          }
 
           return {
             key: `row_${idx}`,
@@ -327,7 +555,7 @@ const BatchMaintenanceModal: React.FC<Props> = ({
       device_id: r.matchedDevice.device_id,
       maintenance_level: r.finalLevel,
       execution_date: r.finalDate
-        ? r.finalDate.toISOString()
+        ? r.finalDate.hour(12).minute(0).second(0).millisecond(0).toISOString()
         : new Date().toISOString(),
       arising_issues: r.notes || undefined,
     }));
@@ -397,9 +625,16 @@ const BatchMaintenanceModal: React.FC<Props> = ({
     {
       title: "Cấp BD",
       dataIndex: "finalLevel",
-      width: 100,
+      width: 110,
       align: "center" as const,
-      render: (lvl: string) => <Tag color="purple">{lvl}</Tag>,
+      render: (lvl: string) => {
+        const conf = LEVEL_DISPLAY_MAP[lvl] || { label: lvl, color: "default" };
+        return (
+          <Tag color={conf.color} style={{ fontWeight: 600 }}>
+            {conf.label}
+          </Tag>
+        );
+      },
     },
     {
       title: "Ngày thực hiện",
@@ -453,9 +688,9 @@ const BatchMaintenanceModal: React.FC<Props> = ({
             size="small"
             style={{
               marginBottom: 16,
-              background: "#fafafa",
-              borderRadius: 8,
-              border: "1px solid #d9d9d9",
+              background: "#f0fdf4",
+              borderRadius: 10,
+              border: "1px solid #bbf7d0",
             }}
           >
             <div
@@ -471,16 +706,16 @@ const BatchMaintenanceModal: React.FC<Props> = ({
                 <div
                   style={{
                     fontWeight: 600,
-                    color: "#1890ff",
+                    color: "#166534",
                     marginBottom: 2,
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
                   }}
                 >
-                  <FileExcelOutlined /> Mẫu file ghi nhận bảo dưỡng hàng loạt
+                  <FileExcelOutlined style={{ color: "#52c41a" }} /> Mẫu file ghi nhận bảo dưỡng hàng loạt
                 </div>
-                <div style={{ fontSize: 13, color: "#595959" }}>
+                <div style={{ fontSize: 13, color: "#4b5563" }}>
                   Tải file mẫu, nhập Biển số xe, Cấp bảo dưỡng và Ngày thực
                   hiện để hệ thống tự động hoàn thành phiếu và chuyển chu kỳ.
                 </div>
@@ -490,6 +725,13 @@ const BatchMaintenanceModal: React.FC<Props> = ({
                 ghost
                 icon={<DownloadOutlined />}
                 onClick={handleDownloadTemplate}
+                style={{
+                  borderRadius: 8,
+                  borderColor: "#52c41a",
+                  color: "#237804",
+                  background: "#fff",
+                  fontWeight: 600,
+                }}
               >
                 Tải File Mẫu Excel (.xlsx)
               </Button>
@@ -510,16 +752,21 @@ const BatchMaintenanceModal: React.FC<Props> = ({
               setParsedRows([]);
             }}
             accept=".xlsx, .xls"
-            style={{ padding: 24, borderRadius: 8 }}
+            style={{
+              padding: "28px 16px",
+              background: "#fafcfc",
+              borderRadius: 12,
+              border: "2px dashed #93c5fd",
+            }}
           >
             <p className="ant-upload-drag-icon">
-              <InboxOutlined style={{ color: "#1890ff" }} />
+              <InboxOutlined style={{ color: "#1677ff", fontSize: 44 }} />
             </p>
-            <p className="ant-upload-text" style={{ fontSize: 15, fontWeight: 600 }}>
+            <p className="ant-upload-text" style={{ fontSize: 15, fontWeight: 600, color: "#0f172a" }}>
               Kéo thả file Excel hoặc bấm vào đây để chọn file
             </p>
-            <p className="ant-upload-hint" style={{ color: "#8c8c8c" }}>
-              Hỗ trợ định dạng .xlsx, .xls (Tự động đối soát và xem trước dữ liệu)
+            <p className="ant-upload-hint" style={{ color: "#64748b" }}>
+              Hỗ trợ định dạng .xlsx, .xls (Hệ thống tự động đối soát biển số và xem trước dữ liệu)
             </p>
           </Dragger>
         </div>
@@ -611,11 +858,13 @@ const BatchMaintenanceModal: React.FC<Props> = ({
               loading={submitting}
               disabled={validCount === 0}
               style={{
-                background: "#1890ff",
-                borderColor: "#1890ff",
+                borderRadius: 8,
+                background: "linear-gradient(135deg, #1677ff 0%, #0958d9 100%)",
+                border: "none",
                 fontWeight: 600,
                 paddingLeft: 24,
                 paddingRight: 24,
+                boxShadow: "0 4px 14px rgba(22, 119, 255, 0.25)",
               }}
             >
               Xác nhận hoàn thành ({validCount} lượt bảo dưỡng{uniqueDevicesCount > 0 ? ` - ${uniqueDevicesCount} xe` : ""})
@@ -641,6 +890,12 @@ const BatchMaintenanceModal: React.FC<Props> = ({
             <Button
               type="primary"
               key="close"
+              style={{
+                borderRadius: 8,
+                background: "linear-gradient(135deg, #1677ff 0%, #0958d9 100%)",
+                border: "none",
+                fontWeight: 600,
+              }}
               onClick={() => {
                 onClose();
                 setCurrentStep(0);
@@ -660,11 +915,31 @@ const BatchMaintenanceModal: React.FC<Props> = ({
   return (
     <Modal
       title={
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <FileExcelOutlined style={{ color: "#1890ff", fontSize: 18 }} />
-          <span style={{ fontWeight: 700, fontSize: 17, color: "#002766" }}>
-            Làm Bảo Dưỡng Hàng Loạt Bằng Excel
-          </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 10,
+              background: "linear-gradient(135deg, #52c41a 0%, #389e0d 100%)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#fff",
+              fontSize: 20,
+              boxShadow: "0 4px 12px rgba(82, 196, 26, 0.3)",
+            }}
+          >
+            <FileExcelOutlined />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 17, color: "#0f172a" }}>
+              Ghi Nhận Bảo Dưỡng Hàng Loạt Bằng Excel
+            </div>
+            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 400 }}>
+              Tự động đối soát biển số, hoàn thành phiếu bảo dưỡng và chuyển chu kỳ tiếp theo
+            </div>
+          </div>
         </div>
       }
       open={open}
@@ -678,7 +953,7 @@ const BatchMaintenanceModal: React.FC<Props> = ({
         }
       }}
       footer={null}
-      width={850}
+      width={900}
       destroyOnClose
       centered
       maskClosable={false}

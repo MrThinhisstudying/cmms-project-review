@@ -27,6 +27,7 @@ import { useRepairsContext } from "../../context/RepairsContext/RepairsContext";
 import { useMaintenanceContext } from "../../context/MaintenanceContext/MaintenanceContext";
 import dayjs from "dayjs";
 import { DeviceStatus } from "../../types/devicesManagement.types";
+import { isMaintenanceOverdue, getMaintenanceStatusInfo } from "../../utils/maintenanceDue";
 import RepairDetailDrawer from "../RepairsManagement/components/RepairDetailDrawer";
 import { useRefreshOnFocus } from "../../hooks/useRefreshOnFocus";
 import { useSocket } from "../../hooks/useSocket";
@@ -100,11 +101,7 @@ const TechnicalDashboard = () => {
     const readinessRate = totalDevices > 0 ? Math.round((activeDevices / totalDevices) * 100) : 0;
 
     // 3. Danger
-    const now = dayjs();
-    const overdueCount = maintenances.filter((m) => {
-      if (!m.next_maintenance_date) return false;
-      return dayjs(m.next_maintenance_date).isBefore(now, 'day');
-    }).length;
+    const overdueCount = maintenances.filter((m) => isMaintenanceOverdue(m)).length;
 
     // 4. Inventory
     const lowStockCount = items.filter((item) => item.quantity < 10).length;
@@ -161,16 +158,14 @@ const TechnicalDashboard = () => {
 
   // --- Schedule Data (Today + Overdue) ---
   const scheduleData = useMemo(() => {
-    const today = dayjs().format('YYYY-MM-DD');
     const now = dayjs();
     
     // Sort: Overdue first, then today
     return maintenances
       .filter(m => {
           if (!m.next_maintenance_date) return false;
-          const date = dayjs(m.next_maintenance_date);
-          // Show if Overdue OR Today
-          return date.isBefore(now, 'day') || date.isSame(today, 'day');
+          const info = getMaintenanceStatusInfo(m, now);
+          return info.isOverdue || info.type === 'in_cycle' || info.type === 'in_cycle_last_day';
       })
       .sort((a, b) => dayjs(a.next_maintenance_date).valueOf() - dayjs(b.next_maintenance_date).valueOf())
       .slice(0, 5); // Show top 5
@@ -507,14 +502,16 @@ const TechnicalDashboard = () => {
                    </div>
                 ) : (
                   <Timeline 
-                    items={scheduleData.map(m => ({
-                        color: dayjs(m.next_maintenance_date).isBefore(dayjs(), 'day') ? 'red' : 'green',
+                    items={scheduleData.map(m => {
+                      const info = getMaintenanceStatusInfo(m);
+                      return {
+                        color: info.isOverdue ? 'red' : 'green',
                         children: (
                           <>
                              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                                 <Text strong>{m.device?.name}</Text>
-                                {dayjs(m.next_maintenance_date).isBefore(dayjs(), 'day') && 
-                                    <Tag color="error" style={{ marginRight: 0, transform: 'scale(0.8)' }}>Quá hạn</Tag>}
+                                {info.isOverdue && 
+                                    <Tag color="error" style={{ marginRight: 0, transform: 'scale(0.8)' }}>{info.label}</Tag>}
                              </div>
                              <br/>
                              <Text type="secondary" style={{ fontSize: 12 }}>
@@ -525,7 +522,8 @@ const TechnicalDashboard = () => {
                              </div>
                           </>
                         )
-                    }))}
+                      };
+                    })}
                   />
                 )}
                  <div style={{ marginTop: 12, textAlign: 'center' }}>

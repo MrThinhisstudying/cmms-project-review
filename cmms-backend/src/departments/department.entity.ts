@@ -66,6 +66,10 @@ export class Department {
     @Column({ default: false })
     is_technical: boolean;
 
+    @ApiProperty({ description: 'Kế thừa quyền từ đơn vị cấp trên (Đội)', default: true })
+    @Column({ default: true })
+    inherit_parent_permissions: boolean;
+
     @ApiProperty({ enum: ['PERSONAL', 'GROUP', 'DEPARTMENT', 'ALL'], default: 'DEPARTMENT' })
     @Column({
         type: 'enum',

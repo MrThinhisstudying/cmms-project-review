@@ -97,6 +97,9 @@ export interface IDepartment {
   updated_at?: string;
   parent_id?: number;
   parent?: IDepartment;
+  inherit_parent_permissions?: boolean;
+  effective_permissions?: string[];
+  parent_permissions?: string[];
   children?: any[];
 }
 

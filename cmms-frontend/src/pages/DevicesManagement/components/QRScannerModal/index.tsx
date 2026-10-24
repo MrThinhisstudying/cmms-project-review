@@ -114,12 +114,36 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ open, onClose, onScanne
       onCancel={() => {
         stopScanning().then(onClose);
       }}
-      width={480}
+      width={500}
+      centered
+      maskClosable={false}
       title={
-        <Space>
-          <CameraOutlined style={{ color: '#1890ff', fontSize: 20 }} />
-          <span>Quét Mã QR Thiết Bị (Camera)</span>
-        </Space>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 10,
+              background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontSize: 18,
+              boxShadow: '0 2px 8px rgba(22, 119, 255, 0.3)',
+            }}
+          >
+            <CameraOutlined />
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16, color: '#0f172a' }}>
+              Quét Mã QR Thiết Bị (Camera)
+            </div>
+            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 400 }}>
+              Hướng camera về phía mã QR dán trên xe để nhận diện tự động
+            </div>
+          </div>
+        </div>
       }
       footer={[
         <Button
@@ -127,11 +151,13 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({ open, onClose, onScanne
           icon={<ReloadOutlined />}
           onClick={startScanning}
           disabled={scanning}
+          style={{ borderRadius: 8 }}
         >
           Khởi động lại Camera
         </Button>,
         <Button
           key="close"
+          style={{ borderRadius: 8 }}
           onClick={() => {
             stopScanning().then(onClose);
           }}

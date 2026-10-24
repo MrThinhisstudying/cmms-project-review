@@ -42,7 +42,8 @@ const parseDate = (value: any): string | null => {
 
     // 1. Nếu là đối tượng Date (khi XLSX parse với cellDates: true)
     if (value instanceof Date && !isNaN(value.getTime())) {
-        return dayjs(value).format('YYYY-MM-DD');
+        const compensated = new Date(value.getTime() + 10 * 60 * 1000);
+        return dayjs(compensated).format('YYYY-MM-DD');
     }
 
     // 2. Nếu là số hoặc chuỗi số nguyên thuần (Excel serial date: 46023 = 01/01/2026)

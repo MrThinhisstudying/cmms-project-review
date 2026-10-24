@@ -57,8 +57,10 @@ import { IMaintenance } from '../../types/maintenance.types';
 import { IRepair } from '../../types/repairs.types';
 import { IUser } from '../../types/user.types';
 import { getToken } from '../../utils/auth';
+import { renderMaintenanceStatusTag, isMaintenanceOverdue, getMaintenanceStatusInfo } from '../../utils/maintenanceDue';
 import { useAuthContext } from '../../context/AuthContext/AuthContext';
 import TicketDetailModal from '../MaintenanceHistory/components/TicketDetailModal';
+import EditMaintenanceDateModal from '../../components/EditMaintenanceDateModal';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -111,6 +113,10 @@ const DevicePassportPage: React.FC = () => {
   const [performRecord, setPerformRecord] = useState<any>(null);
   const [performDate, setPerformDate] = useState<dayjs.Dayjs | null>(dayjs());
   const [performing, setPerforming] = useState(false);
+
+  // Edit Maintenance Date state
+  const [isEditDateOpen, setIsEditDateOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<any>(null);
 
   const [loading, setLoading] = useState(true);
   const [reportModalOpen, setReportModalOpen] = useState(false);
@@ -277,9 +283,10 @@ const DevicePassportPage: React.FC = () => {
     try {
       const payload = {
         device_id: device.device_id,
+        maintenance_id: performRecord?.maintenance_id,
         template_id: null,
         maintenance_level: performRecord.level,
-        execution_date: performDate.toISOString(),
+        execution_date: performDate.hour(12).minute(0).second(0).toISOString(),
         checklist_result: [],
         working_hours: 0,
         execution_team: [],
@@ -713,6 +720,7 @@ const DevicePassportPage: React.FC = () => {
   // --- TAB 3: LỊCH SỬ & KẾ HOẠCH BẢO DƯỠNG ---
   const renderMaintenanceTab = () => {
     const today = dayjs().startOf('day');
+    const canEditDate = user?.role === 'ADMIN' || user?.permissions?.includes('UPDATE_MAINTENANCE_DATE');
 
     const completedList = maintenances.filter(
       (m) => m.status === 'inactive' && !!m.last_maintenance_date
@@ -721,10 +729,7 @@ const DevicePassportPage: React.FC = () => {
       (m) => !(m.status === 'inactive' && !!m.last_maintenance_date)
     );
     const overdueList = planList.filter(
-      (m) =>
-        m.status === 'active' &&
-        m.next_maintenance_date &&
-        dayjs(m.next_maintenance_date).startOf('day').diff(today, 'day') < 0
+      (m) => m.status === 'active' && isMaintenanceOverdue(m)
     );
 
     const getLevelTag = (level: string) => {
@@ -818,6 +823,28 @@ const DevicePassportPage: React.FC = () => {
         width: 130,
         render: () => <Tag color="success" icon={<CheckCircleOutlined />}>Hoàn thành</Tag>,
       },
+      ...(canEditDate
+        ? [
+            {
+              title: 'Thao tác',
+              key: 'action',
+              width: 110,
+              align: 'right' as const,
+              render: (_: any, r: IMaintenance) => (
+                <Button
+                  size="small"
+                  icon={<CalendarOutlined />}
+                  onClick={() => {
+                    setEditingRecord({ ...r, device_name: device?.name });
+                    setIsEditDateOpen(true);
+                  }}
+                >
+                  Sửa ngày
+                </Button>
+              ),
+            },
+          ]
+        : []),
     ];
 
     // Bảng 2: Kế hoạch bảo dưỡng (Dự kiến & Cần làm)
@@ -848,53 +875,41 @@ const DevicePassportPage: React.FC = () => {
       {
         title: 'Tình trạng đến hạn',
         key: 'status',
-        render: (_: any, r: IMaintenance) => {
-          if (r.status === 'active') {
-            const nextDate = dayjs(r.next_maintenance_date).startOf('day');
-            const diff = nextDate.diff(today, 'day');
-            if (diff < 0) {
-              return (
-                <Tag color="red" icon={<ClockCircleOutlined />}>
-                  Đã quá hạn {Math.abs(diff)} ngày
-                </Tag>
-              );
-            }
-            if (diff <= 5) {
-              return (
-                <Tag color="orange" icon={<ClockCircleOutlined />}>
-                  Sắp đến hạn ({diff} ngày)
-                </Tag>
-              );
-            }
-            return (
-              <Tag color="processing" icon={<ClockCircleOutlined />}>
-                Đang tiến hành
-              </Tag>
-            );
-          }
-          return <Tag color="default">Chưa tới ngày</Tag>;
-        },
+        render: (_: any, r: IMaintenance) => renderMaintenanceStatusTag(r),
       },
       {
         title: 'Thao tác',
         key: 'action',
-        width: 130,
+        width: canEditDate ? 200 : 130,
         align: 'right' as const,
-        render: (_: any, r: IMaintenance) => {
-          if (r.status !== 'active') {
-            return <Button size="small" disabled>Chưa tới ngày</Button>;
-          }
-          return (
-            <Button
-              type="primary"
-              size="small"
-              icon={<ToolOutlined />}
-              onClick={() => handleOpenPerform(r)}
-            >
-              Thực hiện
-            </Button>
-          );
-        },
+        render: (_: any, r: IMaintenance) => (
+          <Space size={6}>
+            {canEditDate && (
+              <Button
+                size="small"
+                icon={<CalendarOutlined />}
+                onClick={() => {
+                  setEditingRecord({ ...r, device_name: device?.name });
+                  setIsEditDateOpen(true);
+                }}
+              >
+                Sửa ngày
+              </Button>
+            )}
+            {r.status !== 'active' ? (
+              <Button size="small" disabled>Chưa tới ngày</Button>
+            ) : (
+              <Button
+                type="primary"
+                size="small"
+                icon={<ToolOutlined />}
+                onClick={() => handleOpenPerform(r)}
+              >
+                Thực hiện
+              </Button>
+            )}
+          </Space>
+        ),
       },
     ];
 
@@ -936,43 +951,43 @@ const DevicePassportPage: React.FC = () => {
       {
         title: 'Trạng thái',
         key: 'status',
-        render: (_: any, r: IMaintenance) => {
-          if (r.status === 'inactive' && r.last_maintenance_date) {
-            return <Tag color="green"><CheckCircleOutlined /> Hoàn thành</Tag>;
-          }
-          if (r.status === 'active') {
-            const nextDate = dayjs(r.next_maintenance_date).startOf('day');
-            const diff = nextDate.diff(today, 'day');
-            if (diff < 0) return <Tag color="red" icon={<ClockCircleOutlined />}>Đã quá hạn {Math.abs(diff)} ngày</Tag>;
-            if (diff <= 5) return <Tag color="orange" icon={<ClockCircleOutlined />}>Sắp đến hạn ({diff} ngày)</Tag>;
-            return <Tag color="processing" icon={<ClockCircleOutlined />}>Đang tiến hành</Tag>;
-          }
-          return <Tag color="default">Chưa tới ngày</Tag>;
-        },
+        render: (_: any, r: IMaintenance) => renderMaintenanceStatusTag(r),
       },
       {
         title: 'Thao tác',
         key: 'action',
-        width: 110,
+        width: canEditDate ? 190 : 110,
         align: 'right' as const,
-        render: (_: any, r: IMaintenance) => {
-          if (r.status === 'inactive' && r.last_maintenance_date) {
-            return <Tag color="green"><CheckCircleOutlined /> Đã xong</Tag>;
-          }
-          if (r.status !== 'active') {
-            return <Button size="small" disabled>Thực hiện</Button>;
-          }
-          return (
-            <Button
-              type="primary"
-              size="small"
-              icon={<ToolOutlined />}
-              onClick={() => handleOpenPerform(r)}
-            >
-              Thực hiện
-            </Button>
-          );
-        },
+        render: (_: any, r: IMaintenance) => (
+          <Space size={6}>
+            {canEditDate && (
+              <Button
+                size="small"
+                icon={<CalendarOutlined />}
+                onClick={() => {
+                  setEditingRecord({ ...r, device_name: device?.name });
+                  setIsEditDateOpen(true);
+                }}
+              >
+                Sửa ngày
+              </Button>
+            )}
+            {r.status === 'inactive' && r.last_maintenance_date ? (
+              <Tag color="green"><CheckCircleOutlined /> Đã xong</Tag>
+            ) : r.status !== 'active' ? (
+              <Button size="small" disabled>Thực hiện</Button>
+            ) : (
+              <Button
+                type="primary"
+                size="small"
+                icon={<ToolOutlined />}
+                onClick={() => handleOpenPerform(r)}
+              >
+                Thực hiện
+              </Button>
+            )}
+          </Space>
+        ),
       },
     ];
 
@@ -1357,17 +1372,12 @@ const DevicePassportPage: React.FC = () => {
               <div>
                 {paginatedMaintList.map((r, index) => {
                   const itemIndex = (maintPage - 1) * maintPageSize + index + 1;
-                  const isCompleted = r.status === 'inactive' && !!r.last_maintenance_date;
-                  const nextDate = r.next_maintenance_date ? dayjs(r.next_maintenance_date).startOf('day') : null;
-                  const diff = nextDate ? nextDate.diff(today, 'day') : 0;
-                  const isOverdue = r.status === 'active' && nextDate && diff < 0;
-                  const isNearDue = r.status === 'active' && nextDate && diff >= 0 && diff <= 5;
-
+                  const statusInfo = getMaintenanceStatusInfo(r, today);
                   let borderColor = '#d9d9d9';
-                  if (isCompleted) borderColor = '#52c41a';
-                  else if (isOverdue) borderColor = '#ff4d4f';
-                  else if (isNearDue) borderColor = '#faad14';
-                  else if (r.status === 'active') borderColor = '#1890ff';
+                  if (statusInfo.isCompleted) borderColor = '#52c41a';
+                  else if (statusInfo.isOverdue) borderColor = '#ff4d4f';
+                  else if (statusInfo.type === 'near_due') borderColor = '#faad14';
+                  else if (statusInfo.isActive) borderColor = '#1890ff';
 
                   const t = r.tickets?.[0];
                   const performerName = t?.user?.name || r.user?.name;
@@ -1393,27 +1403,7 @@ const DevicePassportPage: React.FC = () => {
                         </Space>
 
                         <div>
-                          {isCompleted ? (
-                            <Tag color="success" icon={<CheckCircleOutlined />} style={{ margin: 0 }}>
-                              Hoàn thành
-                            </Tag>
-                          ) : isOverdue ? (
-                            <Tag color="red" icon={<ClockCircleOutlined />} style={{ margin: 0 }}>
-                              Quá hạn {Math.abs(diff)} ngày
-                            </Tag>
-                          ) : isNearDue ? (
-                            <Tag color="orange" icon={<ClockCircleOutlined />} style={{ margin: 0 }}>
-                              Sắp đến hạn ({diff} ngày)
-                            </Tag>
-                          ) : r.status === 'active' ? (
-                            <Tag color="processing" icon={<ClockCircleOutlined />} style={{ margin: 0 }}>
-                              Đang tiến hành
-                            </Tag>
-                          ) : (
-                            <Tag color="default" style={{ margin: 0 }}>
-                              Chưa tới ngày
-                            </Tag>
-                          )}
+                          {renderMaintenanceStatusTag(r, today)}
                         </div>
                       </div>
 
@@ -1461,18 +1451,32 @@ const DevicePassportPage: React.FC = () => {
                         )}
                       </div>
 
-                      {r.status === 'active' && (
-                        <Button
-                          type="primary"
-                          icon={<ToolOutlined />}
-                          block
-                          size="small"
-                          onClick={() => handleOpenPerform(r)}
-                          style={{ marginTop: 10, borderRadius: 6, fontWeight: 500 }}
-                        >
-                          Thực hiện bảo dưỡng
-                        </Button>
-                      )}
+                      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                        {canEditDate && (
+                          <Button
+                            size="small"
+                            icon={<CalendarOutlined />}
+                            onClick={() => {
+                              setEditingRecord({ ...r, device_name: device?.name });
+                              setIsEditDateOpen(true);
+                            }}
+                            style={{ flex: 1, borderRadius: 6 }}
+                          >
+                            Sửa ngày
+                          </Button>
+                        )}
+                        {r.status === 'active' && (
+                          <Button
+                            type="primary"
+                            icon={<ToolOutlined />}
+                            size="small"
+                            onClick={() => handleOpenPerform(r)}
+                            style={{ flex: 1, borderRadius: 6, fontWeight: 500 }}
+                          >
+                            Thực hiện
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -1967,6 +1971,16 @@ const DevicePassportPage: React.FC = () => {
           Hệ thống sẽ tạo phiếu bảo dưỡng tự động và đánh dấu lịch này là đã hoàn thành.
         </div>
       </Modal>
+
+      <EditMaintenanceDateModal
+        open={isEditDateOpen}
+        record={editingRecord}
+        onClose={() => {
+          setIsEditDateOpen(false);
+          setEditingRecord(null);
+        }}
+        onSuccess={fetchData}
+      />
 
       {/* RESPONSIVE & PRINT CSS STYLES */}
       <style>{`

@@ -57,7 +57,9 @@ const DepartmentFormModal: React.FC<Props> = ({
 
   // Watch dynamic form fields for reactive UI
   const watchedLevel = Form.useWatch("level", form) || (defaultParentId ? "TO" : "DOI");
-  const watchedPermissions = Form.useWatch("permissions", form) || [];
+  const watchedParentId = Form.useWatch("parent_id", form) || defaultParentId;
+  const watchedInherit = Form.useWatch("inherit_parent_permissions", form);
+  const watchedPermissions: string[] = Form.useWatch("permissions", form) || [];
 
   const isInitializedRef = React.useRef(false);
 
@@ -99,6 +101,24 @@ const DepartmentFormModal: React.FC<Props> = ({
     );
   }, [departments, editingId]);
 
+  // Tìm Đội cấp trên đang được chọn
+  const parentDept = useMemo(() => {
+    if (!watchedParentId) return null;
+    return departments.find((d) => d.dept_id === Number(watchedParentId)) || null;
+  }, [departments, watchedParentId]);
+
+  const parentPermissions: string[] = useMemo(() => {
+    return parentDept?.permissions || [];
+  }, [parentDept]);
+
+  // Quyền hiệu lực thực tế (kết hợp kế thừa nếu bật)
+  const effectivePermissions = useMemo(() => {
+    if (watchedLevel === "TO" && watchedInherit && parentDept) {
+      return [...new Set([...parentPermissions, ...watchedPermissions])];
+    }
+    return watchedPermissions;
+  }, [watchedLevel, watchedInherit, parentDept, parentPermissions, watchedPermissions]);
+
   useEffect(() => {
     if (!open) {
       isInitializedRef.current = false;
@@ -115,10 +135,16 @@ const DepartmentFormModal: React.FC<Props> = ({
       const dept = departments.find((d) => d.dept_id === editingId);
       if (dept) {
         setCurrentDept(dept);
+        const isInherit =
+          dept.inherit_parent_permissions !== undefined
+            ? dept.inherit_parent_permissions
+            : dept.level === "TO" && !!dept.parent_id;
+
         form.setFieldsValue({
           name: dept.name,
           description: dept.description,
           permissions: dept.permissions || [],
+          inherit_parent_permissions: isInherit,
           manager_id: dept.manager_id || (dept.manager as any)?.user_id,
           deputy_id: dept.deputy_id || (dept.deputy as any)?.user_id,
           parent_id: dept.parent_id || (dept as any).parent?.dept_id,
@@ -131,14 +157,15 @@ const DepartmentFormModal: React.FC<Props> = ({
       setCurrentDept(null);
       form.resetFields();
       if (defaultParentId) {
-        const parentDept = departments.find((d) => d.dept_id === defaultParentId);
+        const parentDeptFound = departments.find((d) => d.dept_id === defaultParentId);
         form.setFieldsValue({
           name: "",
           parent_id: defaultParentId,
           level: "TO",
-          is_technical: parentDept?.is_technical ?? true,
+          is_technical: parentDeptFound?.is_technical ?? true,
           scope: "DEPARTMENT",
-          permissions: [
+          inherit_parent_permissions: true,
+          permissions: parentDeptFound?.permissions || [
             "CREATE_REPAIR",
             "VIEW_REPAIR",
             "UPDATE_REPAIR",
@@ -151,6 +178,7 @@ const DepartmentFormModal: React.FC<Props> = ({
           level: "DOI",
           is_technical: false,
           scope: "DEPARTMENT",
+          inherit_parent_permissions: false,
           permissions: [],
         });
       }
@@ -161,9 +189,15 @@ const DepartmentFormModal: React.FC<Props> = ({
   // Khi người dùng đổi cấp (Đội <-> Tổ)
   const handleLevelChange = (level: string) => {
     if (level === "DOI") {
-      form.setFieldsValue({ parent_id: null });
-    } else if (level === "TO" && !form.getFieldValue("parent_id") && parentOptions.length > 0) {
-      form.setFieldsValue({ parent_id: parentOptions[0].dept_id });
+      form.setFieldsValue({ parent_id: null, inherit_parent_permissions: false });
+    } else if (level === "TO") {
+      const targetParentId = form.getFieldValue("parent_id") || (parentOptions.length > 0 ? parentOptions[0].dept_id : null);
+      const targetParent = departments.find((d) => d.dept_id === targetParentId);
+      form.setFieldsValue({
+        parent_id: targetParentId,
+        inherit_parent_permissions: true,
+        permissions: targetParent?.permissions || form.getFieldValue("permissions") || [],
+      });
     }
   };
 
@@ -177,6 +211,15 @@ const DepartmentFormModal: React.FC<Props> = ({
     form.setFieldsValue({ permissions: [] });
   };
 
+  const handleCopyParentPerms = () => {
+    if (parentPermissions.length > 0) {
+      form.setFieldsValue({ permissions: parentPermissions });
+      message.success(`Đã sao chép ${parentPermissions.length} quyền từ Đội ${parentDept?.name}`);
+    } else {
+      message.info("Đội cấp trên hiện chưa được cấu hình quyền");
+    }
+  };
+
   const handleDefaultTechPerms = () => {
     const techCodes = [
       "ADD_DEVICE",
@@ -188,11 +231,13 @@ const DepartmentFormModal: React.FC<Props> = ({
       "EXPORT_REPAIR",
       "EXPORT_MAINTENANCE",
       "PERFORM_MAINTENANCE",
+      "UPDATE_MAINTENANCE_DATE",
+      "VIEW_REPORTS",
     ];
     form.setFieldsValue({ permissions: techCodes });
   };
 
-  // Lưu thông tin đơn vị (Xử lý trực tiếp, không phụ thuộc form submit native)
+  // Lưu thông tin đơn vị
   const handleSave = async () => {
     try {
       const values = await form.validateFields();
@@ -202,6 +247,7 @@ const DepartmentFormModal: React.FC<Props> = ({
         name: values.name.trim(),
         description: values.description ? values.description.trim() : null,
         permissions: values.permissions || [],
+        inherit_parent_permissions: values.level === "TO" ? (values.inherit_parent_permissions !== false) : false,
         manager_id: values.manager_id || null,
         deputy_id: values.deputy_id || null,
         parent_id: values.level === "DOI" ? null : (values.parent_id || null),
@@ -551,9 +597,9 @@ const DepartmentFormModal: React.FC<Props> = ({
                 <span style={{ fontWeight: 500 }}>
                   <SafetyCertificateOutlined /> 2. Phân quyền chức năng (
                   <Badge
-                    count={watchedPermissions.length}
+                    count={effectivePermissions.length}
                     style={{
-                      backgroundColor: watchedPermissions.length > 0 ? "#1890ff" : "#d9d9d9",
+                      backgroundColor: effectivePermissions.length > 0 ? "#1890ff" : "#d9d9d9",
                     }}
                   />
                   )
@@ -561,6 +607,96 @@ const DepartmentFormModal: React.FC<Props> = ({
               ),
               children: (
                 <div style={{ marginTop: 8 }}>
+                  {/* Banner kiểm soát Kế thừa quyền đối với cấp Tổ */}
+                  {watchedLevel === "TO" && (
+                    <div
+                      style={{
+                        padding: "12px 16px",
+                        background: watchedInherit ? "#f0fdf4" : "#fefce8",
+                        border: `1px solid ${watchedInherit ? "#bbf7d0" : "#fef08a"}`,
+                        borderRadius: 8,
+                        marginBottom: 14,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: 12,
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 8,
+                            background: watchedInherit ? "#dcfce7" : "#fef9c3",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: watchedInherit ? "#16a34a" : "#ca8a04",
+                            fontSize: 18,
+                          }}
+                        >
+                          <ApartmentOutlined />
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: "#1e293b" }}>
+                            Cơ chế phân quyền cho Tổ trực thuộc
+                          </div>
+                          <div style={{ fontSize: 12, color: "#64748b" }}>
+                            {parentDept ? (
+                              <>
+                                Đội cấp trên: <strong>{parentDept.name}</strong> ({parentPermissions.length} quyền được cấp)
+                              </>
+                            ) : (
+                              <span style={{ color: "#ef4444" }}>Chưa chọn Đội cấp trên (Vui lòng chọn ở Tab 1)</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 13, fontWeight: 500, color: watchedInherit ? "#15803d" : "#854d0e" }}>
+                          {watchedInherit ? "Kế thừa quyền từ Đội cha" : "Tùy biến riêng cho Tổ"}
+                        </span>
+                        <Form.Item name="inherit_parent_permissions" valuePropName="checked" noStyle>
+                          <Switch
+                            checked={watchedInherit}
+                            onChange={(checked) => {
+                              form.setFieldsValue({ inherit_parent_permissions: checked });
+                              if (checked && parentPermissions.length > 0) {
+                                const merged = [...new Set([...watchedPermissions, ...parentPermissions])];
+                                form.setFieldsValue({ permissions: merged });
+                              }
+                            }}
+                          />
+                        </Form.Item>
+                      </div>
+                    </div>
+                  )}
+
+                  {watchedLevel === "TO" && watchedInherit && (
+                    <div
+                      style={{
+                        marginBottom: 12,
+                        padding: "8px 12px",
+                        borderRadius: 6,
+                        background: "#eff6ff",
+                        border: "1px solid #bfdbfe",
+                        fontSize: 12,
+                        color: "#1e40af",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <InfoCircleOutlined />
+                      <span>
+                        Tổ tự động kế thừa <strong>{parentPermissions.length}</strong> quyền từ Đội <strong>{parentDept?.name || 'cấp trên'}</strong>. Bạn có thể tích chọn thêm các quyền đặc thù bên dưới nếu Tổ có nhiệm vụ mở rộng.
+                      </span>
+                    </div>
+                  )}
+
                   {/* Toolbar hành động nhanh */}
                   <div
                     style={{
@@ -569,19 +705,38 @@ const DepartmentFormModal: React.FC<Props> = ({
                       alignItems: "center",
                       marginBottom: 12,
                       padding: "8px 12px",
-                      background: "#f0f5ff",
+                      background: "#f8fafc",
                       borderRadius: 6,
-                      border: "1px solid #d6e4ff",
+                      border: "1px solid #e2e8f0",
+                      flexWrap: "wrap",
+                      gap: 8,
                     }}
                   >
                     <div>
-                      <Text strong style={{ color: "#1d39c4", fontSize: 13 }}>
-                        🔐 Danh sách quyền được cấp:
+                      <Text strong style={{ color: "#1e293b", fontSize: 13 }}>
+                        🔐 Danh sách quyền hiệu lực:
                       </Text>{" "}
-                      <Tag color="blue">{watchedPermissions.length} / {DEPARTMENT_PERMISSIONS.length} quyền</Tag>
+                      <Tag color={effectivePermissions.length > 0 ? "blue" : "default"}>
+                        {effectivePermissions.length} / {DEPARTMENT_PERMISSIONS.length} quyền
+                      </Tag>
+                      {watchedLevel === "TO" && watchedInherit && parentPermissions.length > 0 && (
+                        <Tag color="green" style={{ fontSize: 11 }}>
+                          {parentPermissions.length} từ Đội
+                        </Tag>
+                      )}
                     </div>
 
-                    <Space size={8}>
+                    <Space size={6} wrap>
+                      {watchedLevel === "TO" && parentPermissions.length > 0 && (
+                        <Button
+                          size="small"
+                          icon={<ApartmentOutlined />}
+                          onClick={handleCopyParentPerms}
+                          style={{ color: "#0284c7", borderColor: "#7dd3fc" }}
+                        >
+                          Lấy trọn bộ quyền Đội
+                        </Button>
+                      )}
                       <Button
                         size="small"
                         icon={<ThunderboltOutlined />}
@@ -621,16 +776,26 @@ const DepartmentFormModal: React.FC<Props> = ({
                         style={{ marginBottom: 12, borderRadius: 6 }}
                       >
                         <Row gutter={[12, 10]}>
-                          {devicePermissions.map((perm) => (
-                            <Col span={12} key={perm.code}>
-                              <Checkbox value={perm.code} style={{ alignItems: "flex-start" }}>
-                                <div>
-                                  <div style={{ fontWeight: 500, fontSize: 13 }}>{perm.name}</div>
-                                  <div style={{ fontSize: 11, color: "#8c8c8c" }}>{perm.description}</div>
-                                </div>
-                              </Checkbox>
-                            </Col>
-                          ))}
+                          {devicePermissions.map((perm) => {
+                            const isInherited = watchedLevel === "TO" && watchedInherit && parentPermissions.includes(perm.code);
+                            return (
+                              <Col span={12} key={perm.code}>
+                                <Checkbox value={perm.code} style={{ alignItems: "flex-start" }}>
+                                  <div>
+                                    <div style={{ fontWeight: 500, fontSize: 13, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4 }}>
+                                      <span>{perm.name}</span>
+                                      {isInherited && (
+                                        <Tag color="green" style={{ fontSize: 10, lineHeight: "18px", padding: "0 4px", margin: 0 }}>
+                                          Kế thừa từ Đội
+                                        </Tag>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: "#8c8c8c", marginTop: 2 }}>{perm.description}</div>
+                                  </div>
+                                </Checkbox>
+                              </Col>
+                            );
+                          })}
                         </Row>
                       </Card>
 
@@ -646,16 +811,26 @@ const DepartmentFormModal: React.FC<Props> = ({
                         style={{ marginBottom: 12, borderRadius: 6 }}
                       >
                         <Row gutter={[12, 10]}>
-                          {repairPermissions.map((perm) => (
-                            <Col span={12} key={perm.code}>
-                              <Checkbox value={perm.code} style={{ alignItems: "flex-start" }}>
-                                <div>
-                                  <div style={{ fontWeight: 500, fontSize: 13 }}>{perm.name}</div>
-                                  <div style={{ fontSize: 11, color: "#8c8c8c" }}>{perm.description}</div>
-                                </div>
-                              </Checkbox>
-                            </Col>
-                          ))}
+                          {repairPermissions.map((perm) => {
+                            const isInherited = watchedLevel === "TO" && watchedInherit && parentPermissions.includes(perm.code);
+                            return (
+                              <Col span={12} key={perm.code}>
+                                <Checkbox value={perm.code} style={{ alignItems: "flex-start" }}>
+                                  <div>
+                                    <div style={{ fontWeight: 500, fontSize: 13, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4 }}>
+                                      <span>{perm.name}</span>
+                                      {isInherited && (
+                                        <Tag color="green" style={{ fontSize: 10, lineHeight: "18px", padding: "0 4px", margin: 0 }}>
+                                          Kế thừa từ Đội
+                                        </Tag>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: "#8c8c8c", marginTop: 2 }}>{perm.description}</div>
+                                  </div>
+                                </Checkbox>
+                              </Col>
+                            );
+                          })}
                         </Row>
                       </Card>
 
@@ -671,16 +846,26 @@ const DepartmentFormModal: React.FC<Props> = ({
                         style={{ borderRadius: 6 }}
                       >
                         <Row gutter={[12, 10]}>
-                          {otherPermissions.map((perm) => (
-                            <Col span={12} key={perm.code}>
-                              <Checkbox value={perm.code} style={{ alignItems: "flex-start" }}>
-                                <div>
-                                  <div style={{ fontWeight: 500, fontSize: 13 }}>{perm.name}</div>
-                                  <div style={{ fontSize: 11, color: "#8c8c8c" }}>{perm.description}</div>
-                                </div>
-                              </Checkbox>
-                            </Col>
-                          ))}
+                          {otherPermissions.map((perm) => {
+                            const isInherited = watchedLevel === "TO" && watchedInherit && parentPermissions.includes(perm.code);
+                            return (
+                              <Col span={12} key={perm.code}>
+                                <Checkbox value={perm.code} style={{ alignItems: "flex-start" }}>
+                                  <div>
+                                    <div style={{ fontWeight: 500, fontSize: 13, display: "flex", alignItems: "center", flexWrap: "wrap", gap: 4 }}>
+                                      <span>{perm.name}</span>
+                                      {isInherited && (
+                                        <Tag color="green" style={{ fontSize: 10, lineHeight: "18px", padding: "0 4px", margin: 0 }}>
+                                          Kế thừa từ Đội
+                                        </Tag>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: 11, color: "#8c8c8c", marginTop: 2 }}>{perm.description}</div>
+                                  </div>
+                                </Checkbox>
+                              </Col>
+                            );
+                          })}
                         </Row>
                       </Card>
                     </Checkbox.Group>

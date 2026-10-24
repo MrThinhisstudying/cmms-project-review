@@ -66,12 +66,56 @@ const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
 
   return (
     <Modal
-      title="Thêm Kế Hoạch Bảo Dưỡng Mới"
+      title={
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 8,
+              background: "#e6f4ff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#1677ff",
+              fontSize: 18,
+            }}
+          >
+            📋
+          </div>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#0f172a" }}>
+              Tạo Chuỗi Kế Hoạch Bảo Dưỡng (2 Năm)
+            </div>
+            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 400 }}>
+              Hệ thống sẽ tự động sinh lịch bảo dưỡng định kỳ tuần tự theo chu kỳ đã chọn
+            </div>
+          </div>
+        </div>
+      }
       open={open}
       onCancel={onCancel}
       footer={null}
       destroyOnClose
+      width={600}
+      centered
+      styles={{ body: { paddingTop: 16 } }}
     >
+      <div
+        style={{
+          background: "#f0fdf4",
+          border: "1px solid #bbf7d0",
+          borderRadius: 8,
+          padding: "10px 14px",
+          marginBottom: 16,
+          fontSize: 12,
+          color: "#166534",
+          lineHeight: 1.5,
+        }}
+      >
+        💡 <b>Gợi ý:</b> Chọn các cấp bảo dưỡng thiết bị áp dụng (VD: <b>Tuần</b>, <b>01 Tháng</b>, <b>06 Tháng</b>...). Hệ thống sẽ tự động tính toán và khởi tạo 24 tháng theo quy tắc cuốn chiếu.
+      </div>
+
       <Form
         form={form}
         layout="vertical"
@@ -83,29 +127,29 @@ const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
       >
         <Form.Item
           name="device_id"
-          label="Thiết bị"
+          label={<span style={{ fontWeight: 600 }}>Thiết bị / Xe áp dụng</span>}
           rules={[{ required: true, message: "Vui lòng chọn thiết bị" }]}
         >
           <Select
-            placeholder="Chọn thiết bị..."
+            placeholder="🔍 Tìm chọn thiết bị..."
             showSearch
             optionFilterProp="children"
+            size="middle"
+            style={{ borderRadius: 8 }}
             filterOption={(input, option) => {
               const children = option?.children as unknown;
-              // Nếu children là string
-              if (typeof children === 'string') {
+              if (typeof children === "string") {
                 return children.toLowerCase().includes(input.toLowerCase());
               }
-              // Nếu children là array (VD: ["Name", " (", "Reg", ")", ...])
               if (Array.isArray(children)) {
-                   return children.join('').toLowerCase().includes(input.toLowerCase());
+                return children.join("").toLowerCase().includes(input.toLowerCase());
               }
               return false;
             }}
           >
             {devices.map((d) => (
               <Option key={d.device_id} value={d.device_id}>
-                {d.name} ({d.reg_number}) - {d.brand}
+                {d.name} {d.reg_number ? `(${d.reg_number})` : ""} {d.brand ? `- ${d.brand}` : ""}
               </Option>
             ))}
           </Select>
@@ -113,45 +157,57 @@ const CreatePlanModal: React.FC<CreatePlanModalProps> = ({
 
         <Form.Item
           name="scheduled_date"
-          label="Ngày BD gần nhất"
+          label={<span style={{ fontWeight: 600 }}>Mốc thời gian bắt đầu</span>}
           rules={[{ required: true, message: "Chọn ngày bắt đầu" }]}
         >
-          <DatePicker style={{ width: "100%" }} format="DD/MM/YYYY" />
+          <DatePicker style={{ width: "100%", borderRadius: 8 }} format="DD/MM/YYYY" size="middle" />
         </Form.Item>
 
         <Form.Item
           name="level"
-          label="Chu kỳ ban đầu (Cấp độ)"
+          label={<span style={{ fontWeight: 600 }}>Các cấp độ bảo dưỡng áp dụng</span>}
           rules={[{ required: true, message: "Chọn ít nhất 1 cấp độ bảo dưỡng" }]}
         >
-          <Select 
-            placeholder="Chọn các chu kỳ..." 
-            mode="multiple" 
+          <Select
+            placeholder="Chọn các chu kỳ bảo dưỡng..."
+            mode="multiple"
             allowClear
-            style={{ width: '100%' }}
+            size="middle"
+            style={{ width: "100%", borderRadius: 8 }}
           >
-            <Option value="Tuần">1 Tuần</Option>
-            <Option value="1M">01 Tháng</Option>
-            <Option value="3M">03 Tháng</Option>
-            <Option value="6M">06 Tháng</Option>
+            <Option value="Tuần">Tuần (Định kỳ 7 ngày)</Option>
+            <Option value="1M">01 Tháng (Cuối mỗi tháng)</Option>
+            <Option value="3M">03 Tháng (Quý)</Option>
+            <Option value="6M">06 Tháng (Nửa năm)</Option>
             <Option value="9M">09 Tháng</Option>
-            <Option value="1Y">01 Năm</Option>
+            <Option value="1Y">01 Năm (Hàng năm)</Option>
             <Option value="2Y">02 Năm</Option>
           </Select>
         </Form.Item>
 
-        <Form.Item name="description" label="Ghi chú">
-          <TextArea rows={3} placeholder="Ghi chú thêm về kế hoạch..." />
+        <Form.Item name="description" label={<span style={{ fontWeight: 600 }}>Ghi chú kế hoạch</span>}>
+          <TextArea rows={3} placeholder="Ghi chú thêm về quy định bảo dưỡng của xe này..." style={{ borderRadius: 8 }} />
         </Form.Item>
 
-        <Form.Item style={{ textAlign: "right", marginTop: 16 }}>
-          <Button onClick={onCancel} style={{ marginRight: 8 }}>
-            Hủy
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20 }}>
+          <Button onClick={onCancel} style={{ borderRadius: 8 }}>
+            Hủy bỏ
           </Button>
-          <Button type="primary" htmlType="submit" loading={loading}>
-            Lưu kế hoạch
+          <Button
+            type="primary"
+            htmlType="submit"
+            loading={loading}
+            style={{
+              borderRadius: 8,
+              fontWeight: 600,
+              background: "linear-gradient(135deg, #1677ff 0%, #0958d9 100%)",
+              paddingLeft: 20,
+              paddingRight: 20,
+            }}
+          >
+            Khởi tạo kế hoạch
           </Button>
-        </Form.Item>
+        </div>
       </Form>
     </Modal>
   );

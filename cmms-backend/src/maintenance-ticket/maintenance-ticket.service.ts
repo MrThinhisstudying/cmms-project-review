@@ -4,7 +4,7 @@ import {Repository, FindOptionsWhere} from 'typeorm';
 import dayjs from 'dayjs';
 import {MaintenanceTicket} from './entities/maintenance-ticket.entity';
 import {MaintenanceService} from 'src/maintenance/maintenance.service';
-import {MaintenanceStatus} from '../maintenance/enum/maintenance.enum';
+import {MaintenanceStatus, normalizeMaintenanceLevel, isMatchLevel} from '../maintenance/enum/maintenance.enum';
 import {TicketStatus} from './enum/ticket.enum';
 import {MaintenanceChecklistTemplate} from 'src/maintenance/entities/maintenance-checklist-template.entity';
 import * as puppeteer from 'puppeteer';
@@ -49,7 +49,23 @@ export class MaintenanceTicketService {
         // }
 
         const plans = await this.maintenanceService.findByDevice(data.device_id);
-        const activePlan = plans.find((p) => p.status === 'active' || p.status === 'warning' || p.status === 'overdue');
+        let activePlan: any = null;
+        if (data.maintenance_id) {
+            activePlan = plans.find((p) => p.maintenance_id === Number(data.maintenance_id));
+        }
+        if (!activePlan && data.maintenance_level) {
+            const targetLvl = normalizeMaintenanceLevel(data.maintenance_level);
+            activePlan = plans.find((p) => isMatchLevel(p.level, targetLvl) && (p.status === MaintenanceStatus.ACTIVE || p.status === MaintenanceStatus.WARNING || p.status === MaintenanceStatus.OVERDUE));
+            if (!activePlan) {
+                const uncompleted = plans
+                    .filter((p) => isMatchLevel(p.level, targetLvl) && p.status !== MaintenanceStatus.CANCELED && !(p.status === MaintenanceStatus.INACTIVE && p.tickets && p.tickets.length > 0))
+                    .sort((a, b) => new Date(a.next_maintenance_date || a.scheduled_date).getTime() - new Date(b.next_maintenance_date || b.scheduled_date).getTime());
+                activePlan = uncompleted[0];
+            }
+        }
+        if (!activePlan) {
+            activePlan = plans.find((p) => p.status === MaintenanceStatus.ACTIVE || p.status === MaintenanceStatus.WARNING || p.status === MaintenanceStatus.OVERDUE);
+        }
 
         // Allow template to be null (User Request: Temporarily disable template logic)
         let template = null;
@@ -96,8 +112,8 @@ export class MaintenanceTicketService {
         }
         // ---------------------------------------------------------
 
-        // --- VALIDATION: CHECK SEQUENTIAL (Không cho làm phiếu mới nếu phiếu cũ chưa xong) ---
-        // Tìm phiếu BẤT KỲ của thiết bị này có ngày kế hoạch TRƯỚC ngày này mà chưa DONE
+        // --- PHƯƠNG ÁN A: CẢNH BÁO MỀM & GHI NHẬN AUDIT (Không chặn cứng hệ thống) ---
+        // Kiểm tra xem thiết bị có kỳ bảo dưỡng nào trước đó chưa hoàn thành không
         const overdueTickets = await this.ticketRepo.createQueryBuilder('t')
             .where('t.device_id = :dId', { dId: data.device_id })
             .andWhere('t.status != :done', { done: 'done' })
@@ -105,8 +121,10 @@ export class MaintenanceTicketService {
             .andWhere('t.scheduled_at < :date', { date: actualDate })
             .getCount();
 
+        let arisingIssues = data.arising_issues || '';
         if (overdueTickets > 0) {
-             throw new ForbiddenException(`Không thể tạo phiếu mới! Còn ${overdueTickets} phiếu cũ chưa hoàn thành.`);
+            const warningNote = `[Ghi nhận hệ thống: Thực hiện khi còn ${overdueTickets} kỳ bảo dưỡng trước đó chưa hoàn thành]`;
+            arisingIssues = arisingIssues ? `${arisingIssues}\n${warningNote}` : warningNote;
         }
         // -----------------------------------------------------------------------------------
 
@@ -117,7 +135,7 @@ export class MaintenanceTicketService {
             template: template,
             maintenance_level: data.maintenance_level,
             checklist_result: data.checklist_result,
-            arising_issues: data.arising_issues,
+            arising_issues: arisingIssues,
             working_hours: data.working_hours,
             execution_team: data.execution_team,
             acceptance_result: data.acceptance_result,
@@ -163,22 +181,49 @@ export class MaintenanceTicketService {
                     throw new Error('Thiếu ID thiết bị');
                 }
 
+                const actualDate = item.execution_date ? new Date(item.execution_date) : new Date();
+                const targetLevel = normalizeMaintenanceLevel(item.maintenance_level);
+
                 const plans = await this.maintenanceService.findByDevice(item.device_id);
-                let activePlan = plans.find((p) => p.status === 'active' || p.status === 'warning' || p.status === 'overdue');
-                if (!activePlan) {
-                    // Fallback: Nếu không tìm thấy kế hoạch active, lấy kế hoạch inactive chưa hoàn thành sớm nhất
-                    activePlan = plans.find((p) => p.status === 'inactive' && !p.last_maintenance_date);
+                
+                // 1. Lọc các kế hoạch khớp chính xác cấp bảo dưỡng targetLevel
+                const matchingPlans = plans.filter((p) => isMatchLevel(p.level, targetLevel));
+
+                // 2. Ưu tiên 1: Kế hoạch đang Active / Warning / Overdue của đúng cấp độ này (Chính là kỳ đang cần làm hiện tại)
+                let chosenPlan = matchingPlans.find(
+                    (p) => (p.status === MaintenanceStatus.ACTIVE || p.status === MaintenanceStatus.WARNING || p.status === MaintenanceStatus.OVERDUE)
+                );
+
+                // Ưu tiên 2: Nếu chưa có kế hoạch nào của cấp độ này Active,
+                // lấy kế hoạch chưa làm có ngày dự kiến gần actualDate nhất
+                if (!chosenPlan) {
+                    const uncompleted = matchingPlans
+                        .filter((p) => p.status !== MaintenanceStatus.CANCELED && !(p.status === MaintenanceStatus.INACTIVE && p.tickets && p.tickets.length > 0))
+                        .sort((a, b) => {
+                            const timeA = new Date(a.next_maintenance_date || a.scheduled_date).getTime();
+                            const timeB = new Date(b.next_maintenance_date || b.scheduled_date).getTime();
+                            return Math.abs(timeA - actualDate.getTime()) - Math.abs(timeB - actualDate.getTime());
+                        });
+                    chosenPlan = uncompleted[0];
                 }
 
-                const actualDate = item.execution_date ? new Date(item.execution_date) : new Date();
-                const level = item.maintenance_level || activePlan?.level || 'Tuần';
+                // Ưu tiên 3 (Dự phòng hy hữu): Nếu xe không hề có kế hoạch nào của targetLevel,
+                // fallback lấy kế hoạch bất kỳ chưa làm
+                if (!chosenPlan && matchingPlans.length === 0) {
+                    const anyActive = plans.find(
+                        (p) => (p.status === MaintenanceStatus.ACTIVE || p.status === MaintenanceStatus.WARNING || p.status === MaintenanceStatus.OVERDUE)
+                    );
+                    chosenPlan = anyActive || plans.find((p) => p.status !== MaintenanceStatus.CANCELED && !(p.status === MaintenanceStatus.INACTIVE && p.tickets && p.tickets.length > 0));
+                }
+
+                const finalLevel = targetLevel || chosenPlan?.level || 'Tuần';
 
                 const ticket = this.ticketRepo.create({
                     device: {device_id: item.device_id} as any,
                     user: user,
-                    maintenance: activePlan || null,
+                    maintenance: chosenPlan || null,
                     template: null,
-                    maintenance_level: level,
+                    maintenance_level: finalLevel,
                     checklist_result: [],
                     arising_issues: item.arising_issues || null,
                     working_hours: item.working_hours || 0,
@@ -193,8 +238,8 @@ export class MaintenanceTicketService {
 
                 const saved = await this.ticketRepo.save(ticket);
 
-                if (activePlan) {
-                    await this.maintenanceService.markCompletedAndSpawnNext(activePlan.maintenance_id, actualDate);
+                if (chosenPlan) {
+                    await this.maintenanceService.markCompletedAndSpawnNext(chosenPlan.maintenance_id, actualDate);
                 }
 
                 successCount++;
@@ -202,9 +247,9 @@ export class MaintenanceTicketService {
                     device_id: item.device_id,
                     status: 'success',
                     ticket_id: saved.ticket_id,
-                    level: level,
+                    level: finalLevel,
                     execution_date: actualDate,
-                    message: 'Hoàn thành bảo dưỡng thành công',
+                    message: `Hoàn thành bảo dưỡng cấp ${finalLevel} thành công`,
                 });
             } catch (err: any) {
                 failedCount++;
@@ -265,8 +310,9 @@ export class MaintenanceTicketService {
         const now = dayjs();
         const scheduled = dayjs(ticket.scheduled_at);
         const earliest = scheduled.subtract(5, 'day');
-        if (!(now.isAfter(earliest) && now.isBefore(scheduled.add(1, 'minute')))) {
-            throw new ForbiddenException('Can only start within 5 days before due');
+        // Chỉ chặn nếu còn quá sớm (> 5 ngày trước hạn). Nếu đã quá hạn thì cho phép làm bình thường
+        if (now.isBefore(earliest)) {
+            throw new ForbiddenException('Chưa đến thời gian bắt đầu bảo dưỡng (chỉ được bắt đầu trước tối đa 5 ngày)');
         }
     }
 
