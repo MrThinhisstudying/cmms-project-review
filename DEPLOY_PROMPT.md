@@ -173,6 +173,9 @@ fi
 echo "📥 Đang kéo mã nguồn mới nhất từ GitHub..."
 git fetch origin main
 
+# Bảo vệ: Tạm lưu các thay đổi cục bộ (nếu có) để tránh xung đột khi git pull
+git stash || true
+
 # Đồng bộ nhánh main
 git checkout main
 git pull origin main
@@ -209,9 +212,25 @@ sleep 5
 
 # 2. Chạy Database Migration TypeORM
 echo "⚙️ Đang thực thi Database Migration..."
-docker compose exec -T backend npx typeorm migration:run -d dist/data-source.js
+docker compose exec -T backend npx typeorm migration:run -d dist/data-source.js || true
 
-# 3. Khởi động lại Frontend với Image mới
+# 3. Đồng bộ bản vá khóa ngoại ON DELETE CASCADE (chống lỗi khi xóa tài khoản người dùng)
+echo "⚙️ Cập nhật ràng buộc khóa ngoại Cascade Delete..."
+docker compose exec -T db psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-cmms_db}" -c "
+DO \$\$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'FK_ba7ae9d9f1c6bdbc272dd64d552') THEN
+    ALTER TABLE user_device_group DROP CONSTRAINT \"FK_ba7ae9d9f1c6bdbc272dd64d552\";
+    ALTER TABLE user_device_group ADD CONSTRAINT \"FK_ba7ae9d9f1c6bdbc272dd64d552\" FOREIGN KEY (user_id) REFERENCES \"user\"(user_id) ON DELETE CASCADE;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'FK_1ced25315eb974b73391fb1c81b') THEN
+    ALTER TABLE notification DROP CONSTRAINT \"FK_1ced25315eb974b73391fb1c81b\";
+    ALTER TABLE notification ADD CONSTRAINT \"FK_1ced25315eb974b73391fb1c81b\" FOREIGN KEY (\"userId\") REFERENCES \"user\"(user_id) ON DELETE CASCADE;
+  END IF;
+END \$\$;
+" || true
+
+# 4. Khởi động lại Frontend với Image mới
 echo "🔄 Khởi động Frontend container mới..."
 docker compose up -d --no-deps frontend
 ```
@@ -344,6 +363,7 @@ fi
 # 5. KÉO CODE MỚI
 echo "📥 Đang kéo mã nguồn mới nhất từ origin/main..."
 git fetch origin main
+git stash || true
 git checkout main
 git pull origin main
 
@@ -361,6 +381,21 @@ sleep 5
 
 echo "⚙️ Thực thi Database Migration..."
 docker compose exec -T backend npx typeorm migration:run -d dist/data-source.js || true
+
+echo "⚙️ Cập nhật ràng buộc khóa ngoại Cascade Delete..."
+docker compose exec -T db psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-cmms_db}" -c "
+DO \$\$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'FK_ba7ae9d9f1c6bdbc272dd64d552') THEN
+    ALTER TABLE user_device_group DROP CONSTRAINT \"FK_ba7ae9d9f1c6bdbc272dd64d552\";
+    ALTER TABLE user_device_group ADD CONSTRAINT \"FK_ba7ae9d9f1c6bdbc272dd64d552\" FOREIGN KEY (user_id) REFERENCES \"user\"(user_id) ON DELETE CASCADE;
+  END IF;
+  IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'FK_1ced25315eb974b73391fb1c81b') THEN
+    ALTER TABLE notification DROP CONSTRAINT \"FK_1ced25315eb974b73391fb1c81b\";
+    ALTER TABLE notification ADD CONSTRAINT \"FK_1ced25315eb974b73391fb1c81b\" FOREIGN KEY (\"userId\") REFERENCES \"user\"(user_id) ON DELETE CASCADE;
+  END IF;
+END \$\$;
+" || true
 
 echo "🔄 Khởi động lại Frontend..."
 docker compose up -d --no-deps frontend
