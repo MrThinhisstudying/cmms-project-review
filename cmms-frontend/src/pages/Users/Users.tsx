@@ -138,8 +138,8 @@ const Users: React.FC = () => {
       await deleteUser(user.user_id, token);
       message.success("Xóa người dùng thành công");
       fetchUsers();
-    } catch (error) {
-      message.error("Xóa người dùng thất bại");
+    } catch (error: any) {
+      message.error(error?.message || "Xóa người dùng thất bại");
     }
   };
 

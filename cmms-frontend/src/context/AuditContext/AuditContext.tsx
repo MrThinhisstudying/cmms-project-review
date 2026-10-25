@@ -77,14 +77,17 @@ const AuditProvider = ({ children }: { children: ReactNode }) => {
 
   const rollbackTx = useCallback(
     async (txId: number, reason?: string) => {
-      if (user?.role !== "admin") return false;
+      const role = user?.role?.toUpperCase();
+      if (role !== "ADMIN") {
+        throw new Error("Chỉ tài khoản Quản trị viên (Admin) mới có quyền hoàn tác dữ liệu");
+      }
       setLoading(true);
       try {
         const token = getToken();
         await rollbackTransaction(txId, reason, token);
         return true;
-      } catch {
-        return false;
+      } catch (err: any) {
+        throw err;
       } finally {
         setLoading(false);
       }

@@ -27,7 +27,7 @@ export class UserDeviceGroup {
     @UpdateDateColumn()
     updated_at: Date;
 
-    @ManyToOne(() => User, (user) => user.user_device_groups)
+    @ManyToOne(() => User, (user) => user.user_device_groups, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'user_id' })
     user: User;
 

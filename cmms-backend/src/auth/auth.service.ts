@@ -7,6 +7,8 @@ import {SignIn} from './dto/sign-in.dto';
 import * as crypto from 'crypto';
 import {InjectRepository} from '@nestjs/typeorm';
 import {Repository} from 'typeorm';
+import {NotificationService} from '../notification/notification.service';
+import {UserRole} from '../user/user-role.enum';
 
 @Injectable()
 export class AuthService {
@@ -15,6 +17,7 @@ export class AuthService {
         private readonly userRepository: Repository<User>,
         private readonly userService: UserService,
         private readonly jwtService: JwtService,
+        private readonly notificationService: NotificationService,
     ) {}
 
     async signIn(signIn: SignIn) {
@@ -182,6 +185,55 @@ export class AuthService {
 
         return {
             accessToken: this.jwtService.sign(payload),
+        };
+    }
+
+    async resetPasswordToDefault(identifier: string): Promise<{ success: boolean; message: string; user_name?: string }> {
+        if (!identifier || identifier.trim() === '') {
+            throw new BadRequestException('Vui lòng nhập tên đăng nhập hoặc email');
+        }
+
+        const trimmed = identifier.trim().toLowerCase();
+
+        // Tìm user theo email hoặc name
+        const user = await this.userRepository
+            .createQueryBuilder('user')
+            .where('LOWER(user.email) = :trimmed', { trimmed })
+            .orWhere('LOWER(user.name) = :trimmed', { trimmed })
+            .getOne();
+
+        if (!user) {
+            throw new NotFoundException('Không tìm thấy tài khoản với tên đăng nhập hoặc email này');
+        }
+
+        // Đặt lại mật khẩu về mặc định "12345678"
+        user.password = '12345678';
+        user.must_change_password = true;
+        user.reset_token = null;
+        user.reset_token_expiry = null;
+
+        // Lưu user (hook @BeforeUpdate sẽ tự động mã hóa bcrypt)
+        await this.userRepository.save(user);
+
+        // Gửi thông báo cho tất cả tài khoản Admin
+        try {
+            const admins = await this.userRepository.find({
+                where: { role: UserRole.ADMIN },
+            });
+
+            const notifyMessage = `🔔 Người dùng "${user.name || user.email}" (${user.email || 'không có email'}) vừa yêu cầu khôi phục mật khẩu. Hệ thống đã đặt lại mật khẩu về mặc định (12345678).`;
+
+            for (const admin of admins) {
+                await this.notificationService.createForUser(admin, notifyMessage);
+            }
+        } catch (notiError) {
+            console.error('Lỗi khi gửi thông báo cho Admin:', notiError);
+        }
+
+        return {
+            success: true,
+            message: 'Mật khẩu của bạn đã được đặt lại về "12345678". Vui lòng đăng nhập và đổi mật khẩu mới.',
+            user_name: user.name || user.email,
         };
     }
 }

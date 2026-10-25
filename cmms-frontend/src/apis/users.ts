@@ -113,7 +113,7 @@ export const deleteUser = async (userId: number, token: string | null) => {
   }
 };
 
-export const forgotPassword = async (email: string) => {
+export const forgotPassword = async (usernameOrEmail: string) => {
   try {
     const response = await fetch(
       `${process.env.REACT_APP_BASE_URL}/auth/forgot-password`,
@@ -122,14 +122,17 @@ export const forgotPassword = async (email: string) => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({
+          username: usernameOrEmail,
+          email: usernameOrEmail,
+        }),
       }
     );
 
     const data = await response.json();
 
     if (!response.ok) {
-      throw new Error(data.message || "Yêu cầu quên mật khẩu thất bại");
+      throw new Error(data.message || "Yêu cầu khôi phục mật khẩu thất bại");
     }
 
     return data;

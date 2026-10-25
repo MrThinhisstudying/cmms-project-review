@@ -1,8 +1,7 @@
 import React from "react";
-
-import { Table, Button, Tag, Space, Tooltip, Popconfirm } from "antd";
+import { Table, Button, Tag, Space, Tooltip, Popconfirm, Dropdown } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { IRepair } from "../../../../types/repairs.types";
+import type { MenuProps } from "antd";
 import {
   EyeOutlined,
   EditOutlined,
@@ -10,18 +9,19 @@ import {
   FileDoneOutlined,
   DeleteOutlined,
   PrinterOutlined,
-  DownOutlined,
   FilePdfOutlined,
   ThunderboltOutlined,
+  CarOutlined,
+  MoreOutlined,
+  CalendarOutlined,
 } from "@ant-design/icons";
-// import { getToken } from "../../../../utils/auth";
-import type { MenuProps } from 'antd';
-import { Dropdown } from 'antd';
+import dayjs from "dayjs";
+import { IRepair } from "../../../../types/repairs.types";
 
 interface RepairsTableProps {
   rows: IRepair[];
-  rowsPerPage: number; // Ignored for AntD table with internal pagination or keep if external
-  page: number; // Ignored if using internal pagination
+  rowsPerPage: number;
+  page: number;
   onReview?: (
     id: number,
     action: "approve" | "reject",
@@ -49,7 +49,6 @@ interface RepairsTableProps {
 
 const RepairsTable: React.FC<RepairsTableProps> = ({
   rows,
-  onReview,
   onEdit,
   onView,
   onOpenInspection,
@@ -57,411 +56,623 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
   onDelete,
   onExport,
   canUpdate,
-  canReview,
-  canDelete,
-  canExport,
   userRole,
   currentUser,
-  hasPermission,
 }) => {
-  // Unused state removed
-  // const [rejectReason, setRejectReason] = useState("");
-  // const [rejectModalOpen, setRejectModalOpen] = useState(false);
-  // const [selectedAction, setSelectedAction] = useState...
-
   const getPhase = (r: IRepair) => {
-    // If Admin Approved Acceptance, it's strictly done.
     if (r.status_acceptance === "acceptance_admin_approved") return "done";
-    
-    // If canceled, it's done/locked.
     if (r.canceled) return "done";
-
-    // If Request is Rejected, it's done (unless we allow re-open, but currently REJECTED request is final unless edited)
-    // If Request is Rejected
-    if (r.status_request === "REJECTED_B03") return "request"; 
-    
-    // If Inspection Rejected
+    if (r.status_request === "REJECTED_B03") return "request";
     if (r.status_inspection === "REJECTED_B04") return "inspection";
-
-    // If Acceptance Rejected
     if (r.status_acceptance === "REJECTED_B05") return "acceptance";
-
     if (r.status_request !== "COMPLETED") return "request";
     if (r.status_inspection !== "inspection_admin_approved") return "inspection";
-    
     return "acceptance";
   };
 
+  const getStatusBadge = (r: IRepair) => {
+    let currentPhase = "request";
+    if (r.status_request === "REJECTED_B03" || r.status_request === "REJECTED") {
+      currentPhase = "request";
+    } else if (r.status_request !== "COMPLETED") {
+      currentPhase = "request";
+    } else if (
+      r.status_inspection === "REJECTED_B04" ||
+      r.status_inspection === "inspection_rejected"
+    ) {
+      currentPhase = "inspection";
+    } else if (r.status_inspection !== "inspection_admin_approved") {
+      currentPhase = "inspection";
+    } else if (
+      r.status_acceptance === "REJECTED_B05" ||
+      r.status_acceptance === "acceptance_rejected"
+    ) {
+      currentPhase = "acceptance";
+    } else if (r.status_acceptance !== "acceptance_admin_approved") {
+      currentPhase = "acceptance";
+    } else {
+      currentPhase = "completed";
+    }
 
-  const getStatusTag = (r: IRepair) => {
-    // 1. Determine Current Phase (Same as RepairDetailDrawer)
-    let currentPhase = 'request';
-    if (r.status_request === 'REJECTED_B03' || r.status_request === 'REJECTED') currentPhase = 'request'; 
-    else if (r.status_request !== 'COMPLETED') currentPhase = 'request';
-    else if (r.status_inspection === 'REJECTED_B04' || r.status_inspection === 'inspection_rejected') currentPhase = 'inspection';
-    else if (r.status_inspection !== 'inspection_admin_approved') currentPhase = 'inspection';
-    else if (r.status_acceptance === 'REJECTED_B05' || r.status_acceptance === 'acceptance_rejected') currentPhase = 'acceptance';
-    else if (r.status_acceptance !== 'acceptance_admin_approved') currentPhase = 'acceptance';
-    else currentPhase = 'completed';
-
-    // 2. Determine raw status key to display
-    let statusKey: string = r.status_request || 'WAITING_TECH';
-    if (currentPhase === 'completed') statusKey = 'COMPLETED';
-    else if (currentPhase === 'acceptance' || r.status_acceptance === 'REJECTED_B05' || r.status_acceptance === 'acceptance_rejected') statusKey = r.status_acceptance || 'acceptance_pending';
-    else if (currentPhase === 'inspection' || r.status_inspection === 'REJECTED_B04' || r.status_inspection === 'inspection_rejected') statusKey = r.status_inspection || 'inspection_pending';
-    
-    // 3. Map to Label/Color (Same as RepairDetailDrawer)
-     const colorMap: Record<string, string> = {
-      WAITING_TECH: "blue",
-      WAITING_TEAM_LEAD: "blue",
-      WAITING_MANAGER: "orange", // Default for Manager/Unit Head
-      WAITING_DIRECTOR: "purple",
-      REJECTED_B03: "red",
-      REJECTED: "red",
-      COMPLETED: "green",
-
-      inspection_pending: "purple",
-      inspection_lead_approved: "warning",
-      inspection_manager_approved: "cyan",
-      inspection_admin_approved: "teal",
-      REJECTED_B04: "red",
-      inspection_rejected: "red",
-
-      acceptance_pending: "cyan",
-      acceptance_lead_approved: "warning",
-      acceptance_manager_approved: "cyan",
-      acceptance_admin_approved: "green",
-      REJECTED_B05: "red",
-      acceptance_rejected: "red",
-    };
+    let statusKey: string = r.status_request || "WAITING_TECH";
+    if (currentPhase === "completed") {
+      statusKey = "COMPLETED";
+    } else if (
+      currentPhase === "acceptance" ||
+      r.status_acceptance === "REJECTED_B05" ||
+      r.status_acceptance === "acceptance_rejected"
+    ) {
+      statusKey = r.status_acceptance || "acceptance_pending";
+    } else if (
+      currentPhase === "inspection" ||
+      r.status_inspection === "REJECTED_B04" ||
+      r.status_inspection === "inspection_rejected"
+    ) {
+      statusKey = r.status_inspection || "inspection_pending";
+    }
 
     const labelMap: Record<string, string> = {
       WAITING_TECH: "Yêu cầu: Chờ KT tiếp nhận",
       WAITING_TEAM_LEAD: "Yêu cầu: Chờ Tổ trưởng duyệt",
-      WAITING_MANAGER: "Yêu cầu: Chờ CB đội duyệt",
+      WAITING_MANAGER: "Yêu cầu: Chờ CB Đội duyệt",
       WAITING_DIRECTOR: "Yêu cầu: Chờ Ban GĐ duyệt",
       REJECTED_B03: "B03: Đã từ chối",
       REJECTED: "Đã hủy",
-      COMPLETED: "Hoàn thành",
+      COMPLETED: "Hoàn tất toàn bộ",
 
-      // If pending but no data -> "Chờ kiểm nghiệm"
-      // If pending AND has data -> "Chờ Tổ trưởng duyệt"
-      inspection_pending: r.inspection_created_at ? "Kiểm nghiệm: chờ CB tổ duyệt" : "Chờ kiểm nghiệm",
-      inspection_lead_approved: "Kiểm nghiệm: Chờ CB đội duyệt",
-      inspection_manager_approved: "Kiểm nghiệm: chờ ban GĐ duyệt",
+      inspection_pending: r.inspection_created_at
+        ? "Kiểm nghiệm: Chờ Tổ duyệt"
+        : "Chờ kiểm nghiệm",
+      inspection_lead_approved: "Kiểm nghiệm: Chờ Đội duyệt",
+      inspection_manager_approved: "Kiểm nghiệm: Chờ Ban GĐ duyệt",
       inspection_admin_approved: "Hoàn tất kiểm nghiệm",
       REJECTED_B04: "B04: Đã từ chối",
       inspection_rejected: "B04: Đã từ chối",
 
-      acceptance_pending: r.acceptance_created_at ? "Nghiệm thu: Chờ CB tổ duyệt" : "Chờ nghiệm thu",
-      acceptance_lead_approved: "Nghiệm thu: Chờ CB đội duyệt",
-      acceptance_manager_approved: "Nghiệm thu: chờ ban GĐ duyệt",
-      acceptance_admin_approved: "Hoàn tất toàn bộ quy trình",
+      acceptance_pending: r.acceptance_created_at
+        ? "Nghiệm thu: Chờ Tổ duyệt"
+        : "Chờ nghiệm thu",
+      acceptance_lead_approved: "Nghiệm thu: Chờ Đội duyệt",
+      acceptance_manager_approved: "Nghiệm thu: Chờ Ban GĐ duyệt",
+      acceptance_admin_approved: "Hoàn tất toàn bộ",
       REJECTED_B05: "B05: Đã từ chối",
       acceptance_rejected: "B05: Đã từ chối",
     };
 
     const label = labelMap[statusKey] || statusKey;
-    const color = colorMap[statusKey] || (statusKey.includes('REJECTED') || statusKey.includes('rejected') ? 'error' : 'default');
 
-    if (statusKey === 'REJECTED_B03' || statusKey === 'REJECTED') {
-         // Keep existing tooltip for B03 rejection if desireable
-         return (
-            <Tooltip title={r.rejection_reason ? `Lý do: ${r.rejection_reason}` : "Đã hủy"}>
-                <Tag color="error">{label}</Tag>
-            </Tooltip>
-        );
+    // Soft badge styles with modern color tokens
+    let bg = "#f1f5f9";
+    let color = "#475569";
+    let dotColor = "#94a3b8";
+    let borderColor = "#e2e8f0";
+
+    if (
+      statusKey.includes("REJECTED") ||
+      statusKey.includes("rejected") ||
+      statusKey === "REJECTED" ||
+      r.canceled
+    ) {
+      bg = "#fef2f2";
+      color = "#dc2626";
+      dotColor = "#ef4444";
+      borderColor = "#fecaca";
+    } else if (
+      statusKey === "COMPLETED" ||
+      statusKey === "acceptance_admin_approved"
+    ) {
+      bg = "#ecfdf5";
+      color = "#059669";
+      dotColor = "#10b981";
+      borderColor = "#a7f3d0";
+    } else if (statusKey === "WAITING_TECH" || statusKey === "WAITING_TEAM_LEAD") {
+      bg = "#eff6ff";
+      color = "#2563eb";
+      dotColor = "#3b82f6";
+      borderColor = "#bfdbfe";
+    } else if (
+      statusKey === "WAITING_MANAGER" ||
+      statusKey === "inspection_lead_approved" ||
+      statusKey === "acceptance_lead_approved"
+    ) {
+      bg = "#fffbeb";
+      color = "#d97706";
+      dotColor = "#f59e0b";
+      borderColor = "#fde68a";
+    } else if (
+      statusKey === "WAITING_DIRECTOR" ||
+      statusKey === "inspection_pending"
+    ) {
+      bg = "#f5f3ff";
+      color = "#7c3aed";
+      dotColor = "#8b5cf6";
+      borderColor = "#ddd6fe";
+    } else if (
+      statusKey === "inspection_manager_approved" ||
+      statusKey === "acceptance_pending" ||
+      statusKey === "acceptance_manager_approved" ||
+      statusKey === "inspection_admin_approved"
+    ) {
+      bg = "#ecfeff";
+      color = "#0891b2";
+      dotColor = "#06b6d4";
+      borderColor = "#a5f3fc";
     }
 
-    return <Tag color={color}>{label}</Tag>;
+    const badgeContent = (
+      <div
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          padding: "3px 10px",
+          borderRadius: 16,
+          fontSize: 12,
+          fontWeight: 600,
+          background: bg,
+          color: color,
+          border: `1px solid ${borderColor}`,
+          whiteSpace: "nowrap",
+        }}
+      >
+        <span
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: "50%",
+            backgroundColor: dotColor,
+            boxShadow: `0 0 0 2px ${bg}`,
+          }}
+        />
+        {label}
+      </div>
+    );
+
+    if (
+      statusKey === "REJECTED_B03" ||
+      statusKey === "REJECTED_B04" ||
+      statusKey === "REJECTED_B05" ||
+      statusKey === "REJECTED"
+    ) {
+      return (
+        <Tooltip title={r.rejection_reason ? `Lý do từ chối: ${r.rejection_reason}` : "Phiếu bị từ chối/hủy"}>
+          {badgeContent}
+        </Tooltip>
+      );
+    }
+
+    return badgeContent;
   };
-
-
 
   const columns: ColumnsType<IRepair> = [
     {
-      title: "#",
+      title: "Mã #",
       dataIndex: "repair_id",
       key: "repair_id",
-      width: 80,
-      render: (id) => <span style={{ fontWeight: 'bold' }}>#{id}</span>,
+      width: 85,
+      align: "center",
+      render: (id) => (
+        <Tag
+          style={{
+            borderRadius: 6,
+            fontWeight: 700,
+            fontSize: 13,
+            background: "#f8fafc",
+            border: "1px solid #cbd5e1",
+            color: "#1e293b",
+            margin: 0,
+            padding: "2px 8px",
+          }}
+        >
+          #{id}
+        </Tag>
+      ),
       sorter: (a, b) => a.repair_id - b.repair_id,
-      defaultSortOrder: 'descend', // Default newest first
+      defaultSortOrder: "descend",
     },
     {
       title: "Thiết bị",
       dataIndex: ["device", "name"],
       key: "device",
-      width: 200,
-      render: (text) => (
-          <div style={{ fontWeight: 500 }}>{text}</div>
-      ),
+      minWidth: 220,
+      render: (text, record) => {
+        const brand = record.device?.brand;
+        const typeName =
+          record.device?.deviceType?.name ||
+          (record.device as any)?.device_type?.name;
+
+        return (
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 8,
+                background: "linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)",
+                border: "1px solid #bfdbfe",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#1d4ed8",
+                fontSize: 17,
+                flexShrink: 0,
+              }}
+            >
+              <CarOutlined />
+            </div>
+            <div>
+              <div style={{ fontWeight: 600, color: "#0f172a", fontSize: 13, lineHeight: 1.4 }}>
+                {text || "Chưa xác định"}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginTop: 3,
+                  flexWrap: "wrap",
+                }}
+              >
+                {brand ? (
+                  <Tag
+                    style={{
+                      borderRadius: 4,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      margin: 0,
+                      padding: "0 6px",
+                      background: "#f1f5f9",
+                      borderColor: "#cbd5e1",
+                      color: "#334155",
+                      lineHeight: "18px",
+                    }}
+                  >
+                    <span style={{ color: "#64748b", fontWeight: 400, marginRight: 3 }}>
+                      Nhãn hiệu:
+                    </span>
+                    {brand}
+                  </Tag>
+                ) : (
+                  <span style={{ fontSize: 11, color: "#94a3b8" }}>
+                    Nhãn hiệu: —
+                  </span>
+                )}
+                {typeName && (
+                  <span style={{ fontSize: 11, color: "#64748b" }}>
+                    • {typeName}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      },
     },
     {
-      title: "BS / Số máy",
+      title: "Biển số / Mã QL",
       key: "code",
-      width: 150,
-      render: (_, record) => (
-        <div style={{ fontSize: 13 }}>
-            <div>{record.device?.reg_number ? `BS: ${record.device.reg_number}` : <Tag color="warning">Đang chờ biển số</Tag>}</div>
-            {record.device?.serial_number && <div style={{ color: "#888", fontSize: "12px" }}>SN: {record.device.serial_number}</div>}
-        </div>
-      ),
-    },
-    {
-      title: "Đơn vị",
-      key: "department",
-      render: (_, record) => {
-        const deptName = record.created_department?.name || record.created_by?.department?.name || '-';
-        return <span>{deptName}</span>;
-      }
-    },
-    {
-      title: "Người lập",
-      key: "creator",
+      width: 160,
       render: (_, record) => (
         <div>
-          <div style={{ fontWeight: 500 }}>{record.created_by?.name}</div>
-          <div style={{ fontSize: '11px', color: '#888' }}>
-            {record.created_at ? new Date(record.created_at).toLocaleDateString('vi-VN') : ''}
-          </div>
+          {record.device?.reg_number ? (
+            <Tag
+              color="blue"
+              style={{
+                fontWeight: 700,
+                fontSize: 12,
+                borderRadius: 6,
+                padding: "2px 8px",
+                letterSpacing: "0.5px",
+                margin: 0,
+              }}
+            >
+              {record.device.reg_number}
+            </Tag>
+          ) : (
+            <Tag color="warning" style={{ borderRadius: 6, margin: 0, fontSize: 11 }}>
+              Chưa gán biển số
+            </Tag>
+          )}
+          {record.device?.serial_number && (
+            <div style={{ color: "#64748b", fontSize: 11, marginTop: 4 }}>
+              Số máy: <span style={{ fontWeight: 500, color: "#334155" }}>{record.device.serial_number}</span>
+            </div>
+          )}
         </div>
-      )
+      ),
     },
     {
-      title: "Trạng thái",
-      key: "status",
-      width: 200,
-      render: (_, record) => getStatusTag(record),
-      filters: [
-        { text: "Pending", value: "WAITING_TECH" },
-        { text: "Approved", value: "COMPLETED" },
-        { text: "Rejected", value: "REJECTED" },
-      ],
-      onFilter: (value, record) => {
-        const status = JSON.stringify(record).toLowerCase();
-        return status.includes((value as string).toLowerCase());
+      title: "Đơn vị quản lý",
+      key: "department",
+      width: 170,
+      render: (_, record) => {
+        const deptName =
+          record.created_department?.name ||
+          record.created_by?.department?.name ||
+          "-";
+        return (
+          <Tag
+            style={{
+              borderRadius: 6,
+              background: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              color: "#334155",
+              fontWeight: 500,
+              fontSize: 12,
+              padding: "2px 8px",
+            }}
+          >
+            {deptName}
+          </Tag>
+        );
       },
+    },
+    {
+      title: "Người lập & Thời gian",
+      key: "creator",
+      width: 180,
+      render: (_, record) => (
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)",
+              border: "1px solid #cbd5e1",
+              color: "#334155",
+              fontWeight: 700,
+              fontSize: 12,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            {(record.created_by?.name || "U").charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, color: "#1e293b", fontSize: 13 }}>
+              {record.created_by?.name || "Không rõ"}
+            </div>
+            <div style={{ fontSize: 11, color: "#64748b", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>
+              <CalendarOutlined style={{ fontSize: 10 }} />
+              {record.created_at ? dayjs(record.created_at).format("DD/MM/YYYY HH:mm") : "-"}
+            </div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      title: "Trạng thái quy trình",
+      key: "status",
+      width: 220,
+      render: (_, record) => getStatusBadge(record),
     },
     {
       title: "Thao tác",
       key: "actions",
-      width: 180,
+      width: 160,
+      align: "center",
+      fixed: "right",
       render: (_, record) => {
         const phase = getPhase(record);
-        const locked = record.canceled || record.status_acceptance === "acceptance_admin_approved";
-        const canEdit = canUpdate && !locked && (record.status_request === "WAITING_TECH" || record.status_request === "REJECTED_B03");
+        const locked =
+          record.canceled ||
+          record.status_acceptance === "acceptance_admin_approved";
+        const canEdit =
+          canUpdate &&
+          !locked &&
+          (record.status_request === "WAITING_TECH" ||
+            record.status_request === "REJECTED_B03");
 
-        // Approval Logic
-        // TECHNICIAN (hoặc ADMIN) có quyền tạo kiểm nghiệm/nghiệm thu
-        // Backend PermissionsGuard kiểm tra quyền chi tiết qua department.permissions
-        const role = userRole?.toLowerCase() || '';
-        const isTechnician = role === 'technician' || role === 'admin';
-        
-        // Kiểm tra user thuộc "Tổ kỹ thuật" (primary dept hoặc user_departments)
-        const primaryDeptName = (currentUser?.department?.name || '').toLowerCase();
-        const secondaryDeptNames: string[] = (currentUser?.user_departments || [])
-          .map((ud: any) => (ud?.department?.name || '').toLowerCase());
+        const role = userRole?.toLowerCase() || "";
+        const isTechnician = role === "technician" || role === "admin";
+        const primaryDeptName = (currentUser?.department?.name || "").toLowerCase();
+        const secondaryDeptNames: string[] = (currentUser?.user_departments || []).map(
+          (ud: any) => (ud?.department?.name || "").toLowerCase()
+        );
         const allDepts = [primaryDeptName, ...secondaryDeptNames];
-        const isInToKyThuat = role === 'admin' || allDepts.some((d: string) => d === 'tổ kỹ thuật');
+        const isInToKyThuat =
+          role === "admin" || allDepts.some((d: string) => d === "tổ kỹ thuật");
 
-        const canCreateInsp = !locked && isTechnician && isInToKyThuat && record.status_request === "COMPLETED" && record.status_inspection === "inspection_pending";
+        const canCreateInsp =
+          !locked &&
+          isTechnician &&
+          isInToKyThuat &&
+          record.status_request === "COMPLETED" &&
+          record.status_inspection === "inspection_pending";
 
-        const canCreateAcc = !locked && isTechnician && isInToKyThuat && record.status_inspection === "inspection_admin_approved" && record.status_acceptance === "acceptance_pending";
+        const canCreateAcc =
+          !locked &&
+          isTechnician &&
+          isInToKyThuat &&
+          record.status_inspection === "inspection_admin_approved" &&
+          record.status_acceptance === "acceptance_pending";
 
-        const isAdminRole = userRole === 'ADMIN';
-        const showDelete = isAdminRole;
-        const isCompleted = record.status_acceptance === 'acceptance_admin_approved';
+        const isCompleted =
+          record.status_acceptance === "acceptance_admin_approved";
+
+        // Tạo danh sách menu hành động phụ gọn gàng trong Dropdown
+        const menuItems: MenuProps["items"] = [];
+
+        // 1. Chỉnh sửa
+        if (
+          canEdit &&
+          (userRole === "ADMIN" ||
+            record.created_by?.user_id === currentUser?.user_id)
+        ) {
+          menuItems.push({
+            key: "edit",
+            icon: <EditOutlined />,
+            label: "Chỉnh sửa phiếu",
+            onClick: () => onEdit?.(record),
+          });
+        }
+
+        // 2. In ấn chính thức
+        if (record.status_request === "COMPLETED") {
+          menuItems.push({
+            key: "print_b03",
+            icon: <PrinterOutlined />,
+            label: "In phiếu B03 (Yêu cầu)",
+            onClick: () => onExport?.(record, "B03", { hideDates: true }),
+          });
+        }
+        if (record.status_inspection === "inspection_admin_approved") {
+          menuItems.push({
+            key: "print_b04",
+            icon: <PrinterOutlined />,
+            label: "In phiếu B04 (Kiểm nghiệm)",
+            onClick: () => onExport?.(record, "B04", { hideDates: true }),
+          });
+        }
+        if (record.status_acceptance === "acceptance_admin_approved") {
+          menuItems.push({
+            key: "print_b05",
+            icon: <PrinterOutlined />,
+            label: "In phiếu B05 (Nghiệm thu)",
+            onClick: () => onExport?.(record, "B05", { hideDates: true }),
+          });
+        }
+
+        // 3. In gấp (khi chưa hoàn thành)
+        if (!isCompleted && !record.canceled) {
+          menuItems.push({
+            type: "divider",
+          });
+          menuItems.push({
+            key: "print_urgent_b03",
+            icon: <ThunderboltOutlined style={{ color: "#faad14" }} />,
+            label: "In gấp B03 (Ẩn tên)",
+            onClick: () =>
+              onExport?.(record, "B03", { hideNames: true, hideDates: true }),
+          });
+          if (
+            record.inspection_created_at ||
+            (record.inspection_items && record.inspection_items.length > 0)
+          ) {
+            menuItems.push({
+              key: "print_urgent_b04",
+              icon: <ThunderboltOutlined style={{ color: "#faad14" }} />,
+              label: "In gấp B04 (Ẩn tên)",
+              onClick: () =>
+                onExport?.(record, "B04", { hideNames: true, hideDates: true }),
+            });
+          }
+          if (record.acceptance_created_at) {
+            menuItems.push({
+              key: "print_urgent_b05",
+              icon: <ThunderboltOutlined style={{ color: "#faad14" }} />,
+              label: "In gấp B05 (Ẩn tên)",
+              onClick: () =>
+                onExport?.(record, "B05", { hideNames: true, hideDates: true }),
+            });
+          }
+        }
+
+        // 4. Lưu hồ sơ PDF tổng hợp
+        if (isCompleted) {
+          menuItems.push({
+            type: "divider",
+          });
+          menuItems.push({
+            key: "export_pdf",
+            icon: <FilePdfOutlined style={{ color: "#1677ff" }} />,
+            label: "Xuất hồ sơ PDF tổng hợp",
+            onClick: () => onExport?.(record, "COMBINED"),
+          });
+        }
+
+        // 5. Xóa phiếu (Admin)
+        if (userRole === "ADMIN") {
+          menuItems.push({
+            type: "divider",
+          });
+          menuItems.push({
+            key: "delete",
+            icon: <DeleteOutlined style={{ color: "#ff4d4f" }} />,
+            danger: true,
+            label: (
+              <Popconfirm
+                title="Xác nhận xóa phiếu"
+                description="Bạn có chắc chắn muốn xóa vĩnh viễn phiếu sửa chữa này?"
+                onConfirm={() => onDelete?.(record.repair_id)}
+                okText="Xóa"
+                cancelText="Hủy"
+                okButtonProps={{ danger: true }}
+              >
+                <span>Xóa phiếu</span>
+              </Popconfirm>
+            ),
+          });
+        }
 
         return (
-          <Space size="small" wrap>
-             <Tooltip title="Xem chi tiết">
-                <Button icon={<EyeOutlined />} size="small" onClick={() => onView?.(record)} />
-             </Tooltip>
+          <Space size={6}>
+            {/* Nút hành động chính: Luôn là Xem chi tiết */}
+            <Tooltip title="Xem chi tiết phiếu">
+              <Button
+                type="primary"
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => onView?.(record)}
+                style={{
+                  borderRadius: 6,
+                  fontWeight: 600,
+                  background: "linear-gradient(135deg, #1677ff 0%, #0958d9 100%)",
+                  border: "none",
+                  boxShadow: "0 2px 6px rgba(22, 119, 255, 0.2)",
+                }}
+              >
+                Chi tiết
+              </Button>
+            </Tooltip>
 
-             {canEdit && (userRole === "ADMIN" || (record.created_by?.user_id === currentUser?.user_id)) && (
-               <Tooltip title="Chỉnh sửa">
-                 <Button icon={<EditOutlined />} type="primary" ghost size="small" onClick={() => onEdit?.(record)} />
-               </Tooltip>
-             )}
-
-            {/* Hidden approval actions as requested to simplify UI. Approval is now done via Detail Drawer. */}
-
-            {phase === "inspection" && (
-                <>
-                    {(() => {
-                        // Restore omitted variable definition
-                        const hasInspectionData = record.inspection_created_at || (record.inspection_items && record.inspection_items.length > 0);
-                        
-                        // Hide "Approve Inspection" button here if it confuses user with "Updated Inspection".
-                        // User request: "khi bấm vào và bấm phê duyệt thì bị báo là "Đã cập nhật kiểm nghiệm" sửa lại hoặc ẩn đi."
-                        // It seems this button was calling onOpenInspection which might be opening the FORM not approval dialog? 
-                        // onOpenInspection opens RepairInspectionForm.
-                        // If user is Approver, they should likely use the Review/Approve flow (Detail Drawer or specific review modal).
-                        // If this button opens the Edit Form, and they click Save, it says "Updated".
-                        // Recommendation: Hide this button for Approvers in the TABLE to avoid confusion. Force them to open Drawer > Approve.
-                        
-                        // Only show "Create Inspection" for Technician (to start).
-                        if (canCreateInsp && !hasInspectionData) {
-                             return (
-                                 <Tooltip title="Tạo kiểm nghiệm">
-                                    <Button icon={<FileSearchOutlined />} color="default" variant="solid" style={{background: '#722ed1', color: 'white'}} size="small" onClick={() => onOpenInspection?.(record)} />
-                                 </Tooltip>
-                            );
-                        }
-                        
-                        // If Rejected, allow Technician/Admin to Redo (Open Form)
-                        if (record.status_inspection === 'REJECTED_B04' && (role === 'technician' || role === 'admin')) {
-                            return (
-                                 <Tooltip title="Tạo lại kiểm nghiệm">
-                                    <Button icon={<FileSearchOutlined />} color="default" variant="solid" style={{background: '#722ed1', color: 'white'}} size="small" onClick={() => onOpenInspection?.(record)} />
-                                 </Tooltip>
-                            );
-                        }
-
-                        return null; 
-                    })()}
-                </>
+            {/* Nút tắt tạo kiểm nghiệm cho thợ kỹ thuật */}
+            {phase === "inspection" && canCreateInsp && (
+              <Tooltip title="Lập biên bản kiểm nghiệm (B04)">
+                <Button
+                  size="small"
+                  icon={<FileSearchOutlined />}
+                  onClick={() => onOpenInspection?.(record)}
+                  style={{
+                    borderRadius: 6,
+                    background: "#722ed1",
+                    borderColor: "#722ed1",
+                    color: "#fff",
+                  }}
+                />
+              </Tooltip>
             )}
 
-            {phase === "acceptance" && (
-                <>
-                    {(() => {
-                        const hasAcceptanceData = record.acceptance_created_at || record.acceptance_note;
-                        const role = userRole?.toLowerCase() || '';
-                        const canApproveAcc = hasAcceptanceData && (
-                            (record.status_acceptance === 'acceptance_pending' && (role === 'team_lead' || role === 'tổ trưởng')) ||
-                            (record.status_acceptance === 'acceptance_lead_approved' && (role === 'unit_head' || role === 'cán bộ đội')) ||
-                            (record.status_acceptance === 'acceptance_manager_approved' && (role === 'admin' || role === 'director' || role === 'ban giám đốc'))
-                        );
-
-                        const showButton = (canCreateAcc && !hasAcceptanceData) || record.status_acceptance === 'REJECTED_B05' || canApproveAcc;
-
-                        if (!showButton) return null;
-
-                        if (canCreateAcc && !hasAcceptanceData) {
-                             return (
-                                 <Tooltip title="Tạo nghiệm thu">
-                                    <Button icon={<FileDoneOutlined />} color="default" variant="solid" style={{background: '#13c2c2', color: 'white'}} size="small" onClick={() => onOpenAcceptance?.(record)} />
-                                 </Tooltip>
-                            );
-                        }
-                         
-                        return null;
-                    })()}
-                </>
+            {/* Nút tắt tạo nghiệm thu cho thợ kỹ thuật */}
+            {phase === "acceptance" && canCreateAcc && (
+              <Tooltip title="Lập biên bản nghiệm thu (B05)">
+                <Button
+                  size="small"
+                  icon={<FileDoneOutlined />}
+                  onClick={() => onOpenAcceptance?.(record)}
+                  style={{
+                    borderRadius: 6,
+                    background: "#13c2c2",
+                    borderColor: "#13c2c2",
+                    color: "#fff",
+                  }}
+                />
+              </Tooltip>
             )}
 
-            {isCompleted && (
-                 <Tooltip title="Lưu hồ sơ (PDF)">
-                    <Button 
-                        icon={<FilePdfOutlined />} 
-                        style={{ background: '#52c41a', color: 'white', borderColor: '#52c41a' }} 
-                        size="small" 
-                    onClick={() => onExport?.(record, 'COMBINED')} 
-                    />
-                 </Tooltip>
+            {/* Menu Dropdown gom toàn bộ hành động phụ */}
+            {menuItems.length > 0 && (
+              <Dropdown menu={{ items: menuItems }} trigger={["click"]} placement="bottomRight">
+                <Button
+                  size="small"
+                  icon={<MoreOutlined />}
+                  style={{ borderRadius: 6, color: "#64748b" }}
+                />
+              </Dropdown>
             )}
-
-              {/* Dropdown In phiếu (Modified as requested) */}
-             {(() => {
-                 const items: MenuProps['items'] = [];
-                 
-                 // Enable B03 if Request is COMPLETED
-                 if (record.status_request === 'COMPLETED') {
-                     items.push({ key: 'B03', label: 'B03: Phiếu Yêu Cầu', onClick: () => onExport?.(record, 'B03', { hideDates: true }) });
-                 }
-
-                 // Enable B04 if Inspection is Admin Approved
-                 if (record.status_inspection === 'inspection_admin_approved') {
-                     items.push({ key: 'B04', label: 'B04: Phiếu Kiểm Nghiệm', onClick: () => onExport?.(record, 'B04', { hideDates: true }) });
-                 }
-
-                 // Enable B05 if Acceptance is Admin Approved
-                 if (record.status_acceptance === 'acceptance_admin_approved') {
-                     items.push({ key: 'B05', label: 'B05: Phiếu Nghiệm Thu', onClick: () => onExport?.(record, 'B05', { hideDates: true }) });
-                 }
-
-                 if (items.length === 0) return null;
-
-                 return (
-                  <Dropdown menu={{ items }} trigger={['click']}>
-                       <Button icon={<PrinterOutlined />} style={{ color: '#1890ff', borderColor: '#1890ff' }}>
-                          In phiếu <DownOutlined />
-                       </Button>
-                   </Dropdown>
-                 );
-             })()}
-
-             {/* Nút In gấp (Chỉ hiển thị khi CHƯA hoàn thành) */}
-             {(() => {
-                 if (isCompleted || record.canceled) return null;
-
-                 const urgentItems: MenuProps['items'] = [];
-                 
-                 // B03 Always available
-                 urgentItems.push({ 
-                     key: 'B03_Urgent', 
-                     label: 'B03 (Gấp - Không tên)', 
-                     onClick: () => onExport?.(record, 'B03', { hideNames: true, hideDates: true }) 
-                 });
-
-                 // Check B04
-                 if (record.inspection_created_at || (record.inspection_items && record.inspection_items.length > 0)) {
-                      urgentItems.push({ 
-                         key: 'B04_Urgent', 
-                         label: 'B04 (Gấp - Không tên)', 
-                         onClick: () => onExport?.(record, 'B04', { hideNames: true, hideDates: true }) 
-                     });
-                 }
-
-                 // Check B05
-                 if (record.acceptance_created_at) {
-                      urgentItems.push({ 
-                         key: 'B05_Urgent', 
-                         label: 'B05 (Gấp - Không tên)', 
-                         onClick: () => onExport?.(record, 'B05', { hideNames: true, hideDates: true }) 
-                     });
-                 }
-
-                 if (urgentItems.length === 0) return null;
-
-                 if (urgentItems.length === 1) {
-                     const item = urgentItems[0] as any;
-                     return (
-                         <Tooltip title={item.label}>
-                             <Button 
-                                icon={<ThunderboltOutlined />} 
-                                style={{ color: '#faad14', borderColor: '#faad14' }} 
-                                size="small"
-                                onClick={item.onClick} 
-                             >
-                                In gấp
-                             </Button>
-                         </Tooltip>
-                     );
-                 }
-
-                 return (
-                     <Dropdown menu={{ items: urgentItems }} trigger={['click']}>
-                         <Tooltip title="In gấp (Ẩn tên)">
-                             <Button 
-                                icon={<ThunderboltOutlined />} 
-                                style={{ color: '#faad14', borderColor: '#faad14' }} 
-                                size="small"
-                             >
-                                In gấp <DownOutlined />
-                             </Button>
-                         </Tooltip>
-                     </Dropdown>
-                 );
-             })()}
-
-             {showDelete && (
-                <Popconfirm title="Bạn có chắc chắn muốn xóa phiếu này?" onConfirm={() => onDelete?.(record.repair_id)}>
-                    <Button icon={<DeleteOutlined />} size="small" danger />
-                </Popconfirm>
-             )}
           </Space>
         );
       },
@@ -469,20 +680,27 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
   ];
 
   return (
-    <>
+    <div style={{ background: "#fff", borderRadius: 12, overflow: "hidden" }}>
       <Table
         columns={columns}
         dataSource={rows}
         rowKey="repair_id"
-        scroll={{ x: 'max-content' }}
-        pagination={{ pageSize: 10 }}
-        locale={{
-          triggerDesc: 'Nhấn để sắp xếp giảm dần',
-          triggerAsc: 'Nhấn để sắp xếp tăng dần',
-          cancelSort: 'Nhấn để hủy sắp xếp'
+        scroll={{ x: 1100 }}
+        pagination={{
+          pageSize: 10,
+          showSizeChanger: true,
+          pageSizeOptions: ["10", "20", "50"],
+          showTotal: (total, range) => (
+            <span style={{ fontSize: 13, color: "#64748b" }}>
+              Hiển thị <b>{range[0]}-{range[1]}</b> trên tổng <b>{total}</b> phiếu sửa chữa
+            </span>
+          ),
         }}
+        rowClassName={(_, index) =>
+          index % 2 === 0 ? "table-row-light" : "table-row-zebra"
+        }
       />
-    </>
+    </div>
   );
 };
 

@@ -98,12 +98,25 @@ export class AuditSubscriber implements EntitySubscriberInterface {
 
     const repo = event.manager.getRepository(AuditLog);
     const pk = event.metadata.primaryColumns[0].propertyName;
-    const snapshot = sanitizeSnapshot(name, event.entity ?? event.databaseEntity);
+
+    let entityData = event.entity ?? event.databaseEntity;
+    if (!entityData && event.entityId) {
+      try {
+        const targetRepo = event.manager.getRepository(event.metadata.target);
+        entityData = await targetRepo.findOne({ where: { [pk]: event.entityId } as any });
+      } catch (err) {
+        // ignore
+      }
+    }
+
+    const snapshot = sanitizeSnapshot(name, entityData);
+    const rawId = snapshot?.[pk] ?? event.entityId;
+    const entityId = rawId !== undefined && rawId !== null ? String(rawId) : 'unknown';
     const tx = await this.ensureTransaction(event.manager);
 
     await repo.save(repo.create({
       entity_name: name,
-      entity_id: String(snapshot?.[pk]),
+      entity_id: entityId,
       action: 'DELETE',
       actor_user_id: this.cls.get('audit.userId'),
       reason: this.cls.get('audit.reason'),

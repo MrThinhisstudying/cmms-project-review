@@ -90,8 +90,15 @@ export class AuditService {
       let afterSnapshot: any = null;
 
       if (log.action === 'DELETE') {
-        if (!log.before) throw new BadRequestException('No snapshot to restore');
-        const restored = await repo.save({ ...log.before });
+        if (!log.before) throw new BadRequestException('Không thể hoàn tác: Bản ghi không có dữ liệu sao lưu trước khi xóa');
+        const toRestore = { ...log.before };
+        if (log.entity_name === 'User') {
+          toRestore.must_change_password = true;
+          if (!toRestore.password) {
+            toRestore.password = '12345678';
+          }
+        }
+        const restored = await repo.save(toRestore);
         beforeSnapshot = null;
         afterSnapshot = restored;
       } else if (log.action === 'INSERT') {
@@ -162,7 +169,17 @@ export class AuditService {
         const idVal = this.coercePk(meta, log.entity_id);
 
         if (log.action === 'DELETE') {
-          if (log.before) await repo.save({ ...log.before });
+          if (!log.before) {
+            throw new BadRequestException(`Không thể hoàn tác thao tác xóa: Bản ghi "${log.entity_name} #${log.entity_id}" không có dữ liệu sao lưu trước khi xóa.`);
+          }
+          const toRestore = { ...log.before };
+          if (log.entity_name === 'User') {
+            toRestore.must_change_password = true;
+            if (!toRestore.password) {
+              toRestore.password = '12345678';
+            }
+          }
+          await repo.save(toRestore);
         } else if (log.action === 'INSERT') {
           const existing = await repo.findOne({ where: { [pk]: idVal } as any });
           if (existing) await repo.remove(existing);

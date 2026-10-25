@@ -6,6 +6,7 @@ import {PassportModule} from '@nestjs/passport';
 import {TypeOrmModule} from '@nestjs/typeorm';
 
 import {UserModule} from '../user/user.module';
+import {NotificationModule} from '../notification/notification.module';
 import {AuthController} from './auth.controller';
 import {AuthService} from './auth.service';
 import {SessionSerializer} from './session.serializer';
@@ -18,6 +19,7 @@ import {PermissionsGuard} from './guards/permissions.guard';
     imports: [
         ConfigModule,
         UserModule,
+        NotificationModule,
         TypeOrmModule.forFeature([User]),
         JwtModule.registerAsync({
             imports: [ConfigModule],

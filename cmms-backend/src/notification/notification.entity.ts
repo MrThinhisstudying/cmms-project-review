@@ -7,7 +7,7 @@ export class Notification {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @ManyToOne(() => User, { nullable: true })
+  @ManyToOne(() => User, { nullable: true, onDelete: 'CASCADE' })
   user?: User;
 
   @ManyToOne(() => Department, { nullable: true })

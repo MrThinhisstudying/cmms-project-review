@@ -59,10 +59,10 @@ const ENTITY_LABELS: Record<string, string> = {
 function getEntityDisplay(log: AuditLog): string {
   const entityLabel = ENTITY_LABELS[log.entity_name] || log.entity_name;
   const target =
-    (log.after && (log.after.name || log.after.title)) ||
-    (log.before && (log.before.name || log.before.title)) ||
-    `#${log.entity_id}`;
-  return `${entityLabel} ${target}`;
+    (log.after && (log.after.name || log.after.title || log.after.email)) ||
+    (log.before && (log.before.name || log.before.title || log.before.email)) ||
+    (log.entity_id && log.entity_id !== "undefined" ? `#${log.entity_id}` : "");
+  return `${entityLabel} ${target}`.trim();
 }
 
 const AuditHistory: React.FC = () => {
@@ -106,15 +106,11 @@ const AuditHistory: React.FC = () => {
   const handleConfirmRollback = async (txId: number) => {
     setRollingTxId(txId);
     try {
-      const ok = await rollbackTx(txId, "admin rollback dữ liệu");
-      if (ok) {
-        message.success("Rollback thành công");
-        fetchWithFilters(buildFilters(currentPage));
-      } else {
-        message.error("Rollback thất bại");
-      }
-    } catch (error) {
-       message.error("Có lỗi xảy ra khi rollback");
+      await rollbackTx(txId, "admin rollback dữ liệu");
+      message.success("Rollback thành công");
+      fetchWithFilters(buildFilters(currentPage));
+    } catch (error: any) {
+      message.error(error?.message || "Có lỗi xảy ra khi rollback");
     } finally {
       setRollingTxId(null);
     }

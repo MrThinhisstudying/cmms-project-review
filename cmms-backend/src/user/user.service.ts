@@ -227,14 +227,50 @@ export class UserService {
     }
 
     async delete(id: number): Promise<void> {
+        const user = await this.userRepository.findOne({ where: { user_id: id } });
+        if (!user) {
+            throw new NotFoundException('Không tìm thấy người dùng cần xóa');
+        }
+
+        // Kiểm tra ràng buộc dữ liệu nghiệp vụ quan trọng (phiếu sửa chữa, bảo dưỡng, xuất kho...)
         try {
-            const result = await this.userRepository.delete(id);
-            if (result.affected === 0) {
-                throw new NotFoundException(`Xoá người dùng thất bại`);
+            const repairCount = await this.userRepository.manager.query(
+                `SELECT COUNT(*) FROM repair WHERE created_by = $1 OR approved_by_manager_request = $1 OR approved_by_admin_request = $1`,
+                [id]
+            );
+            if (parseInt(repairCount[0]?.count || '0', 10) > 0) {
+                throw new BadRequestException('Không thể xóa nhân sự này vì đã phát sinh lịch sử lập/duyệt phiếu sửa chữa. Vui lòng chuyển trạng thái tài khoản sang "Ngừng hoạt động" thay vì xóa.');
             }
-        } catch (error) {
+
+            const maintCount = await this.userRepository.manager.query(
+                `SELECT COUNT(*) FROM maintenance_tickets WHERE leader_user_id = $1 OR operator_user_id = $1`,
+                [id]
+            );
+            if (parseInt(maintCount[0]?.count || '0', 10) > 0) {
+                throw new BadRequestException('Không thể xóa nhân sự này vì đã có dữ liệu phiếu bảo dưỡng định kỳ liên kết. Vui lòng chuyển trạng thái tài khoản sang "Ngừng hoạt động".');
+            }
+
+            const stockOutCount = await this.userRepository.manager.query(
+                `SELECT COUNT(*) FROM inventory_stock_out WHERE requested_by = $1 OR approved_by = $1`,
+                [id]
+            );
+            if (parseInt(stockOutCount[0]?.count || '0', 10) > 0) {
+                throw new BadRequestException('Không thể xóa nhân sự này vì đã có chứng từ xuất kho vật tư liên kết. Vui lòng chuyển trạng thái tài khoản sang "Ngừng hoạt động".');
+            }
+
+            // Dọn dẹp các ràng buộc phụ trợ trước khi xóa (bảng trung gian, thông báo, chức vụ phụ)
+            await this.userDeviceGroupRepository.delete({ user_id: id });
+            await this.userRepository.manager.query(`DELETE FROM user_department WHERE user_id = $1`, [id]);
+            await this.userRepository.manager.query(`DELETE FROM notification WHERE "userUserId" = $1`, [id]);
+            await this.userRepository.manager.query(`UPDATE department SET manager_id = NULL WHERE manager_id = $1`, [id]);
+            await this.userRepository.manager.query(`UPDATE department SET deputy_id = NULL WHERE deputy_id = $1`, [id]);
+            await this.userRepository.manager.query(`UPDATE device_group SET leader_id = NULL WHERE leader_id = $1`, [id]);
+
+            await this.userRepository.remove(user);
+        } catch (error: any) {
             if (error instanceof HttpException) throw error;
-            throw new InternalServerErrorException('Xoá người dùng thất bại');
+            console.error('Lỗi khi xóa người dùng:', error);
+            throw new BadRequestException(error?.message || 'Xoá người dùng thất bại do ràng buộc dữ liệu');
         }
     }
 

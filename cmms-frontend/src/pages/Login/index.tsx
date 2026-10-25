@@ -1,251 +1,205 @@
-import { LoginContainer, LoginFormContainer } from "./styles";
-import { yupResolver } from "@hookform/resolvers/yup";
-import { useRef, useState } from "react";
-import { useForm, Resolver } from "react-hook-form";
+import React, { useState } from "react";
+import { Form, Input, Button, Checkbox, message, Tooltip } from "antd";
+import { UserOutlined, LockOutlined, LoginOutlined, WarningOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import * as yup from "yup";
-import Toast from "./../../components/Toast";
 import ACV_LOGO from "../../assets/images/acv-logo.png";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
 import { signIn } from "../../apis/signIn";
-import ForgotPasswordDialog from "./components/ForgotPasswordDialog";
-import { CustomButton } from "../../components/Button";
-import CheckBox from "../../components/CheckBox";
-import Input from "../../components/Input";
-import { forgotPassword } from "../../apis/users";
 import { setToken } from "../../utils/auth";
+import ForgotPasswordDialog from "./components/ForgotPasswordDialog";
+import { LoginContainer, LoginCard, BrandHeader, LoginFooter } from "./styles";
 
-interface ILoginForm {
+interface ILoginFormValues {
   email: string;
   password: string;
   remember?: boolean;
 }
 
-export type ToastContent = {
-  type: "error" | "success" | "info";
-  content: string;
-  duration?: number;
-};
-
-const Login = () => {
+const Login: React.FC = () => {
   const navigate = useNavigate();
   const { updateUser } = useAuthContext();
-  const [openToast, setOpenToast] = useState(false);
-  const toast = useRef<ToastContent>({
-    type: "success",
-    content: "",
-  });
+  const [form] = Form.useForm<ILoginFormValues>();
 
-  const schema = yup.object().shape({
-    email: yup
-      .string()
-      .required("Xin vui lòng nhập đầy đủ email")
-      .email("Xin vui lòng điền đúng định dạng email"),
-    password: yup.string().required("Xin vui lòng nhập đầy đủ mật khẩu"),
-    remember: yup.boolean(),
-  });
+  const [loading, setLoading] = useState(false);
+  const [capsLockActive, setCapsLockActive] = useState(false);
+  const [openForgotPasswordDialog, setOpenForgotPasswordDialog] = useState(false);
 
-  const resolver = yupResolver(schema) as unknown as Resolver<ILoginForm>;
-
-  const {
-    control,
-    formState: { errors },
-    handleSubmit,
-  } = useForm<ILoginForm>({
-    defaultValues: {
-      email: "",
-      password: "",
-      remember: false,
-    },
-    resolver,
-  });
-
-  const [openForgotPasswordDialog, setOpenForgotPasswordDialog] =
-    useState(false);
-
-  const handleCloseForgotPassword = () => {
-    setOpenForgotPasswordDialog(false);
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.getModifierState && e.getModifierState("CapsLock")) {
+      setCapsLockActive(true);
+    } else {
+      setCapsLockActive(false);
+    }
   };
 
-  const handleOpenForgotPassword = () => {
-    setOpenForgotPasswordDialog(true);
-  };
-
-  const showToast = (content: ToastContent) => {
-    toast.current = content;
-    setOpenToast(true);
-  };
-
-  const handleLogin = async (data: ILoginForm) => {
+  const handleLogin = async (values: ILoginFormValues) => {
+    setLoading(true);
     try {
-      const token = await signIn(data.email, data.password);
+      const emailOrUser = values.email?.trim();
+      const password = values.password;
+
+      const token = await signIn(emailOrUser, password);
 
       if (token) {
-        showToast({
-          content: "Đăng nhập thành công",
-          type: "success",
-        });
-
-        setToken(token, data.remember || false);
+        message.success("Đăng nhập thành công!");
+        setToken(token, values.remember || false);
         updateUser(token);
         navigate("/trang_chu");
       } else {
-        showToast({
-          content:
-            "Đăng nhập không thành công. Vui lòng kiểm tra lại tài khoản và mật khẩu",
-          type: "error",
-        });
+        message.error("Đăng nhập không thành công. Vui lòng kiểm tra lại tài khoản và mật khẩu!");
       }
     } catch (error: any) {
-      showToast({
-        content:
-          "Đăng nhập không thành công. Vui lòng kiểm tra lại tài khoản và mật khẩu",
-        type: "error",
-      });
+      message.error(error?.message || "Đăng nhập không thành công. Vui lòng thử lại!");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleForgotPassword = async (data: { email: string }) => {
-    try {
-      await forgotPassword(data.email);
-
-      showToast({
-        content: "Vui lòng kiểm tra email của bạn",
-        type: "success",
-      });
-
-      handleCloseForgotPassword();
-    } catch (error: any) {
-      showToast({
-        content:
-          error.response?.data?.message || "Có lỗi xảy ra, vui lòng thử lại",
-        type: "error",
-      });
-    }
+  const handlePrefillCredentials = (username: string, defaultPass: string) => {
+    form.setFieldsValue({
+      email: username,
+      password: defaultPass,
+    });
+    message.info("Đã điền tài khoản và mật khẩu mặc định (12345678). Hãy bấm Đăng nhập!");
   };
+
   return (
     <LoginContainer>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          minHeight: "100vh",
-          width: "100%",
-        }}
-      >
-        <div
-          style={{
-            flexGrow: 1,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: "0 16px",
-          }}
+      {/* Spacer to push content gracefully */}
+      <div style={{ height: 16 }} />
+
+      <LoginCard>
+        <BrandHeader>
+          <img src={ACV_LOGO} className="logo" alt="ACV Logo" />
+          <h1 className="system-title">Hệ Thống Quản Lý Kỹ Thuật (CMMS)</h1>
+          <p className="airport-subtitle">Cảng Hàng Không Côn Đảo</p>
+          <div className="divider" />
+        </BrandHeader>
+
+        <Form
+          form={form}
+          layout="vertical"
+          requiredMark={false}
+          initialValues={{ remember: true }}
+          onFinish={handleLogin}
         >
+          <Form.Item
+            name="email"
+            label={<span style={{ fontWeight: 600, color: "#334155" }}>Tài khoản / Email</span>}
+            rules={[
+              { required: true, message: "Vui lòng nhập tài khoản hoặc email đăng nhập" },
+            ]}
+            style={{ marginBottom: 18 }}
+          >
+            <Input
+              size="large"
+              prefix={<UserOutlined style={{ color: "#2563eb", marginRight: 4 }} />}
+              placeholder="Nhập email hoặc tên tài khoản"
+              allowClear
+              style={{
+                borderRadius: 8,
+                fontSize: 14,
+                padding: "8px 12px",
+              }}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="password"
+            label={
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                <span style={{ fontWeight: 600, color: "#334155" }}>Mật khẩu</span>
+                {capsLockActive && (
+                  <Tooltip title="Phím Caps Lock đang bật">
+                    <span style={{ fontSize: 12, color: "#ea580c", display: "inline-flex", alignItems: "center", gap: 3, fontWeight: 500 }}>
+                      <WarningOutlined /> Caps Lock BẬT
+                    </span>
+                  </Tooltip>
+                )}
+              </div>
+            }
+            rules={[{ required: true, message: "Vui lòng nhập mật khẩu" }]}
+            style={{ marginBottom: 14 }}
+          >
+            <Input.Password
+              size="large"
+              prefix={<LockOutlined style={{ color: "#2563eb", marginRight: 4 }} />}
+              placeholder="Nhập mật khẩu của bạn"
+              onKeyDown={handleKeyDown}
+              onKeyUp={handleKeyDown}
+              style={{
+                borderRadius: 8,
+                fontSize: 14,
+                padding: "8px 12px",
+              }}
+            />
+          </Form.Item>
+
           <div
             style={{
-              backgroundColor: "white",
-              padding: "32px",
-              borderRadius: "8px",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-              width: "400px",
-              maxWidth: "100%",
-              zIndex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 22,
             }}
           >
-            <div style={{ marginBottom: "24px", textAlign: "center" }}>
-              <img src={ACV_LOGO} height={50} width={250} alt="ACV Logo" />
-              <p
-                style={{
-                  color: "#667085",
-                  marginTop: "8px",
-                  fontSize: "16px",
-                  fontWeight: "bold",
-                }}
-              >
-                Tổng công ty Cảng hàng không Việt Nam - CTCP
-              </p>
-            </div>
+            <Form.Item name="remember" valuePropName="checked" noStyle>
+              <Checkbox style={{ color: "#475467", fontSize: 13, fontWeight: 500 }}>
+                Ghi nhớ đăng nhập
+              </Checkbox>
+            </Form.Item>
 
-            <LoginFormContainer onSubmit={handleSubmit(handleLogin)}>
-              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-                <Input
-                  control={control}
-                  error={errors?.email?.message || ""}
-                  label="Tên đăng nhập"
-                  name="email"
-                  placeholder="Tài khoản"
-                />
-                <Input
-                  control={control}
-                  type="password"
-                  error={errors?.password?.message || ""}
-                  label="Mật khẩu"
-                  name="password"
-                  placeholder="Mật khẩu"
-                />
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginTop: "16px",
-                }}
-              >
-                <CheckBox
-                  control={control}
-                  name="remember"
-                  label={
-                    <span style={{ color: "#1D2939", fontWeight: 500, fontSize: 14 }}>
-                      Ghi nhớ đăng nhập
-                    </span>
-                  }
-                />
-                <span
-                  style={{
-                    color: "#115eaf",
-                    fontWeight: 500,
-                    fontSize: 14,
-                    cursor: "pointer",
-                  }}
-                  onClick={handleOpenForgotPassword}
-                >
-                  Tôi quên mật khẩu
-                </span>
-              </div>
-              <CustomButton variant="contained" type="submit" fullWidth style={{ marginTop: 16 }}>
-                Đăng nhập
-              </CustomButton>
-            </LoginFormContainer>
+            <Button
+              type="link"
+              onClick={() => setOpenForgotPasswordDialog(true)}
+              style={{
+                padding: 0,
+                fontSize: 13,
+                fontWeight: 600,
+                color: "#2563eb",
+                height: "auto",
+              }}
+            >
+              Quên mật khẩu?
+            </Button>
           </div>
-        </div>
 
-        <div style={{ textAlign: "center", padding: "16px" }}>
-          <p
-            style={{
-              color: "white",
-              fontSize: 14,
-              fontWeight: "bold",
-            }}
-          >
-            Tổng công ty Cảng hàng không Việt Nam - CTCP
-          </p>
-        </div>
+          <Form.Item style={{ marginBottom: 0 }}>
+            <Button
+              type="primary"
+              htmlType="submit"
+              size="large"
+              block
+              loading={loading}
+              icon={<LoginOutlined />}
+              style={{
+                height: 46,
+                borderRadius: 8,
+                background: "linear-gradient(135deg, #1e40af 0%, #2563eb 100%)",
+                border: "none",
+                fontWeight: 600,
+                fontSize: 15,
+                boxShadow: "0 6px 18px rgba(37, 99, 235, 0.35)",
+              }}
+            >
+              Đăng nhập
+            </Button>
+          </Form.Item>
+        </Form>
+      </LoginCard>
 
-        <ForgotPasswordDialog
-          open={openForgotPasswordDialog}
-          onClose={handleCloseForgotPassword}
-          onSubmit={handleForgotPassword}
-        />
-        <Toast
-          content={toast.current.content}
-          variant={toast.current.type}
-          open={openToast}
-          onClose={() => setOpenToast(false)}
-        />
-      </div>
+      <LoginFooter>
+        <p>Tổng công ty Cảng hàng không Việt Nam - CTCP (ACV)</p>
+        <p className="brand-note">
+          Cảng hàng không Côn Đảo • Bản quyền © 2026 ACV. Bảo lưu mọi quyền.
+        </p>
+      </LoginFooter>
+
+      <ForgotPasswordDialog
+        open={openForgotPasswordDialog}
+        onClose={() => setOpenForgotPasswordDialog(false)}
+        onSuccessPrefill={handlePrefillCredentials}
+      />
     </LoginContainer>
   );
 };
