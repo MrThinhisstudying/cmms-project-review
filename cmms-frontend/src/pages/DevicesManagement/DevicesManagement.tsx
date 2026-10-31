@@ -904,6 +904,7 @@ const DevicesManagement: React.FC = () => {
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         device={detailDevice}
+        onUpdateSuccess={fetchDevices}
       />
 
       <DeviceQRModal

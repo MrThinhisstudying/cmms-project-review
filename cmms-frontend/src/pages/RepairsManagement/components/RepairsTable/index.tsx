@@ -45,6 +45,8 @@ interface RepairsTableProps {
   userRole?: string;
   currentUser?: any;
   hasPermission: (code: string) => boolean;
+  selectedRowKeys?: React.Key[];
+  onSelectChange?: (selectedRowKeys: React.Key[]) => void;
 }
 
 const RepairsTable: React.FC<RepairsTableProps> = ({
@@ -58,6 +60,8 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
   canUpdate,
   userRole,
   currentUser,
+  selectedRowKeys,
+  onSelectChange,
 }) => {
   const getPhase = (r: IRepair) => {
     if (r.status_acceptance === "acceptance_admin_approved") return "done";
@@ -679,9 +683,17 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
     },
   ];
 
+  const rowSelection = onSelectChange
+    ? {
+        selectedRowKeys,
+        onChange: onSelectChange,
+      }
+    : undefined;
+
   return (
     <div style={{ background: "#fff", borderRadius: 12, overflow: "hidden" }}>
       <Table
+        rowSelection={rowSelection}
         columns={columns}
         dataSource={rows}
         rowKey="repair_id"

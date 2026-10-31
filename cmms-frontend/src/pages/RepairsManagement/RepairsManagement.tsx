@@ -26,6 +26,7 @@ import {
   BarChartOutlined,
   BellOutlined,
   ClearOutlined,
+  CheckSquareOutlined,
 } from "@ant-design/icons";
 import { useRepairsContext } from "../../context/RepairsContext/RepairsContext";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
@@ -43,6 +44,8 @@ import {
   BulkRepairUpsertPayload,
   RepairInspectionPayload,
   RepairAcceptancePayload,
+  BulkRepairInspectionPayload,
+  BulkRepairAcceptancePayload,
 } from "../../types/repairs.types";
 
 const { Title } = Typography;
@@ -58,6 +61,8 @@ const RepairsManagement: React.FC = () => {
     reviewRepairItem,
     submitInspectionStep,
     submitAcceptanceStep,
+    submitBulkInspectionStep,
+    submitBulkAcceptanceStep,
     requestStockOutForRepair,
     exportRepairItem,
     deleteRepairItem,
@@ -361,6 +366,48 @@ const RepairsManagement: React.FC = () => {
   const [selectedRepair, setSelectedRepair] = useState<IRepair | null>(null);
   const [saving, setSaving] = useState(false);
 
+  // Bulk actions state
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [bulkRepairsForAction, setBulkRepairsForAction] = useState<IRepair[]>([]);
+
+  const selectedRepairs = useMemo(() => {
+    return repairs.filter((r) => selectedRowKeys.includes(r.repair_id));
+  }, [repairs, selectedRowKeys]);
+
+  const canBulkInspection = useMemo(() => {
+    if (selectedRepairs.length < 1) return false;
+    return selectedRepairs.every(
+      (r) =>
+        !r.canceled &&
+        r.status_request === "COMPLETED" &&
+        r.status_inspection !== "inspection_admin_approved"
+    );
+  }, [selectedRepairs]);
+
+  const canBulkAcceptance = useMemo(() => {
+    if (selectedRepairs.length < 1) return false;
+    return selectedRepairs.every(
+      (r) =>
+        !r.canceled &&
+        r.status_inspection === "inspection_admin_approved" &&
+        r.status_acceptance !== "acceptance_admin_approved"
+    );
+  }, [selectedRepairs]);
+
+  const handleOpenBulkInspection = () => {
+    if (selectedRepairs.length === 0) return;
+    setBulkRepairsForAction(selectedRepairs);
+    setSelectedRepair(selectedRepairs[0]);
+    setOpenInspection(true);
+  };
+
+  const handleOpenBulkAcceptance = () => {
+    if (selectedRepairs.length === 0) return;
+    setBulkRepairsForAction(selectedRepairs);
+    setSelectedRepair(selectedRepairs[0]);
+    setOpenAcceptance(true);
+  };
+
   // Sync selectedRepair with latest data from repairs list
   useEffect(() => {
     // BLOCK UPDATE if any form is open (User is editing)
@@ -454,20 +501,31 @@ const RepairsManagement: React.FC = () => {
     if (!selectedRepair) return;
     try {
       setSaving(true);
-      if (payload.inspection_materials?.length) {
-        for (const m of payload.inspection_materials) {
-          if (m.item_id) {
-            await requestStockOutForRepair({
-              item_id: m.item_id,
-              quantity: m.quantity,
-              purpose: "Sửa chữa",
-              repair_id: selectedRepair.repair_id,
-            });
+      if (bulkRepairsForAction && bulkRepairsForAction.length > 1) {
+        const bulkPayload: BulkRepairInspectionPayload = {
+          repair_ids: bulkRepairsForAction.map((r) => r.repair_id),
+          ...payload,
+        };
+        await submitBulkInspectionStep(bulkPayload);
+        message.success(`Đã cập nhật kiểm nghiệm cho ${bulkRepairsForAction.length} phiếu thành công!`);
+        setSelectedRowKeys([]);
+        setBulkRepairsForAction([]);
+      } else {
+        if (payload.inspection_materials?.length) {
+          for (const m of payload.inspection_materials) {
+            if (m.item_id) {
+              await requestStockOutForRepair({
+                item_id: m.item_id,
+                quantity: m.quantity,
+                purpose: "Sửa chữa",
+                repair_id: selectedRepair.repair_id,
+              });
+            }
           }
         }
+        await submitInspectionStep(selectedRepair.repair_id, payload);
+        message.success("Đã cập nhật kiểm nghiệm");
       }
-      await submitInspectionStep(selectedRepair.repair_id, payload);
-      message.success("Đã cập nhật kiểm nghiệm");
       setOpenInspection(false);
       setSelectedRepair(null);
     } catch (e) {
@@ -481,8 +539,19 @@ const RepairsManagement: React.FC = () => {
     if (!selectedRepair) return;
     try {
       setSaving(true);
-      await submitAcceptanceStep(selectedRepair.repair_id, payload);
-      message.success("Đã cập nhật nghiệm thu");
+      if (bulkRepairsForAction && bulkRepairsForAction.length > 1) {
+        const bulkPayload: BulkRepairAcceptancePayload = {
+          repair_ids: bulkRepairsForAction.map((r) => r.repair_id),
+          ...payload,
+        };
+        await submitBulkAcceptanceStep(bulkPayload);
+        message.success(`Đã cập nhật nghiệm thu cho ${bulkRepairsForAction.length} phiếu thành công!`);
+        setSelectedRowKeys([]);
+        setBulkRepairsForAction([]);
+      } else {
+        await submitAcceptanceStep(selectedRepair.repair_id, payload);
+        message.success("Đã cập nhật nghiệm thu");
+      }
       setOpenAcceptance(false);
       setSelectedRepair(null);
     } catch (e) {
@@ -1198,11 +1267,67 @@ const RepairsManagement: React.FC = () => {
           }}
           styles={{ body: { padding: 0 } }}
         >
+          {selectedRowKeys.length > 0 && (
+            <div
+              style={{
+                padding: "12px 16px",
+                background: "#f0f7ff",
+                borderBottom: "1px solid #bae0ff",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                flexWrap: "wrap",
+                gap: 12,
+              }}
+            >
+              <Space wrap align="center">
+                <CheckCircleOutlined style={{ color: "#1677ff", fontSize: 16 }} />
+                <Typography.Text strong>
+                  Đã chọn <span style={{ color: "#0958d9" }}>{selectedRowKeys.length}</span> phiếu:
+                </Typography.Text>
+                {selectedRepairs.slice(0, 4).map((r) => (
+                  <Tag key={r.repair_id} color="blue">
+                    #{r.repair_id} {r.device?.name}
+                  </Tag>
+                ))}
+                {selectedRepairs.length > 4 && (
+                  <Tag color="default">+{selectedRepairs.length - 4} xe khác</Tag>
+                )}
+              </Space>
+
+              <Space wrap>
+                <Button
+                  type="primary"
+                  icon={<ToolOutlined />}
+                  disabled={!canBulkInspection}
+                  onClick={handleOpenBulkInspection}
+                >
+                  Lập B04 hàng loạt ({selectedRowKeys.length} xe)
+                </Button>
+                <Button
+                  type="primary"
+                  style={{
+                    background: canBulkAcceptance ? "#52c41a" : undefined,
+                    borderColor: canBulkAcceptance ? "#52c41a" : undefined,
+                  }}
+                  icon={<CheckSquareOutlined />}
+                  disabled={!canBulkAcceptance}
+                  onClick={handleOpenBulkAcceptance}
+                >
+                  Lập B05 hàng loạt ({selectedRowKeys.length} xe)
+                </Button>
+                <Button onClick={() => setSelectedRowKeys([])}>Bỏ chọn</Button>
+              </Space>
+            </div>
+          )}
+
           <Spin spinning={loading}>
             <RepairsTable
               rows={filteredRepairs}
               rowsPerPage={10}
               page={1}
+              selectedRowKeys={selectedRowKeys}
+              onSelectChange={setSelectedRowKeys}
               onReview={handleReview}
               onDelete={handleDelete}
               onEdit={(r) => {
@@ -1214,10 +1339,12 @@ const RepairsManagement: React.FC = () => {
               }}
               onOpenInspection={(r) => {
                 setSelectedRepair(r);
+                setBulkRepairsForAction([]);
                 setOpenInspection(true);
               }}
               onOpenAcceptance={(r) => {
                 setSelectedRepair(r);
+                setBulkRepairsForAction([]);
                 setOpenAcceptance(true);
               }}
               onExport={(r, t, opts) => handleExport(r.repair_id, t, opts)}
@@ -1294,10 +1421,12 @@ const RepairsManagement: React.FC = () => {
           onClose={() => {
             setOpenInspection(false);
             setSelectedRepair(null);
+            setBulkRepairsForAction([]);
           }}
           onSubmit={handleInspection}
           loading={saving}
           initialData={selectedRepair}
+          bulkRepairs={bulkRepairsForAction}
         />
       )}
 
@@ -1307,10 +1436,12 @@ const RepairsManagement: React.FC = () => {
           onClose={() => {
             setOpenAcceptance(false);
             setSelectedRepair(null);
+            setBulkRepairsForAction([]);
           }}
           onSubmit={handleAcceptance}
           loading={saving}
           initialData={selectedRepair}
+          bulkRepairs={bulkRepairsForAction}
         />
       )}
     </div>

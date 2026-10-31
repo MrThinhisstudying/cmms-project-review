@@ -261,6 +261,37 @@ export class DevicesService {
 
             Object.assign(device, deviceData);
 
+            if (Array.isArray(deviceData.license_info)) {
+                if (!deviceData.inspection_expiry) {
+                    let latestInsp: Date | null = null;
+                    for (const lic of deviceData.license_info) {
+                        if (!lic || !lic.expiry) continue;
+                        const t = String(lic.type || '').toLowerCase();
+                        if (t.includes('đăng kiểm') || t.includes('kiểm định') || t.includes('khí thải') || t.includes('an toàn') || t.includes('lưu hành')) {
+                            const d = new Date(lic.expiry);
+                            if (!isNaN(d.getTime())) {
+                                if (!latestInsp || d > latestInsp) latestInsp = d;
+                            }
+                        }
+                    }
+                    if (latestInsp) device.inspection_expiry = latestInsp;
+                }
+                if (!deviceData.insurance_expiry) {
+                    let latestIns: Date | null = null;
+                    for (const lic of deviceData.license_info) {
+                        if (!lic || !lic.expiry) continue;
+                        const t = String(lic.type || '').toLowerCase();
+                        if (t.includes('bảo hiểm')) {
+                            const d = new Date(lic.expiry);
+                            if (!isNaN(d.getTime())) {
+                                if (!latestIns || d > latestIns) latestIns = d;
+                            }
+                        }
+                    }
+                    if (latestIns) device.insurance_expiry = latestIns;
+                }
+            }
+
             if (userIds) {
                 const users = await this.userRepository.findByIds(userIds);
                 device.users = users;

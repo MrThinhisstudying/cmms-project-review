@@ -13,6 +13,7 @@ import {
   CheckCircleOutlined,
 } from '@ant-design/icons';
 import { IDevice, DeviceStatus } from '../../../../types/devicesManagement.types';
+import { calculateDeviceExpiries } from '../../../../utils/deviceExpiries';
 import dayjs from 'dayjs';
 
 const { Text } = Typography;
@@ -294,12 +295,19 @@ const DevicesTable: React.FC<DevicesTableProps> = ({
       key: 'inspection_expiry',
       width: 160,
       align: 'center' as const,
-      render: (date: string) => {
-        const info = getInspectionStatus(date);
+      render: (date: string, record: IDevice) => {
+        let effectiveDate = date;
+        if (!effectiveDate && record.license_info) {
+          const calc = calculateDeviceExpiries(record.license_info);
+          if (calc.inspection_expiry) {
+            effectiveDate = calc.inspection_expiry;
+          }
+        }
+        const info = getInspectionStatus(effectiveDate);
         if (!info) return <span style={{ color: '#cbd5e1' }}>—</span>;
 
         return (
-          <Tooltip title={date ? `Ngày hết hạn: ${dayjs(date).format('DD/MM/YYYY')}` : undefined}>
+          <Tooltip title={effectiveDate ? `Ngày hết hạn: ${dayjs(effectiveDate).format('DD/MM/YYYY')}` : undefined}>
             <div
               style={{
                 display: 'inline-flex',

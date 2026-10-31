@@ -1,4 +1,5 @@
 import { IUser } from "./user.types";
+import { IRepair } from "./repairs.types";
 
 export interface ICategory {
   id: number;
@@ -50,7 +51,7 @@ export interface IStockOut {
   items?: IStockOutItem[];
   occurred_at?: string;
   created_at?: string;
-  repair?: { repair_id: number } | null;
+  repair?: IRepair | null;
 }
 
 export interface IStockOutItem {

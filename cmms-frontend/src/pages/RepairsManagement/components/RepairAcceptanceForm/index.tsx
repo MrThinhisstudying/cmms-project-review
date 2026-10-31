@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Modal,
   Button,
@@ -11,14 +11,17 @@ import {
   Table,
   Descriptions,
   InputNumber,
-  Form
+  Form,
+  Tag,
+  Alert
 } from "antd";
 import {
   SaveOutlined,
   CloseOutlined,
   PlusOutlined,
   CheckCircleOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  CarOutlined
 } from "@ant-design/icons";
 import {
   IRepair,
@@ -27,6 +30,7 @@ import {
 } from "../../../../types/repairs.types";
 import { useUsersContext } from "../../../../context/UsersContext/UsersContext";
 import { useAuthContext } from "../../../../context/AuthContext/AuthContext";
+import WarehouseItemBadge from "../WarehouseItemBadge";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -64,12 +68,14 @@ export default function RepairAcceptanceForm({
   onClose,
   onSubmit,
   loading,
+  bulkRepairs,
 }: {
   open: boolean;
   initialData: IRepair;
   onClose: () => void;
   onSubmit: (data: RepairAcceptancePayload) => Promise<void> | void;
   loading?: boolean;
+  bulkRepairs?: IRepair[];
 }) {
   const { users } = useUsersContext();
   const { user: currentUser } = useAuthContext();
@@ -79,15 +85,28 @@ export default function RepairAcceptanceForm({
   const committee = Form.useWatch('committee', form) || [];
   const selectedUserIds = Array.isArray(committee) ? committee.map((c: any) => c?.user_id).filter(Boolean) : [];
 
+  const isBulk = Boolean(bulkRepairs && bulkRepairs.length > 1);
+  const targetRepairs = isBulk ? (bulkRepairs as IRepair[]) : (initialData ? [initialData] : []);
+
   // --- STATE ---
   const [materials, setMaterials] = useState<ExtendedMaterial[]>([]);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [location, setLocation] = useState("");
 
+  const lastRepairIdRef = useRef<number | null>(null);
+
   // --- INIT ---
   useEffect(() => {
-    if (!open || !initialData) return;
+    if (!open || !initialData) {
+      lastRepairIdRef.current = null;
+      return;
+    }
+
+    if (lastRepairIdRef.current === initialData.repair_id) {
+      return;
+    }
+    lastRepairIdRef.current = initialData.repair_id;
 
     // 1. Committee
     const initialCommittee = initialData.acceptance_committee?.map(u => ({
@@ -180,7 +199,7 @@ export default function RepairAcceptanceForm({
     });
     setRejectReason("");
     setLocation(initialData.device.location_coordinates || "");
-  }, [open, initialData, form]);
+  }, [open, initialData?.repair_id, form]);
 
   // --- ACTIONS ---
 
@@ -286,6 +305,10 @@ export default function RepairAcceptanceForm({
   const canApprove = currentUser?.role === 'UNIT_HEAD' || currentUser?.role === 'ADMIN' || currentUser?.role === 'DIRECTOR' || currentUser?.role === 'TEAM_LEAD' || currentUser?.role === 'OPERATOR';
   const canModify = currentUser?.role === 'TECHNICIAN' || currentUser?.role === 'ADMIN';
 
+  // Xác định ngữ cảnh: Lập mới (hoặc lập hàng loạt) vs Xem xét phê duyệt phiếu đã lập
+  const isAlreadyCreated = Boolean(initialData?.acceptance_created_at);
+  const isCreationMode = isBulk || !isAlreadyCreated;
+
   if (!initialData) return null;
 
   return (
@@ -297,28 +320,45 @@ export default function RepairAcceptanceForm({
          centered
          title={
              <div style={{ textAlign: "center", marginBottom: 20 }}>
-                 <Title level={4} style={{ margin: 0 }}>KẾT QUẢ NGHIỆM THU (B06)</Title>
-                 <Text type="secondary">Mã phiếu: #{initialData.repair_id}</Text>
+                 <Title level={4} style={{ margin: 0 }}>
+                   KẾT QUẢ NGHIỆM THU (B05) {isBulk ? `- HÀNG LOẠT (${targetRepairs.length} XE)` : ''}
+                 </Title>
+                 <Text type="secondary">
+                   {isBulk 
+                     ? `Áp dụng cho ${targetRepairs.length} phiếu: ${targetRepairs.map(r => `#${r.repair_id}`).join(', ')}` 
+                     : `Mã phiếu: #${initialData.repair_id}`}
+                 </Text>
              </div>
          }
          footer={
             <div style={{ textAlign: "right" }}>
                 <Button onClick={onClose} style={{ marginRight: 8 }}>Thoát</Button>
                 
-                {canModify && (
-                   <Button type="primary" icon={<SaveOutlined />} loading={loading} onClick={() => handleFinalSubmit('approve')}>
-                       Lưu phiếu
-                   </Button>
-                )}
-
-                {canApprove && (
+                {isCreationMode ? (
+                   // Khi lập phiếu (hoặc lập hàng loạt): Chỉ hiển thị nút Lưu phiếu
+                   canModify && (
+                      <Button type="primary" icon={<SaveOutlined />} loading={loading} onClick={() => handleFinalSubmit('approve')}>
+                          {isBulk ? `Lưu phiếu hàng loạt (${targetRepairs.length} xe)` : "Lưu phiếu"}
+                      </Button>
+                   )
+                ) : (
+                   // Khi xem xét phiếu đơn lẻ đã được lập trước đó
                    <Space style={{ marginLeft: 8 }}>
-                       <Button danger icon={<CloseOutlined />} onClick={() => setRejectModalOpen(true)}>
-                           Từ chối
-                       </Button>
-                       <Button type="primary" icon={<CheckCircleOutlined />} onClick={() => handleFinalSubmit('approve')}>
-                           Phê duyệt
-                       </Button>
+                       {canModify && (
+                          <Button icon={<SaveOutlined />} loading={loading} onClick={() => handleFinalSubmit('approve')}>
+                              Lưu thay đổi
+                          </Button>
+                       )}
+                       {canApprove && (
+                          <>
+                              <Button danger icon={<CloseOutlined />} onClick={() => setRejectModalOpen(true)}>
+                                  Từ chối
+                              </Button>
+                              <Button type="primary" icon={<CheckCircleOutlined />} onClick={() => handleFinalSubmit('approve')}>
+                                  Phê duyệt
+                              </Button>
+                          </>
+                       )}
                    </Space>
                 )}
            </div>
@@ -327,12 +367,34 @@ export default function RepairAcceptanceForm({
          <Form form={form} layout="vertical">
              {/* I. DEVICE INFO */}
              <Typography.Title level={5}>I. THÔNG TIN THIẾT BỊ</Typography.Title>
-             <Descriptions bordered size="small" column={2} style={{ marginBottom: 24 }}>
-                <Descriptions.Item label="Tên thiết bị">{initialData.device?.name}</Descriptions.Item>
-                <Descriptions.Item label="Biển số đăng ký">{initialData.device?.reg_number}</Descriptions.Item>
-                <Descriptions.Item label="Nơi đặt">{initialData.device?.location_coordinates || initialData.device?.serial_number}</Descriptions.Item>
-                <Descriptions.Item label="Đơn vị quản lý tài sản">{initialData.device?.using_department || initialData.created_department?.name}</Descriptions.Item>
-             </Descriptions>
+             <div style={{ marginBottom: 24 }}>
+                {isBulk ? (
+                  <div style={{ background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: 8, padding: 14 }}>
+                    <Space direction="vertical" style={{ width: '100%' }} size={6}>
+                      <Typography.Text strong style={{ color: '#096dd9' }}>
+                        <CarOutlined style={{ marginRight: 6 }} /> Đang lập nghiệm thu chung cho {targetRepairs.length} thiết bị:
+                      </Typography.Text>
+                      <Space wrap size={[6, 6]}>
+                        {targetRepairs.map(r => (
+                          <Tag key={r.repair_id} color="blue" style={{ fontSize: 13, padding: '3px 8px' }}>
+                            <strong>#{r.repair_id}</strong>: {r.device?.name} ({r.device?.reg_number || r.device?.serial_number || 'N/A'})
+                          </Tag>
+                        ))}
+                      </Space>
+                      <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+                        ℹ️ Thành phần hội đồng nghiệm thu, đánh giá hư hỏng và kết quả thu hồi/phế liệu sẽ được áp dụng đồng bộ cho các xe trên.
+                      </Typography.Text>
+                    </Space>
+                  </div>
+                ) : (
+                  <Descriptions bordered size="small" column={2}>
+                    <Descriptions.Item label="Tên thiết bị">{initialData.device?.name}</Descriptions.Item>
+                    <Descriptions.Item label="Biển số đăng ký">{initialData.device?.reg_number}</Descriptions.Item>
+                    <Descriptions.Item label="Nơi đặt">{initialData.device?.location_coordinates || initialData.device?.serial_number}</Descriptions.Item>
+                    <Descriptions.Item label="Đơn vị quản lý tài sản">{initialData.device?.using_department || initialData.created_department?.name}</Descriptions.Item>
+                  </Descriptions>
+                )}
+             </div>
 
              {/* II. COMMITTEE */}
              <Typography.Title level={5}>II. THÀNH PHẦN NGHIỆM THU</Typography.Title>
@@ -424,8 +486,20 @@ export default function RepairAcceptanceForm({
                     {
                         title: 'Vật tư thay thế',
                         children: [
-                            { title: 'Tên', dataIndex: 'name', width: 200, render: (val, record) => (
-                                <Input value={val} onChange={e => updateMaterial(record.key, 'name', e.target.value)} placeholder="Tên" />
+                            { title: 'Tên', dataIndex: 'name', width: 220, render: (val, record) => (
+                                <Space direction="vertical" style={{ width: '100%' }} size={4}>
+                                    <Input value={val} onChange={e => updateMaterial(record.key, 'name', e.target.value)} placeholder="Tên" />
+                                    {record.item_id && (
+                                        <WarehouseItemBadge
+                                            itemId={record.item_id}
+                                            itemName={record.name}
+                                            itemCode={record.item_code}
+                                            requestedQty={record.replace_qty}
+                                            requestedUnit={record.unit}
+                                            showName={false}
+                                        />
+                                    )}
+                                </Space>
                             )},
                             { title: 'ĐVT', dataIndex: 'unit', width: 80, render: (val, record) => (
                                 <Input value={val} onChange={e => updateMaterial(record.key, 'unit', e.target.value)} />

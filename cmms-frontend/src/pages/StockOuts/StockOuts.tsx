@@ -24,10 +24,14 @@ import {
 import dayjs from "dayjs";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
+import { useAuthContext } from "../../context/AuthContext/AuthContext";
 import { useInventoryContext } from "../../context/InventoryContext/InventoryContext";
 import StockOutDetailDrawer from "./components/StockOutDetailDrawer";
 import StockOutsTable from "./components/StockOutsTable";
 import CreateStockOutDirectModal from "./components/CreateStockOutDirectModal";
+import RepairDetailDrawer from "../RepairsManagement/components/RepairDetailDrawer";
+import { getRepairById, exportRepair } from "../../apis/repairs";
+import { IRepair } from "../../types/repairs.types";
 import { IStockOut } from "../../types/inventory.types";
 
 const { Content } = Layout;
@@ -35,11 +39,44 @@ const { Title, Text } = Typography;
 const { Option } = Select;
 
 export default function StockOutsPage() {
+  const { user } = useAuthContext();
   const { stockOuts, categories, loading, refreshAll } = useInventoryContext();
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+
+  // Hồ sơ phiếu sửa chữa (Drawer xem toàn bộ)
+  const [repairDrawerOpen, setRepairDrawerOpen] = useState(false);
+  const [selectedRepair, setSelectedRepair] = useState<IRepair | null>(null);
+  const [loadingRepair, setLoadingRepair] = useState(false);
+
+  const handleOpenRepairDetail = async (repairId: number) => {
+    try {
+      setLoadingRepair(true);
+      const token = localStorage.getItem("token");
+      const data = await getRepairById(repairId, token);
+      setSelectedRepair(data);
+      setRepairDrawerOpen(true);
+    } catch (err: any) {
+      message.error(err?.message || "Không thể tải hồ sơ sửa chữa");
+    } finally {
+      setLoadingRepair(false);
+    }
+  };
+
+  const handleExportRepair = async (type: "B03" | "B04" | "B05") => {
+    if (!selectedRepair) return;
+    const key = "export_repair_loading";
+    try {
+      message.loading({ content: "Đang tạo file PDF xem trước...", key });
+      const token = localStorage.getItem("token");
+      await exportRepair(selectedRepair.repair_id, token, type);
+      message.success({ content: "Đã mở file xem trước", key, duration: 2 });
+    } catch {
+      message.error({ content: "Xuất file thất bại", key, duration: 2 });
+    }
+  };
 
   // Bộ lọc & Tìm kiếm
   const [searchText, setSearchText] = useState("");
@@ -670,16 +707,18 @@ export default function StockOutsPage() {
           data={filteredStockOuts}
           loading={loading}
           onDetail={handleDetail}
+          onOpenRepairDetail={handleOpenRepairDetail}
           onSuccess={refreshAll}
           onError={() => {}}
         />
       </Card>
 
-      {/* ── 5. Drawer Chi tiết ── */}
+      {/* ── 5. Drawer Chi tiết Xuất kho ── */}
       <StockOutDetailDrawer
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         stockOutId={detailId ?? undefined}
+        onOpenRepairDetail={handleOpenRepairDetail}
         onActionSuccess={refreshAll}
       />
 
@@ -688,6 +727,19 @@ export default function StockOutsPage() {
         open={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
         onSuccess={refreshAll}
+      />
+
+      {/* ── 7. Drawer Chi tiết Phiếu Sửa Chữa (Toàn bộ hồ sơ B03, B04, B05) ── */}
+      <RepairDetailDrawer
+        open={repairDrawerOpen}
+        data={selectedRepair}
+        onClose={() => {
+          setRepairDrawerOpen(false);
+          setSelectedRepair(null);
+        }}
+        onExport={handleExportRepair}
+        canExport={true}
+        currentUser={user}
       />
     </Content>
   );

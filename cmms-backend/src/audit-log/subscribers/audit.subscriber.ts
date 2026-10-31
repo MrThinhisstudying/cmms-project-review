@@ -13,6 +13,8 @@ import { computeShallowDiff, isTrackedEntity, sanitizeSnapshot } from '../utils/
 
 @EventSubscriber()
 export class AuditSubscriber implements EntitySubscriberInterface {
+  private readonly beforeMap = new Map<string, any>();
+
   constructor(
     private readonly connection: Connection,
     private readonly cls: ClsService,
@@ -42,6 +44,7 @@ export class AuditSubscriber implements EntitySubscriberInterface {
   async afterInsert(event: InsertEvent<any>) {
     const name = event.metadata.targetName;
     if (!isTrackedEntity(name)) return;
+    if (this.cls.get('audit.skipAudit')) return;
 
     const repo = event.manager.getRepository(AuditLog);
     const pk = event.metadata.primaryColumns[0].propertyName;
@@ -62,26 +65,82 @@ export class AuditSubscriber implements EntitySubscriberInterface {
   }
 
   async beforeUpdate(event: UpdateEvent<any>) {
-    if (!isTrackedEntity(event.metadata.targetName)) return;
-    (event as any).__audit_before__ = event.databaseEntity
-      ? sanitizeSnapshot(event.metadata.targetName, event.databaseEntity)
-      : null;
+    const name = event.metadata.targetName;
+    if (!isTrackedEntity(name)) return;
+    if (this.cls.get('audit.skipAudit')) return;
+
+    const pk = event.metadata.primaryColumns[0]?.propertyName;
+    let idVal = event.entity?.[pk] ?? (event as any).entityId;
+    if (idVal === undefined && (event as any).criteria) {
+      const crit = (event as any).criteria;
+      idVal = typeof crit === 'object' ? (crit?.[pk] ?? crit?.id) : crit;
+    }
+
+    let beforeData = event.databaseEntity;
+    if (!beforeData && idVal !== undefined && idVal !== null) {
+      try {
+        const targetRepo = event.manager.getRepository(event.metadata.target);
+        beforeData = await targetRepo.findOne({ where: { [pk]: idVal } as any });
+      } catch (err) {
+        console.error('AuditSubscriber beforeUpdate query error:', err);
+      }
+    }
+
+    const snapshot = beforeData ? sanitizeSnapshot(name, beforeData) : null;
+    (event as any).__audit_before__ = snapshot;
+
+    if (idVal !== undefined && idVal !== null) {
+      const key = `${name}:${idVal}`;
+      this.beforeMap.set(key, snapshot);
+      if (event.queryRunner && !event.queryRunner.data) {
+        (event.queryRunner as any).data = {};
+      }
+      if (event.queryRunner?.data) {
+        event.queryRunner.data[key] = snapshot;
+      }
+    }
   }
 
   async afterUpdate(event: UpdateEvent<any>) {
     const name = event.metadata.targetName;
     if (!isTrackedEntity(name)) return;
+    if (this.cls.get('audit.skipAudit')) return;
 
-    const before = (event as any).__audit_before__;
-    const after = event.entity ? sanitizeSnapshot(name, event.entity) : null;
+    const pk = event.metadata.primaryColumns[0].propertyName;
+    let idVal = event.entity?.[pk] ?? (event as any).entityId;
+    if (idVal === undefined && (event as any).criteria) {
+      const crit = (event as any).criteria;
+      idVal = typeof crit === 'object' ? (crit?.[pk] ?? crit?.id) : crit;
+    }
+
+    const key = idVal !== undefined && idVal !== null ? `${name}:${idVal}` : null;
+    const before =
+      (key && this.beforeMap.has(key) ? this.beforeMap.get(key) : null) ??
+      (key && event.queryRunner?.data ? event.queryRunner.data[key] : null) ??
+      (event as any).__audit_before__ ??
+      null;
+
+    if (key) {
+      this.beforeMap.delete(key);
+      if (event.queryRunner?.data) {
+        delete event.queryRunner.data[key];
+      }
+    }
+
+    let afterData = event.entity;
+    if (afterData && before) {
+      afterData = { ...before, ...afterData };
+    }
+    const after = afterData ? sanitizeSnapshot(name, afterData) : null;
 
     const repo = event.manager.getRepository(AuditLog);
-    const pk = event.metadata.primaryColumns[0].propertyName;
     const tx = await this.ensureTransaction(event.manager);
+
+    const entityId = String((after ?? before)?.[pk] ?? idVal ?? 'unknown');
 
     await repo.save(repo.create({
       entity_name: name,
-      entity_id: String((after ?? before)?.[pk]),
+      entity_id: entityId,
       action: 'UPDATE',
       actor_user_id: this.cls.get('audit.userId'),
       reason: this.cls.get('audit.reason'),
@@ -95,6 +154,7 @@ export class AuditSubscriber implements EntitySubscriberInterface {
   async beforeRemove(event: RemoveEvent<any>) {
     const name = event.metadata.targetName;
     if (!isTrackedEntity(name)) return;
+    if (this.cls.get('audit.skipAudit')) return;
 
     const repo = event.manager.getRepository(AuditLog);
     const pk = event.metadata.primaryColumns[0].propertyName;

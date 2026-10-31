@@ -11,7 +11,7 @@ export class AuditContextMiddleware implements NestMiddleware {
       return next();
     }
 
-    const actor = req.user?.id ?? req.headers['x-actor-id'];
+    const actor = req.user?.user_id ?? req.user?.id ?? req.headers['x-actor-id'];
     const correlationId = req.headers['x-correlation-id'] || randomUUID();
     const reason = req.headers['x-change-reason'] || undefined;
 

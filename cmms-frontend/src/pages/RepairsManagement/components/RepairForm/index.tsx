@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import {
   Modal,
   Form,
@@ -32,23 +32,37 @@ const RepairForm: React.FC<RepairFormProps> = ({
 }) => {
   const [form] = Form.useForm();
   const { devices, fetchDevices } = useDevicesContext();
+  const lastRepairIdRef = useRef<number | null | "NEW" | undefined>(undefined);
 
-
+  // Tải danh mục thiết bị nếu chưa có khi mở modal
   useEffect(() => {
-    if (open) {
-      if (!devices.length) fetchDevices();
+    if (open && devices.length === 0) {
+      fetchDevices();
+    }
+  }, [open, devices.length, fetchDevices]);
+
+  // Khởi tạo giá trị form duy nhất 1 lần khi mở form hoặc khi đổi sang phiếu khác
+  useEffect(() => {
+    if (!open) {
+      lastRepairIdRef.current = undefined;
+      return;
+    }
+
+    const currentId = initialData ? initialData.repair_id : "NEW";
+
+    if (lastRepairIdRef.current !== currentId) {
+      lastRepairIdRef.current = currentId;
       if (initialData) {
         form.setFieldsValue({
           device_id: initialData.device.device_id,
           location_issue: initialData.location_issue,
           recommendation: initialData.recommendation,
-
         });
       } else {
         form.resetFields();
       }
     }
-  }, [open, initialData, devices.length, fetchDevices, form]);
+  }, [open, initialData, form]);
 
   const handleSubmit = async () => {
     try {

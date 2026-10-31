@@ -4,6 +4,8 @@ import {
   BulkRepairUpsertPayload,
   RepairInspectionPayload,
   RepairAcceptancePayload,
+  BulkRepairInspectionPayload,
+  BulkRepairAcceptancePayload,
 } from "../types/repairs.types";
 
 const BASE_URL = `${process.env.REACT_APP_BASE_URL}/repairs`;
@@ -48,6 +50,22 @@ export const getRepairPendingStats = async (token: string | null): Promise<numbe
   const data = await res.json();
   if (!res.ok) return 0; // Fail silent for stats
   return data.data.count;
+};
+
+export const getRepairById = async (
+  id: number,
+  token: string | null
+): Promise<IRepair> => {
+  const res = await fetch(`${BASE_URL}/${id}`, {
+    headers: {
+      Authorization: token ? `Bearer ${token}` : "",
+      "Content-Type": "application/json",
+    },
+  });
+  const data = await res.json();
+  if (!res.ok)
+    throw new Error(data.message || "Lấy thông tin phiếu sửa chữa thất bại");
+  return data.data;
 };
 
 export const getRepairsByDevice = async (
@@ -183,6 +201,40 @@ export const submitAcceptance = async (
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || "Cập nhật nghiệm thu thất bại");
+  return data;
+};
+
+export const submitBulkInspection = async (
+  token: string | null,
+  payload: BulkRepairInspectionPayload
+) => {
+  const res = await fetch(`${BASE_URL}/bulk-inspection`, {
+    method: "PATCH",
+    headers: {
+      Authorization: token ? `Bearer ${token}` : "",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Cập nhật kiểm nghiệm hàng loạt thất bại");
+  return data;
+};
+
+export const submitBulkAcceptance = async (
+  token: string | null,
+  payload: BulkRepairAcceptancePayload
+) => {
+  const res = await fetch(`${BASE_URL}/bulk-acceptance`, {
+    method: "PATCH",
+    headers: {
+      Authorization: token ? `Bearer ${token}` : "",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Cập nhật nghiệm thu hàng loạt thất bại");
   return data;
 };
 

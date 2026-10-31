@@ -151,3 +151,12 @@ export interface RepairAcceptancePayload {
   location_coordinates?: string;
   inspection_materials?: IInspectionMaterial[];
 }
+
+export interface BulkRepairInspectionPayload extends RepairInspectionPayload {
+  repair_ids: number[];
+}
+
+export interface BulkRepairAcceptancePayload extends RepairAcceptancePayload {
+  repair_ids: number[];
+}
+

@@ -46,6 +46,7 @@ import { useRefreshOnFocus } from '../../hooks/useRefreshOnFocus';
 import { isMaintenanceOverdue, getMaintenanceStatusInfo } from '../../utils/maintenanceDue';
 import { useSocket } from '../../hooks/useSocket';
 import RepairDetailDrawer from '../RepairsManagement/components/RepairDetailDrawer';
+import { calculateDeviceExpiries } from '../../utils/deviceExpiries';
 import { IDevice, DeviceStatus } from '../../types/devicesManagement.types';
 import { IRepair } from '../../types/repairs.types';
 
@@ -252,26 +253,39 @@ const HybridDashboard: React.FC = () => {
     ).length;
     const readinessRate = total > 0 ? Math.round((active / total) * 100) : 0;
 
+    const getEffectiveInspection = (d: any) => {
+      if (d.inspection_expiry) return d.inspection_expiry;
+      if (d.license_info) {
+        return calculateDeviceExpiries(d.license_info).inspection_expiry;
+      }
+      return null;
+    };
+
     // Thiết bị đang sự cố hoặc cần chú ý
-    const attentionDevices = devices.filter(
-      (d) =>
+    const attentionDevices = devices.filter((d) => {
+      const exp = getEffectiveInspection(d);
+      return (
         d.status === ('DANG_SUA_CHUA' as DeviceStatus) ||
         d.status === ('SU_DUNG_HAN_CHE' as DeviceStatus) ||
-        (d.inspection_expiry && dayjs(d.inspection_expiry).isBefore(dayjs(), 'day'))
-    );
+        (exp && dayjs(exp).isBefore(dayjs(), 'day'))
+      );
+    });
 
     // Thiết bị hết hạn kiểm định
-    const expiredInspection = devices.filter(
-      (d) => d.inspection_expiry && dayjs(d.inspection_expiry).isBefore(dayjs(), 'day')
-    ).length;
+    const expiredInspection = devices.filter((d) => {
+      const exp = getEffectiveInspection(d);
+      return exp && dayjs(exp).isBefore(dayjs(), 'day');
+    }).length;
 
     // Thiết bị sắp hết hạn kiểm định (trong 30 ngày)
-    const expiringInspection = devices.filter(
-      (d) =>
-        d.inspection_expiry &&
-        dayjs(d.inspection_expiry).isAfter(dayjs()) &&
-        dayjs(d.inspection_expiry).diff(dayjs(), 'day') <= 30
-    ).length;
+    const expiringInspection = devices.filter((d) => {
+      const exp = getEffectiveInspection(d);
+      return (
+        exp &&
+        dayjs(exp).isAfter(dayjs()) &&
+        dayjs(exp).diff(dayjs(), 'day') <= 30
+      );
+    }).length;
 
     return {
       total,

@@ -59,11 +59,35 @@ export class StockOutService {
     }
 
     async listAll() {
-        return await this.repo.find({relations: ['item', 'item.category', 'requested_by', 'approved_by', 'repair'], order: {created_at: 'DESC'}});
+        return await this.repo.find({
+            relations: [
+                'item',
+                'item.category',
+                'requested_by',
+                'approved_by',
+                'repair',
+                'repair.device',
+                'repair.created_by',
+                'repair.created_department',
+            ],
+            order: {created_at: 'DESC'},
+        });
     }
 
     async get(id: number) {
-        const so = await this.repo.findOne({where: {id}, relations: ['item', 'item.category', 'requested_by', 'approved_by', 'repair']});
+        const so = await this.repo.findOne({
+            where: {id},
+            relations: [
+                'item',
+                'item.category',
+                'requested_by',
+                'approved_by',
+                'repair',
+                'repair.device',
+                'repair.created_by',
+                'repair.created_department',
+            ],
+        });
         if (!so) throw new NotFoundException('Stock out not found');
         return so;
     }

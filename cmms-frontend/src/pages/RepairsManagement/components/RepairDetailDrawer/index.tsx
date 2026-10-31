@@ -33,6 +33,7 @@ import {
 import dayjs from "dayjs";
 import { useRepairsContext } from "../../../../context/RepairsContext/RepairsContext";
 import { IRepair } from "../../../../types/repairs.types";
+import WarehouseItemBadge from "../WarehouseItemBadge";
 
 const { Title } = Typography;
 const { TextArea } = Input;
@@ -574,7 +575,17 @@ export default function RepairDetailDrawer({
         title: "Tên vật tư / phụ tùng",
         dataIndex: "item_name",
         key: "name",
-        render: (text: string) => <span style={{ fontWeight: 600, color: "#0f172a" }}>{text}</span>,
+        render: (text: string, record: any) => (
+          <WarehouseItemBadge
+            itemId={record.item_id}
+            itemName={record.item_name || record.name || text}
+            itemCode={record.item_code || record.code}
+            requestedQty={record.quantity}
+            requestedUnit={record.unit}
+            repairId={data?.repair_id}
+            showName={true}
+          />
+        ),
       },
       { title: "Quy cách, mã số", dataIndex: "formatted_specs", key: "specifications" },
       {
@@ -695,6 +706,8 @@ export default function RepairDetailDrawer({
       if (!mergedMap.has(name)) {
         mergedMap.set(name, {
           key: `mat_${i}`,
+          item_id: m.item_id,
+          item_code: m.item_code || m.code,
           item_name: name,
           unit: m.unit,
           specifications: m.specifications || m.code || m.item_code,
@@ -706,6 +719,7 @@ export default function RepairDetailDrawer({
         });
       } else {
         const ex = mergedMap.get(name);
+        if (!ex.item_id && m.item_id) ex.item_id = m.item_id;
         ex.quantity = (ex.quantity || 0) + (m.quantity || 0);
       }
     });
@@ -836,7 +850,22 @@ export default function RepairDetailDrawer({
               {
                 title: "Vật tư thay thế",
                 children: [
-                  { title: "Tên vật tư", dataIndex: "item_name", minWidth: 140 },
+                  {
+                    title: "Tên vật tư",
+                    dataIndex: "item_name",
+                    minWidth: 160,
+                    render: (text: string, record: any) => (
+                      <WarehouseItemBadge
+                        itemId={record.item_id}
+                        itemName={record.item_name || text}
+                        itemCode={record.item_code}
+                        requestedQty={typeof record.quantity === "number" ? record.quantity : undefined}
+                        requestedUnit={record.unit}
+                        repairId={data?.repair_id}
+                        showName={true}
+                      />
+                    ),
+                  },
                   { title: "ĐVT", dataIndex: "unit", width: 60, align: "center" },
                   { title: "SL", dataIndex: "quantity", width: 60, align: "center" },
                 ],

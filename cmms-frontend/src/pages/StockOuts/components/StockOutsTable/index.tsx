@@ -12,11 +12,13 @@ import {
 import dayjs from "dayjs";
 import { useInventoryContext } from "../../../../context/InventoryContext/InventoryContext";
 import { IStockOut } from "../../../../types/inventory.types";
+import RepairTicketBadge from "../RepairTicketBadge";
 
 interface Props {
   data: IStockOut[];
   loading: boolean;
   onDetail: (so: IStockOut) => void;
+  onOpenRepairDetail?: (repairId: number) => void;
   onError?: (msg: string) => void;
   onSuccess?: () => void;
 }
@@ -25,6 +27,7 @@ export default function StockOutsTable({
   data = [],
   loading,
   onDetail,
+  onOpenRepairDetail,
   onError,
   onSuccess,
 }: Props) {
@@ -170,21 +173,11 @@ export default function StockOutsTable({
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
                 <span style={{ fontSize: 11, color: "#64748b" }}>{catName}</span>
-                {isRepair && (
-                  <Tag
-                    color="purple"
-                    style={{
-                      fontSize: 10,
-                      lineHeight: "16px",
-                      padding: "0 6px",
-                      borderRadius: 4,
-                      margin: 0,
-                      fontWeight: 600,
-                    }}
-                  >
-                    <ToolOutlined style={{ marginRight: 3 }} />
-                    Phiếu SC #{record.repair?.repair_id}
-                  </Tag>
+                {isRepair && record.repair && (
+                  <RepairTicketBadge
+                    repair={record.repair}
+                    onClick={(id) => onOpenRepairDetail?.(id)}
+                  />
                 )}
               </div>
             </div>

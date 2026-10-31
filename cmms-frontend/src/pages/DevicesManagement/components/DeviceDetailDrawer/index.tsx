@@ -1,5 +1,25 @@
 import React, { useEffect, useState } from "react";
-import { Drawer, Tabs, Descriptions, Tag, Row, Col, Space, Table, Empty, Card, Button, notification, Select, Popover, message, Avatar, Typography } from "antd";
+import {
+  Drawer,
+  Tabs,
+  Descriptions,
+  Tag,
+  Row,
+  Col,
+  Space,
+  Table,
+  Empty,
+  Card,
+  Button,
+  notification,
+  Select,
+  Popover,
+  message,
+  Avatar,
+  Typography,
+  Alert,
+  Popconfirm,
+} from "antd";
 import {
   StarFilled,
   ToolOutlined,
@@ -10,6 +30,15 @@ import {
   MailOutlined,
   UserOutlined,
   CarOutlined,
+  EditOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  WarningOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  CloseCircleOutlined,
+  SafetyCertificateOutlined,
+  CalendarOutlined,
 } from "@ant-design/icons";
 
 import { getToken } from "../../../../utils/auth";
@@ -21,10 +50,11 @@ import MaintenanceHistoryTab from "./MaintenanceHistoryTab";
 import RepairHistoryTab from "./RepairHistoryTab";
 import { getAllUsers } from "../../../../apis/users";
 import { IUser } from "../../../../types/user.types";
-import LicenseModal from "./LicenseModal";
+import LicenseModal, { LicenseRecord, LicenseModalMode } from "./LicenseModal";
 import { updateDevice } from "../../../../apis/devices";
 import { IDevice } from "../../../../types/devicesManagement.types";
 import { IDeviceGroup, getDeviceGroups, getDeviceGroup, assignDeviceToGroup } from "../../../../apis/device-groups";
+import { calculateDeviceExpiries } from "../../../../utils/deviceExpiries";
 import dayjs from "dayjs";
 
 const { Text } = Typography;
@@ -33,13 +63,16 @@ type Props = {
   open: boolean;
   onClose: () => void;
   device: IDevice | null;
+  onUpdateSuccess?: () => void;
 };
 
 export default function DeviceDetailDrawer({
   open,
   onClose,
   device,
+  onUpdateSuccess,
 }: Props) {
+  const [currentDevice, setCurrentDevice] = useState<IDevice | null>(device);
   const [maintenances, setMaintenances] = useState<IMaintenance[]>([]);
   const [repairs, setRepairs] = useState<IRepair[]>([]);
   const [loadingMaint, setLoadingMaint] = useState(false);
@@ -47,7 +80,19 @@ export default function DeviceDetailDrawer({
 
   const [users, setUsers] = useState<IUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+
+  // Quản lý Modal Giấy phép / Kiểm định
   const [showLicenseModal, setShowLicenseModal] = useState(false);
+  const [licenseModalMode, setLicenseModalMode] = useState<LicenseModalMode>("create");
+  const [selectedLicense, setSelectedLicense] = useState<LicenseRecord | null>(null);
+  const [isEditingHistorical, setIsEditingHistorical] = useState(false);
+  const [savingLicense, setSavingLicense] = useState(false);
+
+  useEffect(() => {
+    setCurrentDevice(device);
+  }, [device]);
+
+  const dev = currentDevice || device;
 
   // Pagination for repairs
   const [repairPage, setRepairPage] = useState(1);
@@ -149,36 +194,161 @@ export default function DeviceDetailDrawer({
     })();
   }, [open, device?.device_id, repairPage, repairPageSize]);
 
-  const handleAddLicense = async (data: any) => {
-      if (!device) return;
-      try {
-          const currentLicenses = Array.isArray(device.license_info) ? device.license_info : [];
-          
-          let typeStr = data.type;
-          if (Array.isArray(data.type)) {
-              typeStr = data.type.join(', ');
-          }
-
-          const newLicense = {
-              type: typeStr,
-              number: data.number,
-              issuer: data.issuer,
-              expiry: data.expiry,
-              note: data.note,
-          };
-          const updatedLicenses = [...currentLicenses, newLicense];
-          
-          await updateDevice(device.device_id, getToken(), { license_info: updatedLicenses });
-          
-          notification.success({ message: "Thêm giấy phép thành công", title: "Thành công" });
-          setShowLicenseModal(false);
-          onClose(); 
-      } catch (error) {
-          notification.error({ message: "Thêm giấy phép thất bại", title: "Thất bại" });
-      }
+  const handleOpenAddLicense = () => {
+    setSelectedLicense(null);
+    setLicenseModalMode("create");
+    setIsEditingHistorical(false);
+    setShowLicenseModal(true);
   };
 
-  if (!device) return null;
+  const handleOpenEditLicense = (record: any, isHistorical = false) => {
+    setSelectedLicense(record);
+    setLicenseModalMode("edit");
+    setIsEditingHistorical(isHistorical);
+    setShowLicenseModal(true);
+  };
+
+  const handleOpenRenewLicense = (record: any) => {
+    setSelectedLicense(record);
+    setLicenseModalMode("renew");
+    setIsEditingHistorical(false);
+    setShowLicenseModal(true);
+  };
+
+  const handleSaveLicense = async (data: LicenseRecord, mode: LicenseModalMode) => {
+    const targetDev = dev;
+    if (!targetDev || !targetDev.device_id) return;
+
+    setSavingLicense(true);
+    try {
+      const currentLicenses = Array.isArray(targetDev.license_info) ? [...targetDev.license_info] : [];
+      let updatedLicenses: any[] = [];
+
+      if (mode === "create") {
+        const newRecord = {
+          id: `lic_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          type: data.type,
+          number: data.number,
+          issuer: data.issuer || "",
+          expiry: data.expiry,
+          note: data.note || "",
+          created_at: new Date().toISOString(),
+        };
+        updatedLicenses = [...currentLicenses, newRecord];
+      } else if (mode === "edit") {
+        updatedLicenses = currentLicenses.map((item, idx) => {
+          const isTarget = data.id ? item.id === data.id : idx === (data as any)._index;
+          if (isTarget) {
+            return {
+              ...item,
+              type: data.type,
+              number: data.number,
+              issuer: data.issuer || "",
+              expiry: data.expiry,
+              note: data.note || "",
+              updated_at: new Date().toISOString(),
+            };
+          }
+          return item;
+        });
+      } else if (mode === "renew") {
+        const newId = `lic_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        const renewedRecord = {
+          id: newId,
+          type: data.type,
+          number: data.number,
+          issuer: data.issuer || "",
+          expiry: data.expiry,
+          note: data.note || "",
+          previous_expiry: data.previous_expiry,
+          renewed_from_id: data.id,
+          created_at: new Date().toISOString(),
+        };
+
+        // Đánh dấu giấy phép cũ đã được gia hạn
+        updatedLicenses = currentLicenses.map((item, idx) => {
+          const isTarget = data.id ? item.id === data.id : idx === (data as any)._index;
+          if (isTarget) {
+            return {
+              ...item,
+              is_renewed: true,
+              renewed_to_id: newId,
+              updated_at: new Date().toISOString(),
+            };
+          }
+          return item;
+        });
+        updatedLicenses.push(renewedRecord);
+      }
+
+      const expiries = calculateDeviceExpiries(updatedLicenses);
+      const payload: any = {
+        license_info: updatedLicenses,
+        ...expiries,
+      };
+
+      await updateDevice(targetDev.device_id, getToken(), payload);
+
+      setCurrentDevice({
+        ...targetDev,
+        ...payload,
+      });
+
+      notification.success({
+        message:
+          mode === "create"
+            ? "Thêm giấy phép thành công"
+            : mode === "edit"
+            ? "Cập nhật giấy phép thành công"
+            : "Gia hạn giấy phép thành công",
+        title: "Thành công",
+      });
+
+      setShowLicenseModal(false);
+      onUpdateSuccess?.();
+    } catch (error) {
+      console.error(error);
+      notification.error({ message: "Lưu giấy phép thất bại", title: "Thất bại" });
+    } finally {
+      setSavingLicense(false);
+    }
+  };
+
+  const handleDeleteLicense = async (record: any) => {
+    const targetDev = dev;
+    if (!targetDev || !targetDev.device_id) return;
+
+    try {
+      const currentLicenses = Array.isArray(targetDev.license_info) ? [...targetDev.license_info] : [];
+      const updatedLicenses = currentLicenses.filter((item, idx) => {
+        if (record.id && item.id) {
+          return item.id !== record.id;
+        }
+        return idx !== record._index;
+      });
+
+      const expiries = calculateDeviceExpiries(updatedLicenses);
+      const payload: any = {
+        license_info: updatedLicenses,
+        ...expiries,
+      };
+
+      await updateDevice(targetDev.device_id, getToken(), payload);
+
+      setCurrentDevice({
+        ...targetDev,
+        ...payload,
+      });
+
+      notification.success({ message: "Xóa giấy phép thành công", title: "Thành công" });
+      onUpdateSuccess?.();
+    } catch (error) {
+      console.error(error);
+      notification.error({ message: "Xóa giấy phép thất bại", title: "Thất bại" });
+    }
+  };
+
+  if (!dev) return null;
 
   // Helper for status translation
   const STATUS_LABELS: Record<string, string> = {
@@ -475,71 +645,456 @@ export default function DeviceDetailDrawer({
 
   // --- Tab 3: Kiểm định/Giấy phép ---
   const renderInspection = () => {
-    // If license_info is an array of objects
-    const licenseData = Array.isArray(device.license_info) ? device.license_info : [];
+    const targetDev = dev;
+    if (!targetDev) return null;
+
+    const licenseData = Array.isArray(targetDev.license_info) ? targetDev.license_info : [];
     
     // Add current expiry dates as rows if license_info is empty
-    const data = licenseData.length > 0 ? licenseData : [
-        { type: 'Đăng kiểm', expiry: device.inspection_expiry, issuer: '-', number: '' },
-        { type: 'Bảo hiểm', expiry: device.insurance_expiry, issuer: '-', number: '' },
+    const rawData = licenseData.length > 0 ? licenseData : [
+        { type: 'Đăng kiểm', expiry: targetDev.inspection_expiry, issuer: '-', number: '' },
+        { type: 'Bảo hiểm', expiry: targetDev.insurance_expiry, issuer: '-', number: '' },
     ].filter(i => i.expiry);
 
-    const columns: any[] = [
-        { 
-            title: 'STT', 
-            key: 'index', 
-            width: 60, 
-            align: 'center',
-            render: (_: any, __: any, index: number) => index + 1 
-        },
-        { 
-            title: 'Số Giấy phép hoặc tem kiểm định', 
-            dataIndex: 'number', 
-            key: 'number', 
-            render: (text: string, record: any) => (
-                <div>
-                    <div style={{ fontWeight: 500 }}>{text || '---'}</div>
-                    <div style={{ fontSize: 12, color: '#888' }}>({record.type || 'Chưa xác định'})</div>
-                </div>
-            ) 
-        },
-        { 
-            title: 'Đơn vị cấp', 
-            dataIndex: 'issuer', 
-            key: 'issuer',
-            align: 'center', 
-            render: (t: any) => t || '-' 
-        },
-        { 
-            title: 'Thời hạn', 
-            dataIndex: 'expiry', 
-            key: 'expiry', 
-            align: 'center',
-            render: (d: string) => d ? dayjs(d).format('DD/MM/YYYY') : '-' 
-        },
-        {
-            title: 'Ghi chú',
-            dataIndex: 'note',
-            key: 'note',
-            render: (t: any) => t || ''
+    const data = rawData.map((item: any, idx: number) => ({
+      ...item,
+      _key: item.id || `lic_${idx}`,
+      _index: idx,
+    }));
+
+    // Helper chuẩn hoá loại giấy phép để gom nhóm chu kỳ
+    const normalizeLicenseType = (type: string) => {
+      const t = String(type || "").trim().toLowerCase();
+      if (t.includes("đăng kiểm") || t.includes("kiểm định")) return "dang_kiem";
+      if (t.includes("bảo hiểm")) return "bao_hiem";
+      if (t.includes("khí thải")) return "khi_thai";
+      if (t.includes("an toàn")) return "an_toan";
+      if (t.includes("sân đỗ") || t.includes("lưu hành")) return "luu_hanh";
+      return t;
+    };
+
+    // Kiểm tra xem giấy phép này đã được gia hạn (có chu kỳ mới kế thừa) hay chưa
+    const isRenewedRecord = (item: any, allItems: any[]) => {
+      if (!item.expiry) return false;
+      if (item.is_renewed || item.renewed_to_id) return true;
+      const itemDate = dayjs(item.expiry).startOf("day");
+      const normType = normalizeLicenseType(item.type);
+
+      return allItems.some((other) => {
+        if (other === item || !other.expiry) return false;
+        // Liên kết trực tiếp qua ID hoặc ngày hết hạn cũ
+        if (other.renewed_from_id && other.renewed_from_id === item.id) return true;
+        if (other.previous_expiry && dayjs(other.previous_expiry).startOf("day").isSame(itemDate)) {
+          return true;
         }
+        // Cùng loại giấy phép và có một kỳ mới với thời hạn xa hơn
+        if (normalizeLicenseType(other.type) === normType && dayjs(other.expiry).startOf("day").isAfter(itemDate)) {
+          return true;
+        }
+        return false;
+      });
+    };
+
+    // Tìm bản ghi chu kỳ mới đã gia hạn từ bản ghi này (nếu có)
+    const getRenewedByRecord = (item: any, allItems: any[]) => {
+      if (!item.expiry) return null;
+      const itemDate = dayjs(item.expiry).startOf("day");
+      const normType = normalizeLicenseType(item.type);
+
+      return allItems.find((other) => {
+        if (other === item || !other.expiry) return false;
+        if (other.renewed_from_id && other.renewed_from_id === item.id) return true;
+        if (other.previous_expiry && dayjs(other.previous_expiry).startOf("day").isSame(itemDate)) {
+          return true;
+        }
+        if (normalizeLicenseType(other.type) === normType && dayjs(other.expiry).startOf("day").isAfter(itemDate)) {
+          return true;
+        }
+        return false;
+      });
+    };
+
+    // Thống kê nhanh trạng thái các giấy phép
+    const today = dayjs().startOf("day");
+    let expiredCount = 0;
+    let expiringCount = 0;
+    let validCount = 0;
+    let renewedCount = 0;
+
+    data.forEach((item: any) => {
+      if (!item.expiry) return;
+      const isRenewed = isRenewedRecord(item, data);
+      if (isRenewed) {
+        renewedCount++;
+        return;
+      }
+
+      const d = dayjs(item.expiry).startOf("day");
+      const diff = d.diff(today, "day");
+      if (diff < 0) {
+        expiredCount++;
+      } else if (diff <= 30) {
+        expiringCount++;
+      } else {
+        validCount++;
+      }
+    });
+
+    const columns: any[] = [
+      { 
+        title: 'STT', 
+        key: 'index', 
+        width: 50, 
+        align: 'center',
+        render: (_: any, __: any, index: number) => index + 1 
+      },
+      { 
+        title: 'Số Giấy phép / Tem kiểm định', 
+        dataIndex: 'number', 
+        key: 'number', 
+        render: (text: string, record: any) => {
+          const isRenewed = isRenewedRecord(record, data);
+          const renewedBy = isRenewed ? getRenewedByRecord(record, data) : null;
+
+          return (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 6,
+                  background: isRenewed ? "#f1f5f9" : "#f3e8ff",
+                  color: isRenewed ? "#64748b" : "#7e22ce",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 14,
+                  flexShrink: 0,
+                }}
+              >
+                <SafetyCertificateOutlined />
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, color: isRenewed ? "#64748b" : "#0f172a", fontSize: 13 }}>
+                  {text || "— (Chưa có số hiệu)"}
+                </div>
+                {record.previous_expiry && (
+                  <div style={{ fontSize: 11, color: "#64748b" }}>
+                    Gia hạn từ: {dayjs(record.previous_expiry).format("DD/MM/YYYY")}
+                  </div>
+                )}
+                {isRenewed && renewedBy && (
+                  <div style={{ fontSize: 11, color: "#7c3aed" }}>
+                    ↳ Đã gia hạn sang: <b>{renewedBy.number || "kỳ mới"}</b> ({dayjs(renewedBy.expiry).format("DD/MM/YYYY")})
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        }
+      },
+      { 
+        title: 'Loại giấy tờ', 
+        dataIndex: 'type', 
+        key: 'type',
+        width: 170,
+        render: (text: string) => {
+          const t = String(text || "").toLowerCase();
+          let color = "blue";
+          if (t.includes("đăng kiểm")) color = "purple";
+          else if (t.includes("bảo hiểm")) color = "green";
+          else if (t.includes("an toàn")) color = "cyan";
+          else if (t.includes("sân đỗ") || t.includes("lưu hành")) color = "geekblue";
+          return <Tag color={color} style={{ fontWeight: 600, borderRadius: 4, margin: 0 }}>{text || "Khác"}</Tag>;
+        }
+      },
+      { 
+        title: 'Đơn vị cấp', 
+        dataIndex: 'issuer', 
+        key: 'issuer',
+        render: (t: any) => t || '—' 
+      },
+      { 
+        title: 'Thời hạn', 
+        dataIndex: 'expiry', 
+        key: 'expiry', 
+        align: 'center',
+        width: 130,
+        render: (d: string) => (
+          <span style={{ fontWeight: 600, color: "#334155" }}>
+            {d ? dayjs(d).format('DD/MM/YYYY') : '—'}
+          </span>
+        ) 
+      },
+      {
+        title: 'Trạng thái hiệu lực',
+        key: 'status',
+        width: 190,
+        align: 'center',
+        render: (_: any, record: any) => {
+          if (!record.expiry) return <Tag>Chưa có hạn</Tag>;
+          const isRenewed = isRenewedRecord(record, data);
+
+          if (isRenewed) {
+            return (
+              <Tag
+                color="default"
+                icon={<CheckCircleOutlined style={{ color: "#16a34a" }} />}
+                style={{
+                  fontWeight: 600,
+                  borderRadius: 4,
+                  padding: "2px 8px",
+                  margin: 0,
+                  background: "#f1f5f9",
+                  borderColor: "#cbd5e1",
+                  color: "#475569",
+                }}
+              >
+                Đã gia hạn (Kỳ cũ)
+              </Tag>
+            );
+          }
+
+          const d = dayjs(record.expiry).startOf("day");
+          const diff = d.diff(today, "day");
+
+          if (diff < 0) {
+            return (
+              <Tag
+                color="error"
+                icon={<CloseCircleOutlined />}
+                style={{
+                  fontWeight: 600,
+                  borderRadius: 4,
+                  padding: "2px 8px",
+                  margin: 0,
+                }}
+              >
+                Đã hết hạn ({Math.abs(diff)} ngày)
+              </Tag>
+            );
+          }
+          if (diff <= 30) {
+            return (
+              <Tag
+                color="warning"
+                icon={<ClockCircleOutlined />}
+                style={{
+                  fontWeight: 600,
+                  borderRadius: 4,
+                  padding: "2px 8px",
+                  margin: 0,
+                }}
+              >
+                Sắp hết hạn (còn {diff} ngày)
+              </Tag>
+            );
+          }
+          return (
+            <Tag
+              color="success"
+              icon={<CheckCircleOutlined />}
+              style={{
+                fontWeight: 600,
+                borderRadius: 4,
+                padding: "2px 8px",
+                margin: 0,
+              }}
+            >
+              Còn hạn ({diff} ngày)
+            </Tag>
+          );
+        }
+      },
+      {
+        title: 'Ghi chú',
+        dataIndex: 'note',
+        key: 'note',
+        render: (t: any) => <span style={{ color: "#64748b", fontSize: 12 }}>{t || '—'}</span>
+      },
+      {
+        title: 'Thao tác',
+        key: 'actions',
+        width: 170,
+        align: 'center',
+        render: (_: any, record: any) => {
+          const isRenewed = isRenewedRecord(record, data);
+          const renewedBy = isRenewed ? getRenewedByRecord(record, data) : null;
+
+          return (
+            <Space size={2}>
+              {!isRenewed && (
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<SwapOutlined />}
+                  onClick={() => handleOpenRenewLicense(record)}
+                  style={{ color: "#7c3aed", fontWeight: 600, padding: "0 4px" }}
+                  title="Gia hạn giấy phép mới từ kỳ này"
+                >
+                  Gia hạn
+                </Button>
+              )}
+              <Button
+                type="link"
+                size="small"
+                icon={<EditOutlined />}
+                onClick={() => handleOpenEditLicense(record, isRenewed)}
+                style={{ color: "#2563eb", fontWeight: 500, padding: "0 4px" }}
+                title={isRenewed ? "Chỉnh sửa thông tin chu kỳ cũ (Khóa thời hạn)" : "Chỉnh sửa thông tin giấy phép"}
+              >
+                Sửa
+              </Button>
+              <Popconfirm
+                title={isRenewed ? "⚠️ Xóa chu kỳ kiểm định cũ đã gia hạn?" : "Xác nhận xóa giấy phép?"}
+                description={
+                  isRenewed && renewedBy ? (
+                    <div style={{ maxWidth: 280 }}>
+                      <div>Kỳ này đã có chu kỳ mới kế thừa (số <b>{renewedBy.number || "kỳ mới"}</b>).</div>
+                      <div style={{ color: "#b91c1c", marginTop: 4, fontSize: 12 }}>
+                        Việc xóa sẽ làm mất liên kết lịch sử chu kỳ gốc của kỳ kế tiếp. Bạn có chắc chắn muốn xóa?
+                      </div>
+                    </div>
+                  ) : isRenewed ? (
+                    "Kỳ này là chu kỳ kiểm định cũ đã được gia hạn. Bạn có chắc chắn muốn xóa bản ghi này?"
+                  ) : (
+                    `Bạn có chắc muốn xóa giấy phép ${record.type} ${record.number ? `số ${record.number}` : ''}?`
+                  )
+                }
+                onConfirm={() => handleDeleteLicense(record)}
+                okText="Xóa"
+                cancelText="Hủy"
+                okButtonProps={{ danger: true }}
+              >
+                <Button
+                  type="link"
+                  danger
+                  size="small"
+                  icon={<DeleteOutlined />}
+                  style={{ padding: "0 4px" }}
+                >
+                  Xóa
+                </Button>
+              </Popconfirm>
+            </Space>
+          );
+        }
+      }
     ];
 
     return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Banner cảnh báo tổng quan: Chỉ hiển thị khi có giấy phép thực sự quá hạn CHƯA được gia hạn */}
+        {expiredCount > 0 && (
+          <Alert
+            type="error"
+            showIcon
+            icon={<WarningOutlined />}
+            message={
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                <span>
+                  <strong>CẢNH BÁO QUÁ HẠN:</strong> Phương tiện đang có <b>{expiredCount}</b> giấy phép/kiểm định đã hết hạn hiệu lực và chưa được gia hạn!
+                </span>
+                <Button
+                  size="small"
+                  type="primary"
+                  danger
+                  icon={<SwapOutlined />}
+                  onClick={handleOpenAddLicense}
+                >
+                  Gia hạn / Cấp mới ngay
+                </Button>
+              </div>
+            }
+            style={{ borderRadius: 8 }}
+          />
+        )}
+
+        {expiringCount > 0 && expiredCount === 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            icon={<ClockCircleOutlined />}
+            message={
+              <span>
+                <strong>LƯU Ý:</strong> Phương tiện có <b>{expiringCount}</b> giấy phép sắp hết hạn trong vòng 30 ngày tới.
+              </span>
+            }
+            style={{ borderRadius: 8 }}
+          />
+        )}
+
+        {expiredCount === 0 && expiringCount === 0 && validCount > 0 && (
+          <Alert
+            type="success"
+            showIcon
+            icon={<CheckCircleOutlined />}
+            message={
+              <span>
+                <strong>HỒ SƠ HỢP LỆ:</strong> Tất cả giấy phép và kiểm định kỹ thuật của phương tiện hiện đang còn đầy đủ hiệu lực.
+              </span>
+            }
+            style={{ borderRadius: 8, background: "#f6ffed", borderColor: "#b7eb8f" }}
+          />
+        )}
+
+        {/* Card dữ liệu */}
         <Card 
-            title="III. Theo dõi hồ sơ pháp lý" 
-            size="small"
-            extra={<Button type="primary" size="small" onClick={() => setShowLicenseModal(true)}>Thêm +</Button>}
+          title="III. Theo dõi hồ sơ pháp lý & Kiểm định kỹ thuật" 
+          size="small"
+          extra={
+            <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleOpenAddLicense}>
+              Thêm mới giấy phép / kiểm định
+            </Button>
+          }
         >
-            <Table
-                columns={columns}
-                dataSource={data}
-                rowKey={(record) => record.type ? record.type + record.expiry : Math.random()} 
-                size="small"
-                pagination={false}
-                bordered
-            />
+          {/* Quick Summary Bar */}
+          <div
+            style={{
+              display: "flex",
+              gap: 20,
+              marginBottom: 12,
+              padding: "10px 14px",
+              background: "#f8fafc",
+              borderRadius: 8,
+              border: "1px solid #e2e8f0",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ fontSize: 12 }}>
+              <span style={{ color: "#64748b" }}>Tổng số giấy tờ: </span>
+              <b style={{ color: "#0f172a" }}>{data.length}</b>
+            </div>
+            <div style={{ fontSize: 12 }}>
+              <span style={{ color: "#16a34a" }}>Còn hiệu lực: </span>
+              <b style={{ color: "#16a34a" }}>{validCount}</b>
+            </div>
+            <div style={{ fontSize: 12 }}>
+              <span style={{ color: "#d97706" }}>Sắp hết hạn (≤ 30 ngày): </span>
+              <b style={{ color: expiringCount > 0 ? "#d97706" : "#64748b" }}>{expiringCount}</b>
+            </div>
+            <div style={{ fontSize: 12 }}>
+              <span style={{ color: "#dc2626" }}>Đã hết hạn: </span>
+              <b style={{ color: expiredCount > 0 ? "#dc2626" : "#64748b" }}>{expiredCount}</b>
+            </div>
+            {renewedCount > 0 && (
+              <div style={{ fontSize: 12 }}>
+                <span style={{ color: "#64748b" }}>Đã gia hạn (kỳ cũ): </span>
+                <b style={{ color: "#475569" }}>{renewedCount}</b>
+              </div>
+            )}
+          </div>
+
+          <Table
+            columns={columns}
+            dataSource={data}
+            rowKey="_key" 
+            size="small"
+            pagination={false}
+            bordered
+          />
         </Card>
+      </div>
     );
   };
  
@@ -619,7 +1174,11 @@ export default function DeviceDetailDrawer({
       <LicenseModal 
         open={showLicenseModal} 
         onClose={() => setShowLicenseModal(false)}
-        onSubmit={handleAddLicense}
+        onSubmit={handleSaveLicense}
+        initialData={selectedLicense}
+        mode={licenseModalMode}
+        loading={savingLicense}
+        isHistorical={isEditingHistorical}
       />
     </Drawer>
   );

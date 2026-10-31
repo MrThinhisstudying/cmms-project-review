@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   Modal,
   Button,
@@ -11,15 +11,25 @@ import {
   Table,
   InputNumber,
   Form,
-  Descriptions
+  Descriptions,
+  Upload,
+  Alert,
+  Tag,
+  Radio,
+  message
 } from "antd";
 import {
   PlusOutlined,
   DeleteOutlined,
   SaveOutlined,
   CloseOutlined,
-  CheckCircleOutlined
+  CheckCircleOutlined,
+  DownloadOutlined,
+  UploadOutlined,
+  CarOutlined,
+  FileExcelOutlined
 } from "@ant-design/icons";
+import * as XLSX from "xlsx";
 import {
   IRepair,
   RepairInspectionPayload,
@@ -28,6 +38,7 @@ import {
 import { useInventoryContext } from "../../../../context/InventoryContext/InventoryContext";
 import { useUsersContext } from "../../../../context/UsersContext/UsersContext";
 import { useAuthContext } from "../../../../context/AuthContext/AuthContext";
+import WarehouseItemBadge from "../WarehouseItemBadge";
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -51,12 +62,14 @@ export default function RepairInspectionForm({
   onClose,
   onSubmit,
   loading,
+  bulkRepairs,
 }: {
   open: boolean;
   initialData: IRepair;
   onClose: () => void;
   onSubmit: (data: RepairInspectionPayload) => Promise<void> | void;
   loading?: boolean;
+  bulkRepairs?: IRepair[];
 }) {
   const { items } = useInventoryContext();
   const { users } = useUsersContext();
@@ -67,14 +80,33 @@ export default function RepairInspectionForm({
   const committee = Form.useWatch('committee', form) || [];
   const selectedUserIds = Array.isArray(committee) ? committee.map((c: any) => c?.user_id).filter(Boolean) : [];
 
+  const isBulk = Boolean(bulkRepairs && bulkRepairs.length > 1);
+  const targetRepairs = isBulk ? (bulkRepairs as IRepair[]) : (initialData ? [initialData] : []);
+
   // --- STATE ---
   const [materials, setMaterials] = useState<ExtendedInspectionMaterial[]>([]);
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [reason, setReason] = useState("");
 
+  // State for Excel import
+  const [importPreviewModal, setImportPreviewModal] = useState(false);
+  const [importedMaterials, setImportedMaterials] = useState<ExtendedInspectionMaterial[]>([]);
+  const [importMode, setImportMode] = useState<'append' | 'replace'>('append');
+
+  const lastRepairIdRef = useRef<number | null>(null);
+
   // --- INIT ---
   useEffect(() => {
-    if (!open || !initialData) return;
+    if (!open || !initialData) {
+      lastRepairIdRef.current = null;
+      return;
+    }
+
+    // Chỉ khởi tạo 1 lần duy nhất khi mở modal cho phiếu này (tránh background fetch items xóa form đang nhập)
+    if (lastRepairIdRef.current === initialData.repair_id) {
+      return;
+    }
+    lastRepairIdRef.current = initialData.repair_id;
 
     // 1. Committee
     const roleMap: Record<string, string> = {
@@ -128,7 +160,7 @@ export default function RepairInspectionForm({
         inspection_other_opinions: initialData.inspection_other_opinions || ""
     });
     setReason("");
-  }, [open, initialData, items, form]);
+  }, [open, initialData?.repair_id, form]);
 
   // --- ACTIONS ---
   
@@ -190,6 +222,135 @@ export default function RepairInspectionForm({
     setMaterials(prev => prev.filter(m => m.key !== key));
   };
 
+  // Tải file mẫu Excel
+  const handleDownloadMaterialTemplate = () => {
+    const wsData = [
+      ["STT", "Tên vật tư, phụ tùng (*)", "Mã vật tư (nếu có trong kho)", "Quy cách, thông số kỹ thuật", "Đơn vị tính", "Số lượng (*)", "Ghi chú"],
+      [1, "Lọc dầu nhiên liệu", "VT-LOC-01", "Chính hãng", "Cái", 2, "Vật tư định kỳ"],
+      [2, "Dầu nhớt động cơ 15W40", "", "Thùng 18L", "Lít", 15, "Vật tư ngoài"],
+      [3, "Bugi đánh lửa", "", "Bugi tiêu chuẩn", "Cái", 4, ""],
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws["!cols"] = [
+      { wch: 6 },
+      { wch: 32 },
+      { wch: 26 },
+      { wch: 26 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 26 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Vat_Tu_De_Nghi");
+    XLSX.writeFile(wb, "Mau_De_Nghi_Vat_Tu_B04.xlsx");
+  };
+
+  // Đọc và phân tích file Excel
+  const handleImportExcel = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const rows: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        if (!rows || rows.length < 2) {
+          message.warning("File Excel không có dữ liệu hoặc không đúng định dạng!");
+          return;
+        }
+
+        // Tìm dòng tiêu đề
+        let headerRowIndex = 0;
+        for (let i = 0; i < Math.min(5, rows.length); i++) {
+          const rowStr = (rows[i] || []).join(" ").toLowerCase();
+          if (rowStr.includes("tên vật tư") || rowStr.includes("vật tư") || rowStr.includes("phụ tùng")) {
+            headerRowIndex = i;
+            break;
+          }
+        }
+
+        const parsedList: ExtendedInspectionMaterial[] = [];
+        const timestamp = Date.now();
+
+        for (let i = headerRowIndex + 1; i < rows.length; i++) {
+          const row = rows[i];
+          if (!row || row.length === 0) continue;
+
+          // 0: STT, 1: Tên vật tư, 2: Mã, 3: Quy cách, 4: ĐVT, 5: Số lượng, 6: Ghi chú
+          const rawName = row[1] ? String(row[1]).trim() : "";
+          if (!rawName) continue;
+
+          const rawCode = row[2] ? String(row[2]).trim() : "";
+          const rawSpec = row[3] ? String(row[3]).trim() : "";
+          const rawUnit = row[4] ? String(row[4]).trim() : "";
+          const rawQty = row[5] ? Number(row[5]) : 1;
+          const rawNote = row[6] ? String(row[6]).trim() : "";
+
+          // Smart match với danh mục kho
+          let matchedItem = null;
+          if (rawCode) {
+            matchedItem = items.find((it) => (it.code || "").toLowerCase() === rawCode.toLowerCase());
+          }
+          if (!matchedItem && rawName) {
+            matchedItem = items.find((it) => (it.name || "").toLowerCase() === rawName.toLowerCase());
+          }
+
+          if (matchedItem) {
+            parsedList.push({
+              key: `import_${timestamp}_${i}`,
+              item_id: matchedItem.item_id,
+              name: matchedItem.name,
+              unit: matchedItem.quantity_unit || rawUnit || "Cái",
+              item_code: matchedItem.code,
+              specifications: rawSpec || (matchedItem as any).specifications || "",
+              quantity: isNaN(rawQty) || rawQty <= 0 ? 1 : rawQty,
+              is_new: false,
+              notes: rawNote,
+            });
+          } else {
+            parsedList.push({
+              key: `import_${timestamp}_${i}`,
+              item_id: null,
+              name: rawName,
+              unit: rawUnit || "Cái",
+              item_code: rawCode,
+              specifications: rawSpec,
+              quantity: isNaN(rawQty) || rawQty <= 0 ? 1 : rawQty,
+              is_new: true,
+              notes: rawNote,
+            });
+          }
+        }
+
+        if (parsedList.length === 0) {
+          message.warning("Không tìm thấy dòng vật tư hợp lệ nào trong file Excel!");
+          return;
+        }
+
+        setImportedMaterials(parsedList);
+        setImportPreviewModal(true);
+      } catch (err) {
+        console.error(err);
+        message.error("Lỗi khi đọc file Excel. Vui lòng kiểm tra lại định dạng file!");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    return false; // Chặn upload mạng mặc định
+  };
+
+  const handleConfirmImport = () => {
+    if (importMode === "replace") {
+      setMaterials(importedMaterials);
+    } else {
+      setMaterials((prev) => [...prev, ...importedMaterials]);
+    }
+    message.success(`Đã thêm thành công ${importedMaterials.length} vật tư vào bảng`);
+    setImportPreviewModal(false);
+    setImportedMaterials([]);
+  };
+
   const handleFinalSubmit = async (finalAction: "approve" | "reject") => {
      try {
          const values = await form.validateFields();
@@ -223,9 +384,12 @@ export default function RepairInspectionForm({
   };
 
   // Permissions
-  // Role 'OPERATOR' (Group Lead) included in Approvers
   const canApprove = currentUser?.role === 'UNIT_HEAD' || currentUser?.role === 'ADMIN' || currentUser?.role === 'DIRECTOR' || currentUser?.role === 'TEAM_LEAD' || currentUser?.role === 'OPERATOR';
   const canModify = currentUser?.role === 'TECHNICIAN' || currentUser?.role === 'ADMIN';
+
+  // Xác định ngữ cảnh: Lập mới (hoặc lập hàng loạt) vs Xem xét phê duyệt phiếu đã lập
+  const isAlreadyCreated = Boolean(initialData?.inspection_created_at);
+  const isCreationMode = isBulk || !isAlreadyCreated;
 
   if (!initialData) return null;
 
@@ -238,28 +402,45 @@ export default function RepairInspectionForm({
         centered
         title={
             <div style={{ textAlign: "center", marginBottom: 20 }}>
-                <Title level={4} style={{ margin: 0 }}>KẾT QUẢ KIỂM TRA KỸ THUẬT (B04)</Title>
-                <Text type="secondary">Mã phiếu: #{initialData.repair_id}</Text>
+                <Title level={4} style={{ margin: 0 }}>
+                  KẾT QUẢ KIỂM TRA KỸ THUẬT (B04) {isBulk ? `- HÀNG LOẠT (${targetRepairs.length} XE)` : ''}
+                </Title>
+                <Text type="secondary">
+                  {isBulk 
+                    ? `Áp dụng cho ${targetRepairs.length} phiếu: ${targetRepairs.map(r => `#${r.repair_id}`).join(', ')}` 
+                    : `Mã phiếu: #${initialData.repair_id}`}
+                </Text>
             </div>
         }
         footer={
            <div style={{ textAlign: "right" }}>
                 <Button onClick={onClose} style={{ marginRight: 8 }}>Thoát</Button>
                 
-                {canModify && (
-                   <Button type="primary" icon={<SaveOutlined />} loading={loading} onClick={() => handleFinalSubmit('approve')}>
-                       Lưu phiếu
-                   </Button>
-                )}
-
-                {canApprove && (
+                {isCreationMode ? (
+                   // Khi lập phiếu (hoặc lập hàng loạt): Chỉ hiển thị nút Lưu phiếu
+                   canModify && (
+                      <Button type="primary" icon={<SaveOutlined />} loading={loading} onClick={() => handleFinalSubmit('approve')}>
+                          {isBulk ? `Lưu phiếu hàng loạt (${targetRepairs.length} xe)` : "Lưu phiếu"}
+                      </Button>
+                   )
+                ) : (
+                   // Khi xem xét phiếu đơn lẻ đã được lập trước đó
                    <Space style={{ marginLeft: 8 }}>
-                       <Button danger icon={<CloseOutlined />} onClick={() => setRejectModalOpen(true)}>
-                           Từ chối
-                       </Button>
-                       <Button type="primary" icon={<CheckCircleOutlined />} onClick={() => handleFinalSubmit('approve')}>
-                           Phê duyệt
-                       </Button>
+                       {canModify && (
+                          <Button icon={<SaveOutlined />} loading={loading} onClick={() => handleFinalSubmit('approve')}>
+                              Lưu thay đổi
+                          </Button>
+                       )}
+                       {canApprove && (
+                          <>
+                              <Button danger icon={<CloseOutlined />} onClick={() => setRejectModalOpen(true)}>
+                                  Từ chối
+                              </Button>
+                              <Button type="primary" icon={<CheckCircleOutlined />} onClick={() => handleFinalSubmit('approve')}>
+                                  Phê duyệt
+                              </Button>
+                          </>
+                       )}
                    </Space>
                 )}
            </div>
@@ -271,18 +452,40 @@ export default function RepairInspectionForm({
              
              {/* 1. Device Info */}
              <div style={{ marginLeft: 16, marginBottom: 24 }}>
-                 <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>1. Lý lịch thiết bị</Typography.Text>
-                 <Descriptions bordered size="small" column={2}>
-                        <Descriptions.Item label="Tên thiết bị" span={3}>{initialData.device?.name}</Descriptions.Item>
-                        <Descriptions.Item label="Số đăng ký">{initialData.device?.reg_number || initialData.device?.serial_number}</Descriptions.Item>
-                        <Descriptions.Item label="Đơn vị quản lý tài sản" span={2}>{initialData.device?.using_department || initialData.created_department?.name || "N/A"}</Descriptions.Item>
-                    <Descriptions.Item label="Số giờ/km hoạt động" span={2}>
-                        <Space>
-                            <Input style={{ width: 120 }} placeholder="Km 000000" bordered={false} className="border-bottom-input" />
-                            <Input style={{ width: 120 }} placeholder="Giờ 000000" bordered={false} className="border-bottom-input" />
-                        </Space>
-                    </Descriptions.Item>
-                 </Descriptions>
+                {isBulk ? (
+                  <div style={{ background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: 8, padding: 14 }}>
+                    <Space direction="vertical" style={{ width: '100%' }} size={6}>
+                      <Typography.Text strong style={{ color: '#096dd9' }}>
+                        <CarOutlined style={{ marginRight: 6 }} /> Đang lập kiểm nghiệm chung cho {targetRepairs.length} thiết bị:
+                      </Typography.Text>
+                      <Space wrap size={[6, 6]}>
+                        {targetRepairs.map(r => (
+                          <Tag key={r.repair_id} color="blue" style={{ fontSize: 13, padding: '3px 8px' }}>
+                            <strong>#{r.repair_id}</strong>: {r.device?.name} ({r.device?.reg_number || r.device?.serial_number || 'N/A'})
+                          </Tag>
+                        ))}
+                      </Space>
+                      <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+                        ℹ️ Thành phần ban kiểm nghiệm, nội dung hư hỏng và định mức đề nghị vật tư bên dưới sẽ được đồng bộ cho từng xe trong đợt này.
+                      </Typography.Text>
+                    </Space>
+                  </div>
+                ) : (
+                  <>
+                    <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>1. Lý lịch thiết bị</Typography.Text>
+                    <Descriptions bordered size="small" column={2}>
+                           <Descriptions.Item label="Tên thiết bị" span={3}>{initialData.device?.name}</Descriptions.Item>
+                           <Descriptions.Item label="Số đăng ký">{initialData.device?.reg_number || initialData.device?.serial_number}</Descriptions.Item>
+                           <Descriptions.Item label="Đơn vị quản lý tài sản" span={2}>{initialData.device?.using_department || initialData.created_department?.name || "N/A"}</Descriptions.Item>
+                       <Descriptions.Item label="Số giờ/km hoạt động" span={2}>
+                           <Space>
+                               <Input style={{ width: 120 }} placeholder="Km 000000" bordered={false} className="border-bottom-input" />
+                               <Input style={{ width: 120 }} placeholder="Giờ 000000" bordered={false} className="border-bottom-input" />
+                           </Space>
+                       </Descriptions.Item>
+                    </Descriptions>
+                  </>
+                )}
              </div>
 
              {/* 2. Committee */}
@@ -443,7 +646,45 @@ export default function RepairInspectionForm({
              </Form.List>
 
              {/* III. MATERIALS */}
-             <Typography.Title level={5}>III. PHẦN ĐỀ NGHỊ CUNG CẤP VẬT TƯ</Typography.Title>
+             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <Typography.Title level={5} style={{ margin: 0 }}>III. PHẦN ĐỀ NGHỊ CUNG CẤP VẬT TƯ</Typography.Title>
+                <Space>
+                  <Button 
+                    size="small" 
+                    icon={<DownloadOutlined />} 
+                    onClick={handleDownloadMaterialTemplate}
+                  >
+                    Tải mẫu Excel
+                  </Button>
+                  <Upload 
+                    beforeUpload={handleImportExcel} 
+                    accept=".xlsx,.xls" 
+                    showUploadList={false}
+                  >
+                    <Button 
+                      size="small" 
+                      type="primary" 
+                      ghost 
+                      icon={<FileExcelOutlined style={{ color: '#52c41a' }} />}
+                    >
+                      Nhập từ Excel
+                    </Button>
+                  </Upload>
+                </Space>
+             </div>
+
+             {isBulk && (
+                <Alert
+                  type="info"
+                  showIcon
+                  message={
+                    <span>
+                      Định mức vật tư dưới đây là số lượng cần cung cấp cho <strong>từng xe</strong> trong đợt kiểm nghiệm ({targetRepairs.length} xe).
+                    </span>
+                  }
+                  style={{ marginBottom: 12 }}
+                />
+             )}
              <Table
                 dataSource={materials}
                 pagination={false}
@@ -452,8 +693,8 @@ export default function RepairInspectionForm({
                 bordered
                 footer={() => <Button type="dashed" size="small" onClick={handleAddNewMaterialRow} icon={<PlusOutlined />}>Thêm vật tư</Button>}
                 columns={[
-                    { title: 'Tên vật tư, phụ tùng cần thay thế', dataIndex: 'name', width: '35%', render: (_: string, record: ExtendedInspectionMaterial) => (
-                         <Space direction="vertical" style={{ width: '100%' }} size={0}>
+                    { title: 'Tên vật tư, phụ tùng cần thay thế', dataIndex: 'name', width: '38%', render: (_: string, record: ExtendedInspectionMaterial) => (
+                         <Space direction="vertical" style={{ width: '100%' }} size={4}>
                             <Select
                                 style={{ width: '100%' }}
                                 placeholder="Chọn từ kho..."
@@ -470,7 +711,16 @@ export default function RepairInspectionForm({
                                     placeholder="Nhập vật tư ngoài..." 
                                     value={record.name} 
                                     onChange={e => updateMaterial(record.key, 'name', e.target.value)} 
-                                    style={{ marginTop: 4 }} 
+                                />
+                            )}
+                            {record.item_id && (
+                                <WarehouseItemBadge
+                                    itemId={record.item_id}
+                                    itemName={record.name}
+                                    itemCode={record.item_code}
+                                    requestedQty={record.quantity}
+                                    requestedUnit={record.unit}
+                                    showName={false}
                                 />
                             )}
                          </Space>
@@ -526,10 +776,79 @@ export default function RepairInspectionForm({
             setRejectModalOpen(false);
         }}
         onCancel={() => setRejectModalOpen(false)}
-    >
+      >
         <Typography.Paragraph>Vui lòng nhập lý do từ chối:</Typography.Paragraph>
          <TextArea rows={4} value={reason} onChange={e => setReason(e.target.value)} />
-    </Modal>
+      </Modal>
+
+      {/* Import Excel Modal */}
+      <Modal
+        title={
+          <Space>
+            <FileExcelOutlined style={{ color: '#52c41a' }} />
+            <span>Xác nhận nhập vật tư từ file Excel</span>
+          </Space>
+        }
+        open={importPreviewModal}
+        onCancel={() => {
+          setImportPreviewModal(false);
+          setImportedMaterials([]);
+        }}
+        onOk={handleConfirmImport}
+        okText="Xác nhận đưa vào bảng"
+        cancelText="Hủy"
+        width={720}
+      >
+        <div style={{ marginBottom: 16 }}>
+          <Alert
+            type="success"
+            showIcon
+            message={`Đã đọc thành công ${importedMaterials.length} vật tư từ file Excel`}
+            description={
+              <div style={{ marginTop: 4 }}>
+                <div>• Vật tư có trong kho: <strong>{importedMaterials.filter(m => m.item_id).length}</strong></div>
+                <div>• Vật tư mua ngoài: <strong>{importedMaterials.filter(m => !m.item_id).length}</strong></div>
+              </div>
+            }
+          />
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <Typography.Text strong style={{ display: 'block', marginBottom: 6 }}>
+            Chọn phương thức áp dụng vào bảng:
+          </Typography.Text>
+          <Radio.Group value={importMode} onChange={e => setImportMode(e.target.value)}>
+            <Space direction="vertical">
+              <Radio value="append">Thêm nối tiếp vào danh sách vật tư hiện tại</Radio>
+              <Radio value="replace">Ghi đè thay thế toàn bộ danh sách vật tư hiện tại</Radio>
+            </Space>
+          </Radio.Group>
+        </div>
+
+        <Typography.Text strong style={{ display: 'block', marginBottom: 6 }}>
+          Xem trước danh sách ({importedMaterials.length} dòng):
+        </Typography.Text>
+        <Table
+          dataSource={importedMaterials}
+          size="small"
+          bordered
+          pagination={{ pageSize: 5 }}
+          rowKey="key"
+          columns={[
+            { title: 'Tên vật tư', dataIndex: 'name', key: 'name' },
+            { title: 'Mã VT', dataIndex: 'item_code', key: 'item_code', width: 100 },
+            { title: 'Quy cách', dataIndex: 'specifications', key: 'specifications', width: 120 },
+            { title: 'ĐVT', dataIndex: 'unit', key: 'unit', width: 70 },
+            { title: 'SL', dataIndex: 'quantity', key: 'quantity', width: 60 },
+            { 
+              title: 'Phân loại', 
+              key: 'type', 
+              width: 90, 
+              render: (_: any, r: ExtendedInspectionMaterial) => r.item_id ? <Tag color="green">Kho</Tag> : <Tag color="orange">Ngoài</Tag> 
+            },
+          ]}
+        />
+      </Modal>
     </>
   );
 }

@@ -3,7 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { Connection } from 'typeorm';
+import { Connection, LessThan, In } from 'typeorm';
 import { AuditLog } from './audit-log.entity';
 import { AuditTransaction } from './audit-transaction.entity';
 import { ClsService } from 'nestjs-cls';
@@ -89,34 +89,62 @@ export class AuditService {
       let beforeSnapshot: any = null;
       let afterSnapshot: any = null;
 
-      if (log.action === 'DELETE') {
-        if (!log.before) throw new BadRequestException('Không thể hoàn tác: Bản ghi không có dữ liệu sao lưu trước khi xóa');
-        const toRestore = { ...log.before };
-        if (log.entity_name === 'User') {
-          toRestore.must_change_password = true;
-          if (!toRestore.password) {
-            toRestore.password = '12345678';
+      this.cls.set('audit.skipAudit', true);
+      try {
+        if (log.action === 'DELETE') {
+          if (!log.before) throw new BadRequestException('Không thể hoàn tác: Bản ghi không có dữ liệu sao lưu trước khi xóa');
+          const toRestore = { ...log.before };
+          if (log.entity_name === 'User') {
+            toRestore.must_change_password = true;
+            if (!toRestore.password) {
+              toRestore.password = '12345678';
+            }
           }
+          const restored = await repo.save(toRestore);
+          beforeSnapshot = null;
+          afterSnapshot = restored;
+        } else if (log.action === 'INSERT') {
+          const existing = await repo.findOne({ where: { [pk]: idVal } as any });
+          if (!existing) throw new NotFoundException('Entity not found for rollback (INSERT)');
+          beforeSnapshot = existing;
+          await repo.remove(existing);
+          afterSnapshot = null;
+        } else if (log.action === 'UPDATE') {
+          let snapshotToRevert = log.before;
+          if (!snapshotToRevert) {
+            const prevLog = await auditRepo.findOne({
+              where: {
+                entity_name: log.entity_name,
+                entity_id: log.entity_id,
+                id: LessThan(log.id),
+                action: In(['INSERT', 'UPDATE']),
+              },
+              order: { id: 'DESC' },
+            });
+            if (prevLog?.after) {
+              snapshotToRevert = prevLog.after;
+            }
+          }
+
+          if (!snapshotToRevert) throw new BadRequestException('Không tìm thấy dữ liệu sao lưu trước đó để hoàn tác');
+
+          const existing = await repo.findOne({ where: { [pk]: idVal } as any });
+          if (!existing) throw new NotFoundException('Entity not found for rollback');
+          beforeSnapshot = JSON.parse(JSON.stringify(existing));
+
+          for (const col of meta.columns) {
+            const prop = col.propertyName;
+            if (prop in snapshotToRevert && prop !== pk && prop !== 'created_at') {
+              existing[prop] = snapshotToRevert[prop];
+            }
+          }
+          const saved = await repo.save(existing);
+          afterSnapshot = saved;
+        } else {
+          throw new BadRequestException(`Rollback not supported for action ${log.action}`);
         }
-        const restored = await repo.save(toRestore);
-        beforeSnapshot = null;
-        afterSnapshot = restored;
-      } else if (log.action === 'INSERT') {
-        const existing = await repo.findOne({ where: { [pk]: idVal } as any });
-        if (!existing) throw new NotFoundException('Entity not found for rollback (INSERT)');
-        beforeSnapshot = existing;
-        await repo.remove(existing);
-        afterSnapshot = null;
-      } else if (log.action === 'UPDATE') {
-        if (!log.before) throw new BadRequestException('No snapshot to revert to');
-        const existing = await repo.findOne({ where: { [pk]: idVal } as any });
-        if (!existing) throw new NotFoundException('Entity not found for rollback');
-        beforeSnapshot = JSON.parse(JSON.stringify(existing));
-        Object.assign(existing, log.before);
-        const saved = await repo.save(existing);
-        afterSnapshot = saved;
-      } else {
-        throw new BadRequestException(`Rollback not supported for action ${log.action}`);
+      } finally {
+        this.cls.set('audit.skipAudit', false);
       }
 
       log.rolled_back = true;
@@ -159,42 +187,69 @@ export class AuditService {
 
       const logs = [...(transaction.logs || [])].sort((a, b) => b.id - a.id);
 
-      for (const log of logs) {
-        if (log.rolled_back) continue;
-        const meta = this.connection.getMetadata(log.entity_name);
-        if (!meta) continue;
+      this.cls.set('audit.skipAudit', true);
+      try {
+        for (const log of logs) {
+          if (log.rolled_back) continue;
+          const meta = this.connection.getMetadata(log.entity_name);
+          if (!meta) continue;
 
-        const pk = meta.primaryColumns[0].propertyName;
-        const repo = manager.getRepository(meta.target as any);
-        const idVal = this.coercePk(meta, log.entity_id);
+          const pk = meta.primaryColumns[0].propertyName;
+          const repo = manager.getRepository(meta.target as any);
+          const idVal = this.coercePk(meta, log.entity_id);
 
-        if (log.action === 'DELETE') {
-          if (!log.before) {
-            throw new BadRequestException(`Không thể hoàn tác thao tác xóa: Bản ghi "${log.entity_name} #${log.entity_id}" không có dữ liệu sao lưu trước khi xóa.`);
-          }
-          const toRestore = { ...log.before };
-          if (log.entity_name === 'User') {
-            toRestore.must_change_password = true;
-            if (!toRestore.password) {
-              toRestore.password = '12345678';
+          if (log.action === 'DELETE') {
+            if (!log.before) {
+              throw new BadRequestException(`Không thể hoàn tác thao tác xóa: Bản ghi "${log.entity_name} #${log.entity_id}" không có dữ liệu sao lưu trước khi xóa.`);
+            }
+            const toRestore = { ...log.before };
+            if (log.entity_name === 'User') {
+              toRestore.must_change_password = true;
+              if (!toRestore.password) {
+                toRestore.password = '12345678';
+              }
+            }
+            await repo.save(toRestore);
+          } else if (log.action === 'INSERT') {
+            const existing = await repo.findOne({ where: { [pk]: idVal } as any });
+            if (existing) await repo.remove(existing);
+          } else if (log.action === 'UPDATE') {
+            let snapshotToRevert = log.before;
+            if (!snapshotToRevert) {
+              const prevLog = await logRepo.findOne({
+                where: {
+                  entity_name: log.entity_name,
+                  entity_id: log.entity_id,
+                  id: LessThan(log.id),
+                  action: In(['INSERT', 'UPDATE']),
+                },
+                order: { id: 'DESC' },
+              });
+              if (prevLog?.after) {
+                snapshotToRevert = prevLog.after;
+              }
+            }
+
+            if (!snapshotToRevert) continue;
+
+            const existing = await repo.findOne({ where: { [pk]: idVal } as any });
+            if (existing) {
+              for (const col of meta.columns) {
+                const prop = col.propertyName;
+                if (prop in snapshotToRevert && prop !== pk && prop !== 'created_at') {
+                  existing[prop] = snapshotToRevert[prop];
+                }
+              }
+              await repo.save(existing);
             }
           }
-          await repo.save(toRestore);
-        } else if (log.action === 'INSERT') {
-          const existing = await repo.findOne({ where: { [pk]: idVal } as any });
-          if (existing) await repo.remove(existing);
-        } else if (log.action === 'UPDATE') {
-          if (!log.before) continue;
-          const existing = await repo.findOne({ where: { [pk]: idVal } as any });
-          if (existing) {
-            Object.assign(existing, log.before);
-            await repo.save(existing);
-          }
-        }
 
-        log.rolled_back = true;
-        log.rolled_back_at = new Date();
-        await logRepo.save(log);
+          log.rolled_back = true;
+          log.rolled_back_at = new Date();
+          await logRepo.save(log);
+        }
+      } finally {
+        this.cls.set('audit.skipAudit', false);
       }
 
       await logRepo.save(

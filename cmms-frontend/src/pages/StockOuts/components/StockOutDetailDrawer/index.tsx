@@ -27,12 +27,14 @@ import {
 import dayjs from "dayjs";
 import { useInventoryContext } from "../../../../context/InventoryContext/InventoryContext";
 import { IStockOut } from "../../../../types/inventory.types";
+import RepairTicketBadge from "../RepairTicketBadge";
 
 interface Props {
   open: boolean;
   onClose: () => void;
   stockOutId?: number;
   onActionSuccess?: () => void;
+  onOpenRepairDetail?: (repairId: number) => void;
 }
 
 export default function StockOutDetailDrawer({
@@ -40,6 +42,7 @@ export default function StockOutDetailDrawer({
   onClose,
   stockOutId,
   onActionSuccess,
+  onOpenRepairDetail,
 }: Props) {
   const { getStockOut, approveStockOut, cancelStockOut } = useInventoryContext();
   const [detail, setDetail] = useState<IStockOut | null>(null);
@@ -293,9 +296,19 @@ export default function StockOutDetailDrawer({
               type="info"
               showIcon
               icon={<ToolOutlined />}
-              message={<span style={{ fontWeight: 600 }}>Yêu cầu cấp phát theo quy trình Sửa chữa</span>}
+              message={
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                  <span style={{ fontWeight: 600 }}>Yêu cầu cấp phát theo quy trình Sửa chữa</span>
+                  {detail?.repair && (
+                    <RepairTicketBadge
+                      repair={detail.repair}
+                      onClick={(id) => onOpenRepairDetail?.(id)}
+                    />
+                  )}
+                </div>
+              }
               description={
-                <div style={{ fontSize: 12, marginTop: 2 }}>
+                <div style={{ fontSize: 12, marginTop: 4 }}>
                   Vật tư này được đăng ký phục vụ phiếu sửa chữa <b>#{detail.repair?.repair_id}</b>. Khi
                   phiếu sửa chữa được cấp thẩm quyền nghiệm thu, hệ thống sẽ tự động xác nhận xuất kho.
                 </div>

@@ -5,6 +5,8 @@ import {CreateRepairBulkDto} from './dto/create-repair-bulk.dto';
 import {ReviewRepairDto} from './dto/review-repair.dto';
 import {UpdateInspectionDto} from './dto/update-inspection.dto';
 import {UpdateAcceptanceDto} from './dto/update-acceptance.dto';
+import {UpdateBulkInspectionDto} from './dto/update-bulk-inspection.dto';
+import {UpdateBulkAcceptanceDto} from './dto/update-bulk-acceptance.dto';
 import {RequestLimitedUseDto} from './dto/request-limited-use.dto';
 import {JWTAuthGuard} from 'src/auth/guards/jwt-auth.guard';
 import {PermissionsGuard} from 'src/auth/guards/permissions.guard';
@@ -36,6 +38,22 @@ export class RepairsController {
     async create(@Body() dto: CreateRepairDto, @Req() req) {
         const repair = await this.repairService.create(dto, req.user.user_id);
         return {message: 'Tạo phiếu sửa chữa thành công', data: repair};
+    }
+
+    @UseGuards(JWTAuthGuard, PermissionsGuard)
+    @RequirePermissions('CREATE_REPAIR')
+    @Patch('bulk-inspection')
+    async updateBulkInspection(@Body() dto: UpdateBulkInspectionDto, @Req() req) {
+        const repairs = await this.repairService.updateBulkInspection(dto, req.user.user_id);
+        return {message: `Cập nhật kiểm nghiệm thành công cho ${repairs.length} phiếu`, data: repairs};
+    }
+
+    @UseGuards(JWTAuthGuard, PermissionsGuard)
+    @RequirePermissions('CREATE_REPAIR')
+    @Patch('bulk-acceptance')
+    async updateBulkAcceptance(@Body() dto: UpdateBulkAcceptanceDto, @Req() req) {
+        const repairs = await this.repairService.updateBulkAcceptance(dto, req.user.user_id);
+        return {message: `Cập nhật nghiệm thu thành công cho ${repairs.length} phiếu`, data: repairs};
     }
 
     @UseGuards(JWTAuthGuard, PermissionsGuard)

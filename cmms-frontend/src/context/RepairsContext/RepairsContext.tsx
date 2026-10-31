@@ -9,6 +9,8 @@ import {
   deleteRepair,
   submitInspection,
   submitAcceptance,
+  submitBulkInspection,
+  submitBulkAcceptance,
   requestLimitedUse,
   reviewLimitedUse,
   getRepairPendingStats,
@@ -19,6 +21,8 @@ import {
   IRepair,
   RepairAcceptancePayload,
   RepairInspectionPayload,
+  BulkRepairInspectionPayload,
+  BulkRepairAcceptancePayload,
   RepairUpsertPayload,
   BulkRepairUpsertPayload,
 } from "../../types/repairs.types";
@@ -134,6 +138,22 @@ export const RepairsProvider = ({
     return res;
   };
 
+  const submitBulkInspectionStep = async (
+    payload: BulkRepairInspectionPayload
+  ) => {
+    const res = await submitBulkInspection(getToken(), payload);
+    await fetchData();
+    return res;
+  };
+
+  const submitBulkAcceptanceStep = async (
+    payload: BulkRepairAcceptancePayload
+  ) => {
+    const res = await submitBulkAcceptance(getToken(), payload);
+    await fetchData();
+    return res;
+  };
+
   const requestStockOutForRepair = async (
     payload: StockOutPayload & { repair_id: number }
   ) => {
@@ -184,6 +204,8 @@ export const RepairsProvider = ({
         reviewRepairItem,
         submitInspectionStep,
         submitAcceptanceStep,
+        submitBulkInspectionStep,
+        submitBulkAcceptanceStep,
         requestStockOutForRepair,
         exportRepairItem,
         deleteRepairItem,

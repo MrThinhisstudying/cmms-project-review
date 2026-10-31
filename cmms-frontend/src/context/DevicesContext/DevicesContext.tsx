@@ -89,17 +89,20 @@ const DevicesProvider = ({ children }: { children: ReactNode }) => {
 
   useSocket(user?.user_id, socketListeners);
 
+  const contextValue = useMemo(
+    () => ({
+      devices,
+      setDevices,
+      loading,
+      fetchDevices,
+      report,
+      fetchReport,
+    }),
+    [devices, loading, fetchDevices, report, fetchReport]
+  );
+
   return (
-    <DevicesContext.Provider
-      value={{
-        devices,
-        setDevices,
-        loading,
-        fetchDevices,
-        report,
-        fetchReport,
-      }}
-    >
+    <DevicesContext.Provider value={contextValue}>
       {children}
     </DevicesContext.Provider>
   );

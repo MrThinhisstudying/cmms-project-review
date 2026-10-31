@@ -9,6 +9,8 @@ import { CreateRepairDto } from './dto/create-repair.dto';
 import { ReviewRepairDto } from './dto/review-repair.dto';
 import { UpdateInspectionDto } from './dto/update-inspection.dto';
 import { UpdateAcceptanceDto } from './dto/update-acceptance.dto';
+import { UpdateBulkInspectionDto } from './dto/update-bulk-inspection.dto';
+import { UpdateBulkAcceptanceDto } from './dto/update-bulk-acceptance.dto';
 import { NotificationService } from 'src/notification/notification.service';
 import { DeviceStatus } from 'src/devices/enums/device-status.enum';
 import { Packer, Document, Paragraph, TextRun, AlignmentType, Table, TableRow, TableCell, WidthType, HeightRule, BorderStyle, Header, Footer, } from 'docx';
@@ -387,6 +389,16 @@ export class RepairsService {
         return savedRepair;
     }
 
+    async updateBulkInspection(dto: UpdateBulkInspectionDto, userId: number) {
+        const { repair_ids, ...inspectionDto } = dto;
+        const results = [];
+        for (const id of repair_ids) {
+            const updated = await this.updateInspection(id, inspectionDto, userId);
+            results.push(updated);
+        }
+        return results;
+    }
+
     async updateAcceptance(id: number, dto: UpdateAcceptanceDto, userId: number) {
         const repair = await this.repairRepo.findOne({
             where: { repair_id: id },
@@ -490,6 +502,16 @@ export class RepairsService {
         this.repairsGateway.notifyRepairUpdate();
 
         return saved;
+    }
+
+    async updateBulkAcceptance(dto: UpdateBulkAcceptanceDto, userId: number) {
+        const { repair_ids, ...acceptanceDto } = dto;
+        const results = [];
+        for (const id of repair_ids) {
+            const updated = await this.updateAcceptance(id, acceptanceDto, userId);
+            results.push(updated);
+        }
+        return results;
     }
 
     private ensureHasSignature(user: User) {

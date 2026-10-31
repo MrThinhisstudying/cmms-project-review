@@ -6,6 +6,13 @@ export function sanitizeSnapshot(entityName: string, obj: any) {
         delete clone.reset_token;
         delete clone.reset_token_expiry;
     }
+    // Remove relation objects/arrays so audit snapshot focuses strictly on entity direct state
+    delete clone.users;
+    delete clone.repairs;
+    delete clone.devices;
+    delete clone.maintenances;
+    delete clone.device_group;
+    delete clone.deviceType;
     return clone;
 }
 
