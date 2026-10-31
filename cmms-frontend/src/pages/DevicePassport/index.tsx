@@ -44,6 +44,7 @@ import {
   FileTextOutlined,
   ExclamationCircleOutlined,
   TableOutlined,
+  CloseCircleOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
@@ -58,6 +59,13 @@ import { IRepair } from '../../types/repairs.types';
 import { IUser } from '../../types/user.types';
 import { getToken } from '../../utils/auth';
 import { renderMaintenanceStatusTag, isMaintenanceOverdue, getMaintenanceStatusInfo } from '../../utils/maintenanceDue';
+import {
+  getPreparedLicenseData,
+  calculateLicenseStats,
+  isRenewedRecord,
+  getRenewedByRecord,
+  LicenseItem,
+} from '../../utils/deviceExpiries';
 import { useAuthContext } from '../../context/AuthContext/AuthContext';
 import TicketDetailModal from '../MaintenanceHistory/components/TicketDetailModal';
 import EditMaintenanceDateModal from '../../components/EditMaintenanceDateModal';
@@ -333,11 +341,15 @@ const DevicePassportPage: React.FC = () => {
     );
   }
 
-  // Inspection expiry checks
-  const inspectionExpiry = device.inspection_expiry ? dayjs(device.inspection_expiry) : null;
-  const daysUntilInspection = inspectionExpiry ? inspectionExpiry.diff(dayjs(), 'days') : null;
-  const isInspectionExpired = daysUntilInspection !== null && daysUntilInspection < 0;
-  const isInspectionExpiringSoon = daysUntilInspection !== null && daysUntilInspection >= 0 && daysUntilInspection <= 90;
+  // Dữ liệu & Thống kê Giấy phép & Kiểm định kỹ thuật
+  const licenseList = getPreparedLicenseData(device);
+  const licenseStats = calculateLicenseStats(licenseList);
+
+  const effectiveInspectionExpiry = licenseStats.latestExpiryDate || device.inspection_expiry;
+  const inspectionExpiry = effectiveInspectionExpiry ? dayjs(effectiveInspectionExpiry) : null;
+  const daysUntilInspection = inspectionExpiry ? inspectionExpiry.diff(dayjs().startOf('day'), 'days') : null;
+  const isInspectionExpired = licenseStats.expiredCount > 0 || (daysUntilInspection !== null && daysUntilInspection < 0 && licenseStats.renewedCount === 0);
+  const isInspectionExpiringSoon = !isInspectionExpired && ((daysUntilInspection !== null && daysUntilInspection <= 30) || licenseStats.expiringCount > 0);
 
   const currentStatus = STATUS_CONFIG[device.status || ''] || {
     label: device.status || 'Chưa xác định',
@@ -717,7 +729,388 @@ const DevicePassportPage: React.FC = () => {
     );
   };
 
-  // --- TAB 3: LỊCH SỬ & KẾ HOẠCH BẢO DƯỠNG ---
+  // --- TAB 3: HỒ SƠ PHÁP LÝ & KIỂM ĐỊNH KỸ THUẬT ---
+  const renderInspectionTab = () => {
+    const today = dayjs().startOf('day');
+
+    const columns: ColumnsType<LicenseItem> = [
+      {
+        title: 'STT',
+        key: 'index',
+        width: 50,
+        align: 'center',
+        render: (_: any, __: any, index: number) => index + 1,
+      },
+      {
+        title: 'Số Giấy phép / Tem kiểm định',
+        dataIndex: 'number',
+        key: 'number',
+        render: (text: string, record: LicenseItem) => {
+          const isRenewed = isRenewedRecord(record, licenseList);
+          const renewedBy = isRenewed ? getRenewedByRecord(record, licenseList) : null;
+
+          return (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 6,
+                  background: isRenewed ? '#f1f5f9' : '#f3e8ff',
+                  color: isRenewed ? '#64748b' : '#7e22ce',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 14,
+                  flexShrink: 0,
+                }}
+              >
+                <SafetyCertificateOutlined />
+              </div>
+              <div>
+                <div style={{ fontWeight: 600, color: isRenewed ? '#64748b' : '#0f172a', fontSize: 13 }}>
+                  {text || '— (Chưa có số hiệu)'}
+                </div>
+                {record.previous_expiry && (
+                  <div style={{ fontSize: 11, color: '#64748b' }}>
+                    Gia hạn từ: {dayjs(record.previous_expiry).format('DD/MM/YYYY')}
+                  </div>
+                )}
+                {isRenewed && renewedBy && (
+                  <div style={{ fontSize: 11, color: '#7c3aed' }}>
+                    ↳ Đã gia hạn sang: <b>{renewedBy.number || 'kỳ mới'}</b> ({dayjs(renewedBy.expiry).format('DD/MM/YYYY')})
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        title: 'Loại giấy tờ',
+        dataIndex: 'type',
+        key: 'type',
+        width: 170,
+        render: (text: string) => {
+          const t = String(text || '').toLowerCase();
+          let color = 'blue';
+          if (t.includes('đăng kiểm')) color = 'purple';
+          else if (t.includes('bảo hiểm')) color = 'green';
+          else if (t.includes('an toàn')) color = 'cyan';
+          else if (t.includes('khí thải')) color = 'geekblue';
+          else if (t.includes('sân đỗ') || t.includes('lưu hành')) color = 'gold';
+          return (
+            <Tag color={color} style={{ fontWeight: 600, borderRadius: 4, margin: 0 }}>
+              {text || 'Khác'}
+            </Tag>
+          );
+        },
+      },
+      {
+        title: 'Đơn vị cấp',
+        dataIndex: 'issuer',
+        key: 'issuer',
+        render: (t: any) => t || '—',
+      },
+      {
+        title: 'Thời hạn',
+        dataIndex: 'expiry',
+        key: 'expiry',
+        align: 'center',
+        width: 130,
+        render: (d: string) => (
+          <span style={{ fontWeight: 600, color: '#334155' }}>
+            {d ? dayjs(d).format('DD/MM/YYYY') : '—'}
+          </span>
+        ),
+      },
+      {
+        title: 'Trạng thái hiệu lực',
+        key: 'status',
+        width: 190,
+        align: 'center',
+        render: (_: any, record: LicenseItem) => {
+          if (!record.expiry) return <Tag>Chưa có hạn</Tag>;
+          const isRenewed = isRenewedRecord(record, licenseList);
+
+          if (isRenewed) {
+            return (
+              <Tag
+                color="default"
+                icon={<CheckCircleOutlined style={{ color: '#16a34a' }} />}
+                style={{
+                  fontWeight: 600,
+                  borderRadius: 4,
+                  padding: '2px 8px',
+                  margin: 0,
+                  background: '#f1f5f9',
+                  borderColor: '#cbd5e1',
+                  color: '#475569',
+                }}
+              >
+                Đã gia hạn (Kỳ cũ)
+              </Tag>
+            );
+          }
+
+          const d = dayjs(record.expiry).startOf('day');
+          const diff = d.diff(today, 'day');
+
+          if (diff < 0) {
+            return (
+              <Tag
+                color="error"
+                icon={<CloseCircleOutlined />}
+                style={{ fontWeight: 600, borderRadius: 4, padding: '2px 8px', margin: 0 }}
+              >
+                Đã hết hạn ({Math.abs(diff)} ngày)
+              </Tag>
+            );
+          }
+          if (diff <= 30) {
+            return (
+              <Tag
+                color="warning"
+                icon={<ClockCircleOutlined />}
+                style={{ fontWeight: 600, borderRadius: 4, padding: '2px 8px', margin: 0 }}
+              >
+                Sắp hết hạn (còn {diff} ngày)
+              </Tag>
+            );
+          }
+          return (
+            <Tag
+              color="success"
+              icon={<CheckCircleOutlined />}
+              style={{ fontWeight: 600, borderRadius: 4, padding: '2px 8px', margin: 0 }}
+            >
+              Còn hạn ({diff} ngày)
+            </Tag>
+          );
+        },
+      },
+      {
+        title: 'Ghi chú',
+        dataIndex: 'note',
+        key: 'note',
+        render: (t: any) => <span style={{ color: '#64748b', fontSize: 12 }}>{t || '—'}</span>,
+      },
+    ];
+
+    return (
+      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        {/* Banner Tổng Quan Hợp Lệ */}
+        {licenseStats.expiredCount > 0 ? (
+          <Alert
+            type="error"
+            showIcon
+            icon={<WarningOutlined />}
+            message={
+              <span>
+                <strong>CẢNH BÁO QUÁ HẠN:</strong> Phát hiện <strong>{licenseStats.expiredCount}</strong> giấy phép / tem kiểm định đã hết hạn hiệu lực. Cần kiểm tra kỹ thuật trước khi vận hành!
+              </span>
+            }
+            style={{ borderRadius: 8 }}
+          />
+        ) : (
+          <Alert
+            type="success"
+            showIcon
+            icon={<CheckCircleOutlined />}
+            message={
+              <span>
+                <strong>HỒ SƠ HỢP LỆ:</strong> Tất cả giấy phép và kiểm định kỹ thuật của phương tiện hiện đang còn đầy đủ hiệu lực.
+              </span>
+            }
+            style={{ borderRadius: 8 }}
+          />
+        )}
+
+        <Card
+          size="small"
+          title="III. Theo dõi hồ sơ pháp lý & Kiểm định kỹ thuật"
+          style={{ borderRadius: 8 }}
+        >
+          {/* Quick Summary Bar */}
+          <div
+            style={{
+              display: 'flex',
+              gap: 20,
+              marginBottom: 12,
+              padding: '10px 14px',
+              background: '#f8fafc',
+              borderRadius: 8,
+              border: '1px solid #e2e8f0',
+              flexWrap: 'wrap',
+            }}
+          >
+            <div style={{ fontSize: 12 }}>
+              <span style={{ color: '#64748b' }}>Tổng số giấy tờ: </span>
+              <b style={{ color: '#0f172a' }}>{licenseStats.totalCount}</b>
+            </div>
+            <div style={{ fontSize: 12 }}>
+              <span style={{ color: '#16a34a' }}>Còn hiệu lực: </span>
+              <b style={{ color: '#16a34a' }}>{licenseStats.validCount}</b>
+            </div>
+            <div style={{ fontSize: 12 }}>
+              <span style={{ color: '#d97706' }}>Sắp hết hạn (≤ 30 ngày): </span>
+              <b style={{ color: licenseStats.expiringCount > 0 ? '#d97706' : '#64748b' }}>
+                {licenseStats.expiringCount}
+              </b>
+            </div>
+            <div style={{ fontSize: 12 }}>
+              <span style={{ color: '#dc2626' }}>Đã hết hạn: </span>
+              <b style={{ color: licenseStats.expiredCount > 0 ? '#dc2626' : '#64748b' }}>
+                {licenseStats.expiredCount}
+              </b>
+            </div>
+            {licenseStats.renewedCount > 0 && (
+              <div style={{ fontSize: 12 }}>
+                <span style={{ color: '#64748b' }}>Đã gia hạn (kỳ cũ): </span>
+                <b style={{ color: '#475569' }}>{licenseStats.renewedCount}</b>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop View: Full Table */}
+          <div className="passport-desktop-only">
+            <Table
+              columns={columns}
+              dataSource={licenseList}
+              rowKey="_key"
+              size="small"
+              pagination={false}
+              bordered
+              locale={{
+                emptyText: (
+                  <Empty
+                    description="Chưa có dữ liệu giấy phép hoặc đăng kiểm nào"
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  />
+                ),
+              }}
+            />
+          </div>
+
+          {/* Mobile View: Vertical Cards */}
+          <div className="passport-mobile-only">
+            {licenseList.length === 0 ? (
+              <Empty
+                description="Chưa có dữ liệu giấy phép hoặc đăng kiểm nào"
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+              />
+            ) : (
+              licenseList.map((record, index) => {
+                const isRenewed = isRenewedRecord(record, licenseList);
+                const renewedBy = isRenewed ? getRenewedByRecord(record, licenseList) : null;
+                const d = record.expiry ? dayjs(record.expiry).startOf('day') : null;
+                const diff = d ? d.diff(today, 'day') : null;
+
+                let borderColor = '#94a3b8';
+                let tagStatus = <Tag>Chưa có hạn</Tag>;
+
+                if (isRenewed) {
+                  borderColor = '#cbd5e1';
+                  tagStatus = (
+                    <Tag
+                      color="default"
+                      icon={<CheckCircleOutlined style={{ color: '#16a34a' }} />}
+                      style={{ fontWeight: 600, borderRadius: 4, margin: 0 }}
+                    >
+                      Đã gia hạn (Kỳ cũ)
+                    </Tag>
+                  );
+                } else if (diff !== null) {
+                  if (diff < 0) {
+                    borderColor = '#ef4444';
+                    tagStatus = (
+                      <Tag color="error" icon={<CloseCircleOutlined />} style={{ fontWeight: 600, margin: 0 }}>
+                        Đã hết hạn ({Math.abs(diff)} ngày)
+                      </Tag>
+                    );
+                  } else if (diff <= 30) {
+                    borderColor = '#f59e0b';
+                    tagStatus = (
+                      <Tag color="warning" icon={<ClockCircleOutlined />} style={{ fontWeight: 600, margin: 0 }}>
+                        Sắp hết hạn (còn {diff} ngày)
+                      </Tag>
+                    );
+                  } else {
+                    borderColor = '#22c55e';
+                    tagStatus = (
+                      <Tag color="success" icon={<CheckCircleOutlined />} style={{ fontWeight: 600, margin: 0 }}>
+                        Còn hạn ({diff} ngày)
+                      </Tag>
+                    );
+                  }
+                }
+
+                const t = String(record.type || '').toLowerCase();
+                let typeColor = 'blue';
+                if (t.includes('đăng kiểm')) typeColor = 'purple';
+                else if (t.includes('bảo hiểm')) typeColor = 'green';
+                else if (t.includes('an toàn')) typeColor = 'cyan';
+                else if (t.includes('khí thải')) typeColor = 'geekblue';
+                else if (t.includes('sân đỗ') || t.includes('lưu hành')) typeColor = 'gold';
+
+                return (
+                  <div
+                    key={record._key || index}
+                    style={{
+                      background: isRenewed ? '#f8fafc' : '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      borderLeft: `4px solid ${borderColor}`,
+                      borderRadius: 8,
+                      padding: '12px 14px',
+                      marginBottom: 10,
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <Tag color={typeColor} style={{ fontWeight: 600, margin: 0, borderRadius: 4 }}>
+                        {record.type || 'Giấy phép'}
+                      </Tag>
+                      {tagStatus}
+                    </div>
+
+                    <div style={{ fontWeight: 700, fontSize: 14, color: isRenewed ? '#64748b' : '#0f172a', marginBottom: 6 }}>
+                      {record.number || '— (Chưa có số hiệu)'}
+                    </div>
+
+                    <div style={{ fontSize: 12, color: '#475569', lineHeight: 1.6 }}>
+                      <div>
+                        Đơn vị cấp: <strong>{record.issuer || '—'}</strong>
+                      </div>
+                      <div>
+                        Thời hạn: <strong>{record.expiry ? dayjs(record.expiry).format('DD/MM/YYYY') : '—'}</strong>
+                      </div>
+                      {record.previous_expiry && (
+                        <div style={{ fontSize: 11, color: '#64748b' }}>
+                          Gia hạn từ: {dayjs(record.previous_expiry).format('DD/MM/YYYY')}
+                        </div>
+                      )}
+                      {isRenewed && renewedBy && (
+                        <div style={{ fontSize: 11, color: '#7c3aed', marginTop: 2 }}>
+                          ↳ Đã gia hạn sang: <b>{renewedBy.number || 'kỳ mới'}</b> ({dayjs(renewedBy.expiry).format('DD/MM/YYYY')})
+                        </div>
+                      )}
+                      {record.note && (
+                        <div style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic', marginTop: 2 }}>
+                          Ghi chú: {record.note}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </Card>
+      </Space>
+    );
+  };
+
+  // --- TAB 4: LỊCH SỬ & KẾ HOẠCH BẢO DƯỠNG ---
   const renderMaintenanceTab = () => {
     const today = dayjs().startOf('day');
     const canEditDate = user?.role === 'ADMIN' || user?.permissions?.includes('UPDATE_MAINTENANCE_DATE');
@@ -1656,13 +2049,22 @@ const DevicePassportPage: React.FC = () => {
       key: '3',
       label: (
         <span>
+          <SafetyCertificateOutlined /> Giấy phép & Đăng kiểm ({licenseStats.totalCount})
+        </span>
+      ),
+      children: renderInspectionTab(),
+    },
+    {
+      key: '4',
+      label: (
+        <span>
           <ToolOutlined /> Bảo dưỡng ({maintenances.length})
         </span>
       ),
       children: renderMaintenanceTab(),
     },
     {
-      key: '4',
+      key: '5',
       label: (
         <span>
           <WarningOutlined /> Sửa chữa ({repairs.length})
@@ -1778,42 +2180,45 @@ const DevicePassportPage: React.FC = () => {
 
           {/* Inspection Alert Bar */}
           <div style={{ marginTop: 12 }}>
-            {isInspectionExpired ? (
+            {licenseStats.expiredCount > 0 ? (
               <Alert
                 type="error"
                 showIcon
                 icon={<WarningOutlined />}
                 message={
                   <span>
-                    <strong>CẢNH BÁO KIỂM ĐỊNH:</strong> Phương tiện đã hết hạn kiểm định từ ngày{' '}
-                    <strong>{dayjs(device.inspection_expiry).format('DD/MM/YYYY')}</strong>. Cần liên hệ tổ kỹ thuật ngay!
+                    <strong>CẢNH BÁO KIỂM ĐỊNH:</strong> Phương tiện có <strong>{licenseStats.expiredCount}</strong> giấy tờ / tem kiểm định đã quá hạn! Cần liên hệ tổ kỹ thuật kiểm tra và gia hạn ngay.
                   </span>
                 }
               />
-            ) : isInspectionExpiringSoon ? (
+            ) : licenseStats.expiringCount > 0 ? (
               <Alert
                 type="warning"
                 showIcon
                 icon={<ClockCircleOutlined />}
                 message={
                   <span>
-                    <strong>LƯU Ý:</strong> Hạn đăng kiểm sắp hết vào ngày{' '}
-                    <strong>{dayjs(device.inspection_expiry).format('DD/MM/YYYY')}</strong> (còn{' '}
-                    <strong>{daysUntilInspection} ngày</strong>).
+                    <strong>LƯU Ý:</strong> Có <strong>{licenseStats.expiringCount}</strong> giấy tờ / tem kiểm định sắp hết hạn trong vòng 30 ngày tới.
                   </span>
                 }
               />
-            ) : (
+            ) : licenseStats.totalCount > 0 ? (
               <Alert
                 type="success"
                 showIcon
                 icon={<SafetyCertificateOutlined />}
                 message={
                   <span>
-                    Hạn đăng kiểm hợp lệ đến ngày{' '}
-                    <strong>{device.inspection_expiry ? dayjs(device.inspection_expiry).format('DD/MM/YYYY') : '---'}</strong>.
+                    <strong>HỒ SƠ HỢP LỆ:</strong> Tất cả giấy phép và kiểm định kỹ thuật của phương tiện hiện đang còn đầy đủ hiệu lực{licenseStats.latestExpiryDate ? ` (Hạn đến ${dayjs(licenseStats.latestExpiryDate).format('DD/MM/YYYY')})` : ''}.
                   </span>
                 }
+              />
+            ) : (
+              <Alert
+                type="info"
+                showIcon
+                icon={<SafetyCertificateOutlined />}
+                message="Chưa có thông tin giấy phép / tem kiểm định cho phương tiện này."
               />
             )}
           </div>
