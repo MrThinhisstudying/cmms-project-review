@@ -32,6 +32,26 @@ export class RecordLeaveDto {
   @IsNotEmpty()
   year: number;
 
+  @ApiPropertyOptional({ example: 'ANNUAL', description: 'Loại nghỉ: ANNUAL, COMPENSATORY, SPECIAL_PAID, SICK_LEAVE, UNPAID' })
+  @IsString()
+  @IsOptional()
+  leave_type?: string;
+
+  @ApiPropertyOptional({ example: 'ĐXP-012/2026', description: 'Số hiệu đơn / giấy phép đã đóng dấu' })
+  @IsString()
+  @IsOptional()
+  document_number?: string;
+
+  @ApiPropertyOptional({ example: 'Trưởng phòng Kỹ thuật', description: 'Cấp phê duyệt / Người ký' })
+  @IsString()
+  @IsOptional()
+  approved_by?: string;
+
+  @ApiPropertyOptional({ example: '2026-04-18', description: 'Ngày ký duyệt đóng dấu' })
+  @IsDateString()
+  @IsOptional()
+  signed_date?: string;
+
   @ApiPropertyOptional({ example: 'Nghỉ ốm', description: 'Lý do' })
   @IsString()
   @IsOptional()

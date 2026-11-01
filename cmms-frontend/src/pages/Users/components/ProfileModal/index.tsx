@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { 
     Drawer, Form, Input, Button, Upload, message, Avatar, Tag, Spin, Empty, 
     Badge, Tooltip, Table, Space, Popconfirm, DatePicker, Modal, Descriptions,
-    Select, Row, Col, Alert
+    Select, Row, Col, Alert, InputNumber
 } from 'antd';
 import {
     UploadOutlined, UserOutlined, LockOutlined, WarningOutlined, PlusOutlined,
@@ -12,7 +12,7 @@ import {
     TeamOutlined, GlobalOutlined, DesktopOutlined, EyeOutlined,
     CheckCircleOutlined, HomeOutlined, EnvironmentOutlined, CrownOutlined,
     SolutionOutlined, AuditOutlined, InfoCircleOutlined, CopyOutlined,
-    SaveOutlined
+    SaveOutlined, FilePdfOutlined
 } from '@ant-design/icons';
 import { IUser } from '../../../../types/user.types';
 import { uploadSignature, updateUser, uploadAvatar } from '../../../../apis/users';
@@ -28,6 +28,7 @@ import { useAuthContext } from '../../../../context/AuthContext/AuthContext';
 import { createProfileRequest, getMyRequests, IProfileRequest } from '../../../../apis/profileRequests';
 import { createLaborContract } from '../../../../apis/laborContracts';
 import { createRewardDiscipline } from '../../../../apis/rewardDisciplines';
+import { LEAVE_TYPE_CONFIG, LeaveType, recordLeave, uploadLeaveAttachments, getAnnualLeavesByUser, getLeaveHistoriesByUser } from '../../../../apis/annualLeaves';
 
 // ─────────────────────────── Types ───────────────────────────
 interface ProfileModalProps {
@@ -115,6 +116,10 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
     const [addModalLoading, setAddModalLoading] = useState(false);
     const [contractForm] = Form.useForm();
     const [rewardForm] = Form.useForm();
+    const [recordLeaveOpen, setRecordLeaveOpen] = useState(false);
+    const [recordLeaveLoading, setRecordLeaveLoading] = useState(false);
+    const [recordLeaveForm] = Form.useForm();
+    const [leaveFileList, setLeaveFileList] = useState<any[]>([]);
 
     // ── Data Loading ──
     useEffect(() => {
@@ -320,6 +325,116 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
         } finally {
             setAddModalLoading(false);
         }
+    };
+
+    const reloadLeavesData = async () => {
+        if (!user?.user_id) return;
+        setHistoryLoading(true);
+        try {
+            const [leavesData, historiesData] = await Promise.all([
+                getAnnualLeavesByUser(user.user_id).catch(() => []),
+                getLeaveHistoriesByUser(user.user_id).catch(() => [])
+            ]);
+            setAnnualLeaves(leavesData);
+            setLeaveHistories(historiesData);
+            loadedTabsRef.current.leaves = true;
+            setLoadedTabs(prev => ({ ...prev, leaves: true }));
+        } catch { /* silent */ }
+        finally { setHistoryLoading(false); }
+    };
+
+    const handleOpenRecordLeave = () => {
+        recordLeaveForm.resetFields();
+        recordLeaveForm.setFieldsValue({
+            leave_type: 'ANNUAL',
+            days: 1,
+            date_range: [dayjs(), dayjs()],
+        });
+        setLeaveFileList([]);
+        setRecordLeaveOpen(true);
+    };
+
+    const handleDateRangeChangeInProfile = (dates: any) => {
+        if (dates && dates[0] && dates[1]) {
+            const diffDays = dates[1].startOf('day').diff(dates[0].startOf('day'), 'day') + 1;
+            if (diffDays > 0) {
+                recordLeaveForm.setFieldsValue({ days: diffDays });
+            }
+        }
+    };
+
+    const handleRecordLeaveSubmitInProfile = async () => {
+        if (!user?.user_id) return;
+        try {
+            const values = await recordLeaveForm.validateFields();
+            setRecordLeaveLoading(true);
+
+            let attachments: string[] = [];
+            if (leaveFileList.length > 0) {
+                const filesToUpload = leaveFileList
+                    .map((f: any) => f.originFileObj || f)
+                    .filter((f: any) => f instanceof File);
+
+                if (filesToUpload.length > 0) {
+                    try {
+                        attachments = await uploadLeaveAttachments(filesToUpload);
+                    } catch (err: any) {
+                        message.warning('Tải file đính kèm thất bại, tiếp tục ghi nhận thông tin phép');
+                    }
+                }
+            }
+
+            const [startDate, endDate] = values.date_range;
+            await recordLeave({
+                user_id: user.user_id,
+                year: startDate.year(),
+                applied_month: startDate.month() + 1,
+                leave_type: values.leave_type || 'ANNUAL',
+                days_taken: Number(values.days),
+                from_date: startDate.format('YYYY-MM-DD'),
+                to_date: endDate.format('YYYY-MM-DD'),
+                reason: values.reason,
+                attachments,
+            });
+
+            message.success('Ghi nhận nghỉ phép thành công!');
+            setRecordLeaveOpen(false);
+            setLeaveFileList([]);
+            await reloadLeavesData();
+            if (user) {
+                onUpdateSuccess(user);
+            }
+        } catch (error: any) {
+            console.error('Error recording leave in profile:', error);
+            message.error(error.response?.data?.message || 'Có lỗi xảy ra khi ghi nhận nghỉ phép');
+        } finally {
+            setRecordLeaveLoading(false);
+        }
+    };
+
+    const leaveUploadProps = {
+        onRemove: (file: any) => {
+            const index = leaveFileList.indexOf(file);
+            const newFileList = leaveFileList.slice();
+            newFileList.splice(index, 1);
+            setLeaveFileList(newFileList);
+        },
+        beforeUpload: (file: File) => {
+            const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+            const isImage = file.type.startsWith('image/');
+            if (!isPdf && !isImage) {
+                message.error('Chỉ hỗ trợ file PDF hoặc ảnh (JPG, PNG)');
+                return Upload.LIST_IGNORE;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                message.error('Dung lượng file tối đa là 10MB');
+                return Upload.LIST_IGNORE;
+            }
+            setLeaveFileList([file]);
+            return false;
+        },
+        fileList: leaveFileList,
+        maxCount: 1,
     };
 
 
@@ -1146,52 +1261,104 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
         );
     };
 
-    // ── SECTION 6: Phép năm ──
+    // ── SECTION 6: Phép năm & Nghỉ bù ──
     const renderLeavesSection = () => {
         if (historyLoading && !loadedTabs.leaves) return <div className="pf-loading"><Spin tip="Đang tải..." /></div>;
         const currentYearLeaves = annualLeaves.filter(l => l.year === dayjs().year());
         return (
             <div className="pf-section">
-                <div className="pf-section-header">
-                    <CalendarOutlined className="pf-section-icon" />
-                    <span>Phép năm {dayjs().year()}</span>
+                <div className="pf-section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <CalendarOutlined className="pf-section-icon" />
+                        <span>Quỹ Phép năm & Nghỉ bù {dayjs().year()}</span>
+                    </div>
+                    <Button 
+                        type="primary" 
+                        size="small" 
+                        icon={<PlusOutlined />}
+                        onClick={handleOpenRecordLeave}
+                    >
+                        Ghi nhận phép / nghỉ bù
+                    </Button>
                 </div>
                 {currentYearLeaves.length === 0 ? (
                     <Empty description="Chưa có thông tin phép năm" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                 ) : (
-                    <div className="pf-card-list">
+                    <div className="pf-card-list" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
                         {currentYearLeaves.map(rec => {
-                            const total = rec.leave_balance_n2 + rec.leave_balance_n1 + rec.current_year_leave;
-                            const taken = rec.m1_taken + rec.m2_taken + rec.m3_taken + rec.m4_taken + rec.m5_taken + rec.m6_taken + rec.m7_taken + rec.m8_taken + rec.m9_taken + rec.m10_taken + rec.m11_taken + rec.m12_taken;
+                            const total = (Number(rec.leave_balance_n2) || 0) + (Number(rec.leave_balance_n1) || 0) + (Number(rec.current_year_leave) || 0);
+                            const taken = (Number(rec.m1_taken) || 0) + (Number(rec.m2_taken) || 0) + (Number(rec.m3_taken) || 0) + (Number(rec.m4_taken) || 0) + 
+                                (Number(rec.m5_taken) || 0) + (Number(rec.m6_taken) || 0) + (Number(rec.m7_taken) || 0) + (Number(rec.m8_taken) || 0) + 
+                                (Number(rec.m9_taken) || 0) + (Number(rec.m10_taken) || 0) + (Number(rec.m11_taken) || 0) + (Number(rec.m12_taken) || 0);
                             const remain = total - taken;
+                            const compQuota = Number(rec.compensatory_leave_quota) || 0;
+                            const compTaken = Number(rec.compensatory_leave_taken) || 0;
+                            const compRemain = compQuota - compTaken;
+
                             return (
-                                <div key={rec.id} className="pf-card">
-                                    <div className="pf-card-top">
-                                        <span style={{ fontWeight: 600, color: '#1890ff' }}>Năm {rec.year}</span>
-                                        <Tag color={remain < 0 ? 'red' : remain === 0 ? 'orange' : 'green'}>Còn lại: {remain} ngày</Tag>
+                                <React.Fragment key={rec.id}>
+                                    {/* Quỹ Phép Năm */}
+                                    <div className="pf-card">
+                                        <div className="pf-card-top">
+                                            <span style={{ fontWeight: 600, color: '#1890ff' }}>🏖️ Quỹ Phép Năm {rec.year}</span>
+                                            <Tag color={remain < 0 ? 'red' : remain === 0 ? 'orange' : 'green'}>Còn lại: {remain} ngày</Tag>
+                                        </div>
+                                        <div className="pf-leave-stats">
+                                            <div className="pf-leave-stat">
+                                                <span className="pf-leave-stat-label">Tổng quỹ phép</span>
+                                                <span className="pf-leave-stat-value" style={{ color: '#1890ff' }}>{total}</span>
+                                            </div>
+                                            <div className="pf-leave-stat">
+                                                <span className="pf-leave-stat-label">Đã sử dụng</span>
+                                                <span className="pf-leave-stat-value" style={{ color: '#ff4d4f' }}>{taken}</span>
+                                            </div>
+                                            <div className="pf-leave-stat">
+                                                <span className="pf-leave-stat-label">Còn lại</span>
+                                                <span className="pf-leave-stat-value" style={{ color: remain < 0 ? '#ff4d4f' : '#52c41a' }}>{remain}</span>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="pf-leave-stats">
-                                        <div className="pf-leave-stat">
-                                            <span className="pf-leave-stat-label">Tổng quỹ phép</span>
-                                            <span className="pf-leave-stat-value" style={{ color: '#1890ff' }}>{total}</span>
+
+                                    {/* Quỹ Nghỉ Bù */}
+                                    <div className="pf-card" style={{ borderColor: '#d3adf7' }}>
+                                        <div className="pf-card-top">
+                                            <span style={{ fontWeight: 600, color: '#722ed1' }}>⏰ Quỹ Nghỉ Bù Tích Luỹ {rec.year}</span>
+                                            <Tag color={compRemain < 0 ? 'red' : compRemain === 0 ? 'default' : 'purple'}>Còn tồn: {compRemain} ngày</Tag>
                                         </div>
-                                        <div className="pf-leave-stat">
-                                            <span className="pf-leave-stat-label">Đã sử dụng</span>
-                                            <span className="pf-leave-stat-value" style={{ color: '#ff4d4f' }}>{taken}</span>
-                                        </div>
-                                        <div className="pf-leave-stat">
-                                            <span className="pf-leave-stat-label">Còn lại</span>
-                                            <span className="pf-leave-stat-value" style={{ color: remain < 0 ? '#ff4d4f' : '#52c41a' }}>{remain}</span>
+                                        <div className="pf-leave-stats">
+                                            <div className="pf-leave-stat">
+                                                <span className="pf-leave-stat-label">Tích luỹ cấp bù</span>
+                                                <span className="pf-leave-stat-value" style={{ color: '#722ed1' }}>{compQuota}</span>
+                                            </div>
+                                            <div className="pf-leave-stat">
+                                                <span className="pf-leave-stat-label">Đã nghỉ bù</span>
+                                                <span className="pf-leave-stat-value" style={{ color: '#fa8c16' }}>{compTaken}</span>
+                                            </div>
+                                            <div className="pf-leave-stat">
+                                                <span className="pf-leave-stat-label">Còn tồn bù</span>
+                                                <span className="pf-leave-stat-value" style={{ color: compRemain < 0 ? '#ff4d4f' : '#722ed1' }}>{compRemain}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
+                                </React.Fragment>
                             );
                         })}
                     </div>
                 )}
 
                 <div className="pf-subsection" style={{ marginTop: 24 }}>
-                    <div className="pf-subsection-title">Lịch sử nghỉ phép ({leaveHistories.length})</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <div className="pf-subsection-title" style={{ margin: 0 }}>Lịch sử nghỉ phép & Giấy đề nghị ({leaveHistories.length})</div>
+                        <Button 
+                            type="primary" 
+                            ghost
+                            size="small" 
+                            icon={<PlusOutlined />}
+                            onClick={handleOpenRecordLeave}
+                        >
+                            Ghi nhận
+                        </Button>
+                    </div>
                     {leaveHistories.length === 0 ? (
                         <Empty description="Chưa có lịch sử nghỉ phép" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                     ) : (
@@ -1201,42 +1368,71 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                             pagination={{ pageSize: 5 }} 
                             size="small" 
                             bordered 
-                            scroll={{ x: 800 }}
+                            scroll={{ x: 750 }}
                             columns={[
                                 {
-                                    title: 'Thời gian',
+                                    title: 'Thời gian nghỉ',
+                                    width: 170,
                                     render: (_: any, r: any) => (
                                         <span>{dayjs(r.from_date).format('DD/MM/YYYY')} - {dayjs(r.to_date).format('DD/MM/YYYY')}</span>
                                     )
                                 },
                                 {
+                                    title: 'Loại nghỉ',
+                                    width: 135,
+                                    dataIndex: 'leave_type',
+                                    render: (type: LeaveType) => {
+                                        const cfg = LEAVE_TYPE_CONFIG[type] || LEAVE_TYPE_CONFIG.ANNUAL;
+                                        return <Tag color={cfg.color}>{cfg.label}</Tag>;
+                                    }
+                                },
+                                {
                                     title: 'Số ngày',
+                                    width: 80,
                                     dataIndex: 'days_taken',
+                                    align: 'center' as const,
                                     render: (val: number) => <span style={{ color: '#ff4d4f', fontWeight: 600 }}>{val}</span>
                                 },
                                 {
-                                    title: 'Lý do',
+                                    title: 'Lý do nghỉ',
                                     dataIndex: 'reason',
-                                    ellipsis: true,
+                                    render: (reason: string, r: any) => (
+                                        <div>
+                                            <div>{reason || '-'}</div>
+                                            {r.location && <div style={{ fontSize: 11, color: '#8c8c8c' }}>📍 {r.location}</div>}
+                                        </div>
+                                    )
                                 },
                                 {
-                                    title: 'Đính kèm',
+                                    title: 'Giấy đề nghị',
+                                    width: 150,
                                     dataIndex: 'attachments',
                                     render: (attachments: string[]) => {
                                         if (!attachments || attachments.length === 0) return <span style={{ color: '#999' }}>Không có</span>;
                                         return (
                                             <Space direction="vertical" size="small">
-                                                {attachments.map((url, i) => (
-                                                    <a key={i} href={`${process.env.REACT_APP_BASE_URL?.replace('/api', '')}${url}`} target="_blank" rel="noreferrer" style={{ fontSize: 13 }}>
-                                                        <FileTextOutlined /> Xem file {i + 1}
-                                                    </a>
-                                                ))}
+                                                {attachments.map((url, i) => {
+                                                    const isPdf = url.toLowerCase().endsWith('.pdf');
+                                                    return (
+                                                        <a 
+                                                            key={i} 
+                                                            href={`${process.env.REACT_APP_BASE_URL?.replace('/api', '')}${url}`} 
+                                                            target="_blank" 
+                                                            rel="noreferrer" 
+                                                            style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, color: isPdf ? '#ff4d4f' : '#1890ff', fontWeight: 500 }}
+                                                        >
+                                                            {isPdf ? <FilePdfOutlined style={{ color: '#ff4d4f' }} /> : <FileTextOutlined style={{ color: '#1890ff' }} />} 
+                                                            {attachments.length > 1 ? `Giấy đề nghị (${i + 1})` : 'Giấy đề nghị'}
+                                                        </a>
+                                                    );
+                                                })}
                                             </Space>
                                         );
                                     }
                                 },
                                 {
-                                    title: 'Ngày duyệt',
+                                    title: 'Ngày ghi nhận',
+                                    width: 110,
                                     dataIndex: 'created_at',
                                     render: (d: string) => <span style={{ color: '#8c8c8c' }}>{dayjs(d).format('DD/MM/YYYY')}</span>
                                 }
@@ -1935,6 +2131,63 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     </Form.Item>
                     <Form.Item name="effective_date" label="Ngày hiệu lực" rules={[{ required: true, message: 'Chọn ngày' }]}>
                         <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+                    </Form.Item>
+                </Form>
+            </Modal>
+
+            {/* Modal Ghi nhận Nghỉ phép / Nghỉ bù */}
+            <Modal
+                title={`🏖️ Ghi nhận Nghỉ phép / Nghỉ bù - ${user?.name || ''}`}
+                open={recordLeaveOpen}
+                onCancel={() => {
+                    setRecordLeaveOpen(false);
+                    setLeaveFileList([]);
+                }}
+                onOk={() => recordLeaveForm.submit()}
+                confirmLoading={recordLeaveLoading}
+                destroyOnClose
+                width={540}
+            >
+                <Form form={recordLeaveForm} layout="vertical" onFinish={handleRecordLeaveSubmitInProfile} style={{ marginTop: 16 }}>
+                    <Form.Item label="Nhân viên">
+                        <Input value={`${user?.name} (${user?.employee_code || user?.user_id || ''})`} disabled />
+                    </Form.Item>
+
+                    <Row gutter={12}>
+                        <Col xs={24} sm={14}>
+                            <Form.Item name="leave_type" label="Loại hình nghỉ" initialValue="ANNUAL" rules={[{ required: true }]}>
+                                <Select>
+                                    <Select.Option value="ANNUAL">🏖️ Nghỉ phép năm (Trừ quỹ phép)</Select.Option>
+                                    <Select.Option value="COMPENSATORY">⏰ Nghỉ bù ca/lễ (Trừ quỹ bù)</Select.Option>
+                                    <Select.Option value="SPECIAL_PAID">💍 Việc riêng có lương (Cưới hỏi, tang...)</Select.Option>
+                                    <Select.Option value="SICK_LEAVE">🏥 Nghỉ ốm / Thai sản / BHXH</Select.Option>
+                                    <Select.Option value="UNPAID">🚫 Nghỉ việc riêng không lương</Select.Option>
+                                </Select>
+                            </Form.Item>
+                        </Col>
+
+                        <Col xs={24} sm={10}>
+                            <Form.Item name="days" label="Số ngày nghỉ" rules={[{ required: true, message: 'Nhập số ngày' }]}>
+                                <InputNumber min={0.5} max={30} step={0.5} style={{ width: '100%' }} placeholder="VD: 1, 0.5..." />
+                            </Form.Item>
+                        </Col>
+                    </Row>
+
+                    <Form.Item name="date_range" label="Thời gian nghỉ (Từ ngày - Đến ngày)" rules={[{ required: true, message: 'Chọn khoảng ngày' }]}>
+                        <DatePicker.RangePicker style={{ width: '100%' }} format="DD/MM/YYYY" onChange={handleDateRangeChangeInProfile} />
+                    </Form.Item>
+
+                    <Form.Item name="reason" label="Lý do nghỉ phép">
+                        <Input.TextArea rows={3} placeholder="Ghi chú thêm lý do..." />
+                    </Form.Item>
+
+                    <Form.Item label="Đính kèm file PDF nghỉ phép (Giấy đề nghị)">
+                        <Upload {...leaveUploadProps}>
+                            <Button icon={<UploadOutlined />}>Tải lên file PDF giấy đề nghị</Button>
+                        </Upload>
+                        <div style={{ color: '#8c8c8c', marginTop: 4, fontSize: 12 }}>
+                            Hỗ trợ file PDF hoặc ảnh giấy phép đã duyệt (tối đa 10MB)
+                        </div>
                     </Form.Item>
                 </Form>
             </Modal>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useMemo } from "react";
 import {
   Modal,
   Form,
@@ -21,6 +21,13 @@ interface RepairFormProps {
   onSubmit: (data: RepairUpsertPayload | BulkRepairUpsertPayload) => void;
   loading: boolean;
   initialData: IRepair | null;
+  prefilledData?: {
+    device_id?: number;
+    device?: any;
+    location_issue?: string;
+    recommendation?: string;
+    incidentReportId?: number;
+  } | null;
 }
 
 const RepairForm: React.FC<RepairFormProps> = ({
@@ -29,10 +36,11 @@ const RepairForm: React.FC<RepairFormProps> = ({
   onSubmit,
   loading,
   initialData,
+  prefilledData,
 }) => {
   const [form] = Form.useForm();
   const { devices, fetchDevices } = useDevicesContext();
-  const lastRepairIdRef = useRef<number | null | "NEW" | undefined>(undefined);
+  const lastRepairIdRef = useRef<number | null | string | undefined>(undefined);
 
   // Tải danh mục thiết bị nếu chưa có khi mở modal
   useEffect(() => {
@@ -41,6 +49,23 @@ const RepairForm: React.FC<RepairFormProps> = ({
     }
   }, [open, devices.length, fetchDevices]);
 
+  // Đảm bảo thiết bị được chuyển tiếp từ sự cố luôn có mặt trong danh sách options của Select
+  const availableDevices = useMemo(() => {
+    if (!prefilledData?.device && !prefilledData?.device_id) return devices;
+    const devId = Number(prefilledData.device_id);
+    const exists = devices.some((d) => Number(d.device_id) === devId);
+    if (!exists && prefilledData.device) {
+      return [
+        {
+          ...prefilledData.device,
+          device_id: devId,
+        } as any,
+        ...devices,
+      ];
+    }
+    return devices;
+  }, [devices, prefilledData]);
+
   // Khởi tạo giá trị form duy nhất 1 lần khi mở form hoặc khi đổi sang phiếu khác
   useEffect(() => {
     if (!open) {
@@ -48,7 +73,11 @@ const RepairForm: React.FC<RepairFormProps> = ({
       return;
     }
 
-    const currentId = initialData ? initialData.repair_id : "NEW";
+    const currentId = initialData
+      ? initialData.repair_id
+      : prefilledData
+      ? `PREFILLED_${prefilledData.incidentReportId || prefilledData.device_id}`
+      : "NEW";
 
     if (lastRepairIdRef.current !== currentId) {
       lastRepairIdRef.current = currentId;
@@ -58,11 +87,17 @@ const RepairForm: React.FC<RepairFormProps> = ({
           location_issue: initialData.location_issue,
           recommendation: initialData.recommendation,
         });
+      } else if (prefilledData) {
+        form.setFieldsValue({
+          device_id: prefilledData.device_id ? [prefilledData.device_id] : [],
+          location_issue: prefilledData.location_issue || "",
+          recommendation: "",
+        });
       } else {
         form.resetFields();
       }
     }
-  }, [open, initialData, form]);
+  }, [open, initialData, prefilledData, form]);
 
   const handleSubmit = async () => {
     try {
@@ -75,7 +110,7 @@ const RepairForm: React.FC<RepairFormProps> = ({
 
   // The user requested that a single device can have multiple repair tickets simultaneously.
   // Therefore, we no longer filter out devices that are currently in an active repair process.
-  const filteredDevices = devices;
+  const filteredDevices = availableDevices;
 
   // Watch device_id to show details. For array, show the first selected device or a summary.
   const selectedDeviceValue = Form.useWatch("device_id", form);
@@ -85,7 +120,9 @@ const RepairForm: React.FC<RepairFormProps> = ({
 
   // Selected Device for detail display. If multiple, show details of the first selected just as preview
   const firstSelectedId = Array.isArray(selectedDeviceValue) ? selectedDeviceValue[0] : selectedDeviceValue;
-  const selectedDevice = devices.find((d) => d.device_id === firstSelectedId);
+  const selectedDevice =
+    availableDevices.find((d) => Number(d.device_id) === Number(firstSelectedId)) ||
+    (Number(firstSelectedId) === Number(prefilledData?.device_id) ? prefilledData?.device : undefined);
   const selectedCount = Array.isArray(selectedDeviceValue) ? selectedDeviceValue.length : (selectedDeviceValue ? 1 : 0);
 
   return (
@@ -108,7 +145,11 @@ const RepairForm: React.FC<RepairFormProps> = ({
           BẢO DƯỠNG - SỬA CHỮA
         </Title>
         <Text type="secondary">
-          {initialData ? `Mã phiếu: #${initialData.repair_id}` : "Tạo phiếu mới"}
+          {initialData
+            ? `Mã phiếu: #${initialData.repair_id}`
+            : prefilledData?.incidentReportId
+            ? `Lập hồ sơ sửa chữa từ sự cố #${prefilledData.incidentReportId}`
+            : "Tạo phiếu mới"}
         </Text>
       </div>
 
@@ -148,7 +189,7 @@ const RepairForm: React.FC<RepairFormProps> = ({
                   <Descriptions.Item label="Danh sách thiết bị">
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                       {Array.isArray(selectedDeviceValue) && selectedDeviceValue.map(id => {
-                        const d = devices.find(x => x.device_id === id);
+                        const d = availableDevices.find(x => Number(x.device_id) === Number(id));
                         return d ? <Typography.Text key={id}>• {d.name} ({d.reg_number || 'N/A'})</Typography.Text> : null;
                       })}
                     </div>
@@ -157,13 +198,16 @@ const RepairForm: React.FC<RepairFormProps> = ({
              ) : (
                 <>
                   <Descriptions.Item label="Tên thiết bị">
-                    {selectedDevice?.name}
+                    {selectedDevice?.name || prefilledData?.device?.name || "N/A"}
                   </Descriptions.Item>
                   <Descriptions.Item label="Số đăng ký">
-                    {selectedDevice?.reg_number} {selectedDevice?.brand ? `- ${selectedDevice.brand}` : ''}
+                    {selectedDevice?.reg_number || prefilledData?.device?.reg_number || "N/A"}{" "}
+                    {(selectedDevice?.brand || prefilledData?.device?.brand)
+                      ? `- ${selectedDevice?.brand || prefilledData?.device?.brand}`
+                      : ""}
                   </Descriptions.Item>
                   <Descriptions.Item label="Đơn vị quản lý tài sản">
-                      {selectedDevice?.using_department || "Đội Kỹ Thuật"}
+                    {selectedDevice?.using_department || prefilledData?.device?.using_department || "Đội Kỹ Thuật"}
                   </Descriptions.Item>
                 </>
              )}

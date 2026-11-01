@@ -20,6 +20,6 @@ import { CertificatesModule } from 'src/certificates/certificates.module';
     imports: [TypeOrmModule.forFeature([Repair, Device, User, StockOut, Item, Notification, UserDeviceGroup, Department, UserDepartment]), CertificatesModule],
     controllers: [RepairsController],
     providers: [RepairsService, NotificationService, ExportDocxService, RepairsGateway],
-    exports: [ExportDocxService, RepairsGateway],
+    exports: [RepairsService, ExportDocxService, RepairsGateway],
 })
 export class RepairsModule {}

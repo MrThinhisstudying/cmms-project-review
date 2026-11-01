@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Card, Button, Input, Space, Row, Col, Typography, InputNumber, message, Upload, Empty, Modal, Form, Select, DatePicker, Descriptions } from 'antd';
+import { Table, Card, Button, Input, Space, Row, Col, Typography, InputNumber, message, Upload, Empty, Modal, Form, Select, DatePicker } from 'antd';
 import { SearchOutlined, UploadOutlined, DownloadOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
 import { getAnnualLeaves, updateAnnualLeave, importAnnualLeaves, recordLeave, uploadLeaveAttachments, IAnnualLeave } from '../../apis/annualLeaves';
@@ -26,7 +26,6 @@ const LeaveManagement: React.FC = () => {
     const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
     const [recordForm] = Form.useForm();
     const [recordLoading, setRecordLoading] = useState(false);
-    const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
     const [selectedProfileUser, setSelectedProfileUser] = useState<any>(null);
     
     useEffect(() => {
@@ -63,8 +62,12 @@ const LeaveManagement: React.FC = () => {
 
     const handleOpenRecordModal = () => {
         recordForm.resetFields();
+        recordForm.setFieldsValue({
+            leave_type: 'ANNUAL',
+            days_taken: 1,
+            date_range: [dayjs(), dayjs()],
+        });
         setFileList([]);
-        setSelectedUserId(null);
         setIsRecordModalOpen(true);
     };
 
@@ -79,19 +82,24 @@ const LeaveManagement: React.FC = () => {
                 attachments = await uploadLeaveAttachments(uploadFiles);
             }
 
-            const fromDate = dayjs(values.from_date);
+            const [startDate, endDate] = values.date_range;
 
             const payload = {
-                ...values,
-                applied_month: fromDate.month() + 1,
-                year: fromDate.year(),
-                from_date: values.from_date.toISOString(),
-                to_date: values.to_date.toISOString(),
-                attachments
+                user_id: values.user_id,
+                applied_month: startDate.month() + 1,
+                year: startDate.year(),
+                from_date: startDate.format('YYYY-MM-DD'),
+                to_date: endDate.format('YYYY-MM-DD'),
+                days_taken: Number(values.days_taken),
+                leave_type: values.leave_type || 'ANNUAL',
+                reason: values.reason,
+                attachments,
             };
             await recordLeave(payload);
             message.success('Ghi nhận nghỉ phép thành công');
             setIsRecordModalOpen(false);
+            recordForm.resetFields();
+            setFileList([]);
             fetchRecords();
         } catch (error: any) {
             if (error.message) message.error(error.message);
@@ -131,28 +139,51 @@ const LeaveManagement: React.FC = () => {
                 const worksheet = workbook.Sheets[sheetName];
                 const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
                 
-                // Expecting Header mapping (you can modify based on the final template)
-                // Col 0: STT, Col 1: Ten, Col 2: MSNV, Col 3: Nam vao, Col 4: Ton N-2, Col 5: Ton N-1, Col 6: Phep Nam, Col 7: T1, Col 8: T2...
+                // Expecting Header mapping (supports both legacy and compensatory columns)
+                const headerRow = (json[0] || []).map((h: any) => String(h || '').trim().toLowerCase());
+                const compQuotaIdx = headerRow.findIndex(h => h.includes('quỹ nghỉ bù') || h.includes('cấp bù') || h.includes('nghỉ bù'));
+                const compTakenIdx = headerRow.findIndex(h => h.includes('đã nghỉ bù') || h.includes('sử dụng bù'));
+
                 const rows = json.slice(1); // skip header
-                const payload = rows.map(r => ({
-                    employee_code: r[2]?.toString(),
-                    year: selectedYear,
-                    leave_balance_n2: Number(r[4]) || 0,
-                    leave_balance_n1: Number(r[5]) || 0,
-                    current_year_leave: Number(r[6]) || 0,
-                    m1_taken: Number(r[7]) || 0,
-                    m2_taken: Number(r[8]) || 0,
-                    m3_taken: Number(r[9]) || 0,
-                    m4_taken: Number(r[10]) || 0,
-                    m5_taken: Number(r[11]) || 0,
-                    m6_taken: Number(r[12]) || 0,
-                    m7_taken: Number(r[13]) || 0,
-                    m8_taken: Number(r[14]) || 0,
-                    m9_taken: Number(r[15]) || 0,
-                    m10_taken: Number(r[16]) || 0,
-                    m11_taken: Number(r[17]) || 0,
-                    m12_taken: Number(r[18]) || 0,
-                })).filter(r => r.employee_code);
+                const payload = rows.map(r => {
+                    const getNum = (idx: number) => (idx >= 0 && idx < r.length) ? Number(r[idx]) || 0 : 0;
+                    const mIndices: number[] = [];
+                    for (let m = 1; m <= 12; m++) {
+                        const mIdx = headerRow.findIndex(h => h === `t${m}` || h === `tháng ${m}` || h === `thang ${m}`);
+                        mIndices.push(mIdx);
+                    }
+                    const mVal = (monthNum: number, fallbackIdx: number) => {
+                        const idx = mIndices[monthNum - 1];
+                        return idx !== -1 ? getNum(idx) : getNum(fallbackIdx);
+                    };
+
+                    const hasCompCols = compQuotaIdx !== -1 || r.length >= 21;
+                    const compQuota = compQuotaIdx !== -1 ? getNum(compQuotaIdx) : (r.length >= 21 ? getNum(7) : 0);
+                    const compTaken = compTakenIdx !== -1 ? getNum(compTakenIdx) : (r.length >= 21 ? getNum(8) : 0);
+                    const monthOffset = hasCompCols ? 9 : 7;
+
+                    return {
+                        employee_code: r[2]?.toString(),
+                        year: selectedYear,
+                        leave_balance_n2: Number(r[4]) || 0,
+                        leave_balance_n1: Number(r[5]) || 0,
+                        current_year_leave: Number(r[6]) || 0,
+                        compensatory_leave_quota: compQuota,
+                        compensatory_leave_taken: compTaken,
+                        m1_taken: mVal(1, monthOffset),
+                        m2_taken: mVal(2, monthOffset + 1),
+                        m3_taken: mVal(3, monthOffset + 2),
+                        m4_taken: mVal(4, monthOffset + 3),
+                        m5_taken: mVal(5, monthOffset + 4),
+                        m6_taken: mVal(6, monthOffset + 5),
+                        m7_taken: mVal(7, monthOffset + 6),
+                        m8_taken: mVal(8, monthOffset + 7),
+                        m9_taken: mVal(9, monthOffset + 8),
+                        m10_taken: mVal(10, monthOffset + 9),
+                        m11_taken: mVal(11, monthOffset + 10),
+                        m12_taken: mVal(12, monthOffset + 11),
+                    };
+                }).filter(r => r.employee_code);
 
                 if (payload.length === 0) {
                     message.warning('Không tìm thấy dữ liệu hợp lệ trong file');
@@ -178,7 +209,7 @@ const LeaveManagement: React.FC = () => {
 
     const downloadTemplate = () => {
         const worksheet = XLSX.utils.aoa_to_sheet([
-            ['STT', 'Họ và tên', 'MSNV', 'Năm làm', `Tồn ${selectedYear - 2}`, `Tồn ${selectedYear - 1}`, `Phép ${selectedYear}`, 'T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12']
+            ['STT', 'Họ và tên', 'MSNV', 'Năm làm', `Tồn ${selectedYear - 2}`, `Tồn ${selectedYear - 1}`, `Phép ${selectedYear}`, 'Quỹ nghỉ bù', 'Đã nghỉ bù', 'T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12']
         ]);
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, 'Data');
@@ -253,9 +284,15 @@ const LeaveManagement: React.FC = () => {
         c.user?.employee_code?.toLowerCase().includes(searchText.toLowerCase())
     );
 
-    const calcTotal = (r: IAnnualLeave) => r.leave_balance_n2 + r.leave_balance_n1 + r.current_year_leave;
-    const calcTaken = (r: IAnnualLeave) => r.m1_taken + r.m2_taken + r.m3_taken + r.m4_taken + r.m5_taken + r.m6_taken + r.m7_taken + r.m8_taken + r.m9_taken + r.m10_taken + r.m11_taken + r.m12_taken;
+    const calcTotal = (r: IAnnualLeave) => (Number(r.leave_balance_n2) || 0) + (Number(r.leave_balance_n1) || 0) + (Number(r.current_year_leave) || 0);
+    const calcTaken = (r: IAnnualLeave) => (Number(r.m1_taken) || 0) + (Number(r.m2_taken) || 0) + (Number(r.m3_taken) || 0) + (Number(r.m4_taken) || 0) + 
+        (Number(r.m5_taken) || 0) + (Number(r.m6_taken) || 0) + (Number(r.m7_taken) || 0) + (Number(r.m8_taken) || 0) + 
+        (Number(r.m9_taken) || 0) + (Number(r.m10_taken) || 0) + (Number(r.m11_taken) || 0) + (Number(r.m12_taken) || 0);
     const calcRemain = (r: IAnnualLeave) => calcTotal(r) - calcTaken(r);
+    const calcCompRemain = (r?: IAnnualLeave) => {
+        if (!r) return 0;
+        return (Number(r.compensatory_leave_quota) || 0) - (Number(r.compensatory_leave_taken) || 0);
+    };
 
     const columns: any = [
         {
@@ -277,14 +314,14 @@ const LeaveManagement: React.FC = () => {
                             size="small" 
                             icon={<EyeOutlined style={{ color: '#1890ff' }} />} 
                             onClick={() => setSelectedProfileUser(r.user)} 
-                            title="Xem lịch sử nghỉ phép"
+                            title="Xem chi tiết lịch sử phép"
                         />
                     )}
                 </div>
             )
         },
         {
-            title: 'Khởi tạo',
+            title: 'Quỹ Phép năm',
             children: [
                 { title: `Tồn ${selectedYear - 2}`, width: 70, render: (v: any, r: IAnnualLeave) => <EditableCell value={r.leave_balance_n2} recordId={r.id} dataKey="leave_balance_n2" /> },
                 { title: `Tồn ${selectedYear - 1}`, width: 70, render: (v: any, r: IAnnualLeave) => <EditableCell value={r.leave_balance_n1} recordId={r.id} dataKey="leave_balance_n1" /> },
@@ -293,7 +330,42 @@ const LeaveManagement: React.FC = () => {
             ]
         },
         {
-            title: 'Sử dụng từng tháng',
+            title: 'Quỹ Nghỉ bù (Tích luỹ)',
+            children: [
+                { 
+                    title: 'Được cấp', 
+                    width: 75, 
+                    render: (v: any, r: IAnnualLeave) => (
+                        <EditableCell 
+                            value={r.compensatory_leave_quota || 0} 
+                            recordId={r.id} 
+                            dataKey="compensatory_leave_quota" 
+                        />
+                    ) 
+                },
+                { 
+                    title: 'Đã nghỉ', 
+                    width: 75, 
+                    render: (v: any, r: IAnnualLeave) => (
+                        <EditableCell 
+                            value={r.compensatory_leave_taken || 0} 
+                            recordId={r.id} 
+                            dataKey="compensatory_leave_taken" 
+                        />
+                    ) 
+                },
+                { 
+                    title: 'Tồn bù', 
+                    width: 75, 
+                    render: (v: any, r: IAnnualLeave) => {
+                        const compRemain = calcCompRemain(r);
+                        return <b style={{ color: compRemain < 0 ? '#ff4d4f' : compRemain > 0 ? '#722ed1' : '#8c8c8c' }}>{compRemain}</b>;
+                    } 
+                }
+            ]
+        },
+        {
+            title: 'Sử dụng phép năm từng tháng',
             children: Array.from({ length: 12 }, (_, i) => ({
                 title: `T${i + 1}`,
                 width: 60,
@@ -306,7 +378,7 @@ const LeaveManagement: React.FC = () => {
             children: [
                 { title: 'Đã nghỉ', width: 80, fixed: 'right', render: (v: any, r: IAnnualLeave) => <span style={{color: '#faad14'}}>{calcTaken(r)}</span> },
                 { 
-                    title: 'TỔNG TỒN', width: 90, fixed: 'right',
+                    title: 'TỒN PHÉP', width: 95, fixed: 'right',
                     render: (v: any, r: IAnnualLeave) => {
                         const remain = calcRemain(r);
                         return <b style={{ color: remain < 0 ? '#ff4d4f' : '#52c41a' }}>{remain}</b>
@@ -316,20 +388,11 @@ const LeaveManagement: React.FC = () => {
         }
     ];
 
-    const selectedUserInfo = users.find(u => u.user_id === selectedUserId);
-    const selectedUserLeave = records.find(r => r.user?.user_id === selectedUserId);
-
-    const handleDateChange = () => {
-        const fromDate = recordForm.getFieldValue('from_date');
-        const toDate = recordForm.getFieldValue('to_date');
-        
-        if (fromDate && toDate) {
-            // Simple difference in days + 1 (includes start and end date)
-            const diffDays = dayjs(toDate).startOf('day').diff(dayjs(fromDate).startOf('day'), 'day') + 1;
+    const handleDateRangeChange = (dates: any) => {
+        if (dates && dates[0] && dates[1]) {
+            const diffDays = dates[1].startOf('day').diff(dates[0].startOf('day'), 'day') + 1;
             if (diffDays > 0) {
                 recordForm.setFieldsValue({ days_taken: diffDays });
-            } else {
-                recordForm.setFieldsValue({ days_taken: 0 });
             }
         }
     };
@@ -342,32 +405,17 @@ const LeaveManagement: React.FC = () => {
             setFileList(newFileList);
         },
         beforeUpload: (file: File) => {
-            const isPdf = file.type === 'application/pdf';
+            const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
             const isImage = file.type.startsWith('image/');
             
             if (!isPdf && !isImage) {
-                message.error('Chỉ được tải lên file PDF hoặc Ảnh!');
+                message.error('Vui lòng chọn file PDF hoặc hình ảnh giấy phép nghỉ!');
                 return Upload.LIST_IGNORE;
             }
 
-            const isLt5M = file.size / 1024 / 1024 < 5;
-            if (!isLt5M) {
-                message.error('File phải nhỏ hơn 5MB!');
-                return Upload.LIST_IGNORE;
-            }
-
-            const pdfCount = fileList.filter(f => f.type === 'application/pdf').length;
-            if (isPdf && pdfCount > 0) {
-                message.error('Chỉ được tải lên 1 file PDF duy nhất!');
-                return Upload.LIST_IGNORE;
-            }
-            if (isPdf && fileList.length > 0) {
-                message.error('Nếu tải PDF thì không được kèm thêm file khác!');
-                return Upload.LIST_IGNORE;
-            }
-
-            if (!isPdf && fileList.length >= 3) {
-                message.error('Chỉ được tải lên tối đa 3 ảnh!');
+            const isLt10M = file.size / 1024 / 1024 <= 10;
+            if (!isLt10M) {
+                message.error('File phải nhỏ hơn hoặc bằng 10MB!');
                 return Upload.LIST_IGNORE;
             }
 
@@ -379,11 +427,11 @@ const LeaveManagement: React.FC = () => {
                 type: file.type,
                 size: file.size
             };
-            setFileList(prev => [...prev, uploadFile]);
+            setFileList([uploadFile]);
             return false;
         },
         fileList,
-        multiple: true
+        maxCount: 1
     };
 
     return (
@@ -460,122 +508,75 @@ const LeaveManagement: React.FC = () => {
             </Card>
 
             <Modal
-                title="Ghi nhận nghỉ phép trực tiếp"
+                title="Ghi nhận Nghỉ phép nhân viên"
                 open={isRecordModalOpen}
                 onOk={handleRecordSubmit}
-                onCancel={() => setIsRecordModalOpen(false)}
+                onCancel={() => {
+                    setIsRecordModalOpen(false);
+                    setFileList([]);
+                }}
                 confirmLoading={recordLoading}
-                width={700}
+                width={560}
                 destroyOnClose
             >
-                <Form form={recordForm} layout="vertical" style={{ marginTop: 20 }}>
-                    <Row gutter={16}>
-                        <Col span={24}>
-                            <Form.Item name="user_id" label="Nhân viên" rules={[{ required: true, message: 'Vui lòng chọn nhân viên' }]}>
-                                <Select
-                                    showSearch
-                                    placeholder="Chọn nhân viên"
-                                    optionFilterProp="children"
-                                    onChange={(val) => setSelectedUserId(val)}
-                                    filterOption={(input, option: any) =>
-                                        (option?.children as unknown as string).toLowerCase().includes(input.toLowerCase())
-                                    }
-                                >
-                                    {users.map(u => (
-                                        <Option key={u.user_id} value={u.user_id}>
-                                            {u.name} - {u.employee_code || 'N/A'} - {u.position || 'N/A'}
-                                        </Option>
-                                    ))}
+                <Form form={recordForm} layout="vertical" style={{ marginTop: 16 }}>
+                    <Form.Item name="user_id" label="Nhân viên" rules={[{ required: true, message: 'Vui lòng chọn nhân viên' }]}>
+                        <Select
+                            showSearch
+                            placeholder="Chọn nhân viên"
+                            optionFilterProp="children"
+                            filterOption={(input, option: any) =>
+                                (option?.children as unknown as string).toLowerCase().includes(input.toLowerCase())
+                            }
+                        >
+                            {users.map(u => (
+                                <Option key={u.user_id} value={u.user_id}>
+                                    {u.name} ({u.employee_code || u.user_id})
+                                </Option>
+                            ))}
+                        </Select>
+                    </Form.Item>
+
+                    <Row gutter={12}>
+                        <Col xs={24} sm={12}>
+                            <Form.Item 
+                                name="leave_type" 
+                                label="Loại hình nghỉ" 
+                                rules={[{ required: true, message: 'Vui lòng chọn loại hình nghỉ' }]}
+                                initialValue="ANNUAL"
+                            >
+                                <Select>
+                                    <Option value="ANNUAL">🏖️ Nghỉ phép năm (Trừ quỹ phép)</Option>
+                                    <Option value="COMPENSATORY">⏰ Nghỉ bù ca/lễ (Trừ quỹ bù)</Option>
+                                    <Option value="SPECIAL_PAID">💍 Việc riêng có lương (Cưới hỏi, tang...)</Option>
+                                    <Option value="SICK_LEAVE">🏥 Nghỉ ốm / Thai sản / BHXH</Option>
+                                    <Option value="UNPAID">🚫 Nghỉ việc riêng không lương</Option>
                                 </Select>
                             </Form.Item>
                         </Col>
-                    </Row>
-                    
-                    {selectedUserInfo && (
-                        <Card size="small" style={{ marginBottom: 16, background: '#fafafa', border: '1px solid #d9d9d9' }}>
-                            <Descriptions size="small" column={2}>
-                                <Descriptions.Item label="Họ và tên"><b>{selectedUserInfo.name}</b></Descriptions.Item>
-                                <Descriptions.Item label="Mã nhân viên">{selectedUserInfo.employee_code || 'N/A'}</Descriptions.Item>
-                                <Descriptions.Item label="Bộ phận công tác">{selectedUserInfo.department?.name || 'N/A'}</Descriptions.Item>
-                                <Descriptions.Item label="Chức vụ/công việc">{selectedUserInfo.position || 'N/A'}</Descriptions.Item>
-                            </Descriptions>
-                            
-                            <div style={{ marginTop: 12 }}>
-                                <Text strong>Số ngày nghỉ tiêu chuẩn:</Text>
-                                {selectedUserLeave ? (
-                                    <Table 
-                                        size="small" 
-                                        pagination={false} 
-                                        bordered
-                                        showHeader={false}
-                                        columns={[
-                                            { dataIndex: 'label', width: '75%' },
-                                            { dataIndex: 'value', align: 'right', render: (val) => <b>{val} ngày</b> }
-                                        ]}
-                                        dataSource={[
-                                            { key: '1', label: `1. Tổng số ngày được nghỉ (Năm ${selectedYear})`, value: calcTotal(selectedUserLeave) },
-                                            { key: '2', label: '2. Số ngày đã nghỉ', value: calcTaken(selectedUserLeave) },
-                                            { key: '3', label: '3. Số ngày còn lại', value: calcRemain(selectedUserLeave) }
-                                        ]}
-                                        style={{ marginTop: 8 }}
-                                    />
-                                ) : (
-                                    <div style={{ marginTop: 4 }}>
-                                        <Text type="warning">Nhân viên này chưa có dữ liệu quỹ phép năm {selectedYear}.</Text>
-                                    </div>
-                                )}
-                            </div>
-                        </Card>
-                    )}
-                    
-                    <Text strong style={{ fontSize: 16, display: 'block', marginBottom: 16 }}>Đề nghị được nghỉ phép:</Text>
-
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item name="from_date" label="Từ ngày" rules={[{ required: true }]}>
-                                <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} onChange={handleDateChange} />
-                            </Form.Item>
-                        </Col>
-                        <Col span={12}>
-                            <Form.Item name="to_date" label="Đến ngày" rules={[{ required: true }]}>
-                                <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} onChange={handleDateChange} />
+                        <Col xs={24} sm={12}>
+                            <Form.Item name="days_taken" label="Số ngày nghỉ" rules={[{ required: true, message: 'Nhập số ngày nghỉ' }]}>
+                                <InputNumber min={0.5} max={30} step={0.5} style={{ width: '100%' }} placeholder="VD: 1, 0.5..." />
                             </Form.Item>
                         </Col>
                     </Row>
 
-                    <Row gutter={16}>
-                        <Col span={12}>
-                            <Form.Item name="days_taken" label="Số ngày tính phép" rules={[{ required: true, message: 'Nhập số ngày bị trừ' }]}>
-                                <InputNumber min={0.5} step={0.5} style={{ width: '100%' }} placeholder="VD: 0.5, 1, 1.5" />
-                            </Form.Item>
-                        </Col>
-                    </Row>
+                    <Form.Item name="date_range" label="Thời gian nghỉ (Từ ngày - Đến ngày)" rules={[{ required: true, message: 'Chọn khoảng ngày' }]}>
+                        <DatePicker.RangePicker style={{ width: '100%' }} format="DD/MM/YYYY" onChange={handleDateRangeChange} />
+                    </Form.Item>
 
-                    <Row gutter={16}>
-                        <Col span={24}>
-                            <Form.Item name="location" label="Địa điểm">
-                                <Input placeholder="VD: TP. Cần Thơ..." />
-                            </Form.Item>
-                        </Col>
-                    </Row>
+                    <Form.Item name="reason" label="Lý do nghỉ phép">
+                        <Input.TextArea rows={3} placeholder="Ghi chú thêm lý do..." />
+                    </Form.Item>
 
-                    <Row gutter={16}>
-                        <Col span={24}>
-                            <Form.Item name="reason" label="Lý do nghỉ" rules={[{ required: true }]}>
-                                <Input.TextArea rows={3} placeholder="VD: Giải quyết việc cá nhân..." />
-                            </Form.Item>
-                        </Col>
-                    </Row>
-                    <Row gutter={16}>
-                        <Col span={24}>
-                            <Form.Item label="Đính kèm (Đơn xin nghỉ)">
-                                <Upload {...uploadProps}>
-                                    <Button icon={<UploadOutlined />}>Chọn file Ảnh hoặc PDF</Button>
-                                </Upload>
-                                <Text type="secondary" style={{ display: 'block', marginTop: 4, fontSize: 12 }}>Tối đa 3 ảnh, hoặc 1 file PDF duy nhất. (Tối đa 5MB/file)</Text>
-                            </Form.Item>
-                        </Col>
-                    </Row>
+                    <Form.Item label="Đính kèm file PDF nghỉ phép (Giấy nghỉ phép / Đơn xin nghỉ)">
+                        <Upload {...uploadProps}>
+                            <Button icon={<UploadOutlined />}>Tải lên file PDF giấy phép</Button>
+                        </Upload>
+                        <Text type="secondary" style={{ display: 'block', marginTop: 4, fontSize: 12 }}>
+                            Đính kèm file scan PDF hoặc ảnh giấy phép nghỉ đã duyệt (tối đa 10MB)
+                        </Text>
+                    </Form.Item>
                 </Form>
             </Modal>
 

@@ -83,15 +83,24 @@ export class AnnualLeavesService {
     const data = await this.annualLeaveRepo.find({ where: { year } });
     let totalEntitlement = 0;
     let totalTaken = 0;
+    let totalCompensatoryQuota = 0;
+    let totalCompensatoryTaken = 0;
     for (const r of data) {
-      totalEntitlement += r.current_year_leave + r.leave_balance_n1 + r.leave_balance_n2;
-      totalTaken += r.m1_taken + r.m2_taken + r.m3_taken + r.m4_taken + r.m5_taken + r.m6_taken + r.m7_taken + r.m8_taken + r.m9_taken + r.m10_taken + r.m11_taken + r.m12_taken;
+      totalEntitlement += (Number(r.current_year_leave) || 0) + (Number(r.leave_balance_n1) || 0) + (Number(r.leave_balance_n2) || 0);
+      totalTaken += (Number(r.m1_taken) || 0) + (Number(r.m2_taken) || 0) + (Number(r.m3_taken) || 0) + (Number(r.m4_taken) || 0) + 
+                    (Number(r.m5_taken) || 0) + (Number(r.m6_taken) || 0) + (Number(r.m7_taken) || 0) + (Number(r.m8_taken) || 0) + 
+                    (Number(r.m9_taken) || 0) + (Number(r.m10_taken) || 0) + (Number(r.m11_taken) || 0) + (Number(r.m12_taken) || 0);
+      totalCompensatoryQuota += Number(r.compensatory_leave_quota) || 0;
+      totalCompensatoryTaken += Number(r.compensatory_leave_taken) || 0;
     }
     return {
       total_employees: data.length,
       total_entitlement: totalEntitlement,
       total_taken: totalTaken,
-      total_remaining: totalEntitlement - totalTaken
+      total_remaining: totalEntitlement - totalTaken,
+      total_compensatory_quota: totalCompensatoryQuota,
+      total_compensatory_taken: totalCompensatoryTaken,
+      total_compensatory_remaining: totalCompensatoryQuota - totalCompensatoryTaken,
     };
   }
 
@@ -146,6 +155,8 @@ export class AnnualLeavesService {
         if (row.leave_balance_n2 !== undefined) record.leave_balance_n2 = row.leave_balance_n2;
         if (row.leave_balance_n1 !== undefined) record.leave_balance_n1 = row.leave_balance_n1;
         if (row.current_year_leave !== undefined) record.current_year_leave = row.current_year_leave;
+        if (row.compensatory_leave_quota !== undefined) record.compensatory_leave_quota = row.compensatory_leave_quota;
+        if (row.compensatory_leave_taken !== undefined) record.compensatory_leave_taken = row.compensatory_leave_taken;
         
         // months
         for (let i = 1; i <= 12; i++) {
@@ -165,7 +176,21 @@ export class AnnualLeavesService {
   }
 
   async recordLeave(dto: RecordLeaveDto) {
-    const { user_id, year, applied_month, days_taken, from_date, to_date, reason, location, attachments } = dto;
+    const {
+      user_id,
+      year,
+      applied_month,
+      days_taken,
+      from_date,
+      to_date,
+      reason,
+      location,
+      attachments,
+      leave_type = 'ANNUAL',
+      document_number,
+      approved_by,
+      signed_date,
+    } = dto;
     
     // Tìm hoặc tạo mới AnnualLeave record cho user trong năm
     let annualLeave = await this.annualLeaveRepo.findOne({ where: { user_id, year } });
@@ -174,10 +199,18 @@ export class AnnualLeavesService {
         await this.annualLeaveRepo.save(annualLeave);
     }
 
-    // Cộng dồn phép vào tháng tương ứng
-    const monthKey = `m${applied_month}_taken`;
-    (annualLeave as any)[monthKey] = ((annualLeave as any)[monthKey] || 0) + days_taken;
-    await this.annualLeaveRepo.save(annualLeave);
+    // Phân loại xử lý trừ quỹ tương ứng
+    if (leave_type === 'COMPENSATORY') {
+        // Nghỉ bù: Cộng dồn vào số ngày nghỉ bù đã sử dụng (KHÔNG trừ vào phép năm)
+        annualLeave.compensatory_leave_taken = (Number(annualLeave.compensatory_leave_taken) || 0) + Number(days_taken);
+        await this.annualLeaveRepo.save(annualLeave);
+    } else if (leave_type === 'ANNUAL') {
+        // Phép năm: Cộng dồn phép vào tháng tương ứng
+        const monthKey = `m${applied_month}_taken`;
+        (annualLeave as any)[monthKey] = ((annualLeave as any)[monthKey] || 0) + Number(days_taken);
+        await this.annualLeaveRepo.save(annualLeave);
+    }
+    // Các loại nghỉ khác (SPECIAL_PAID, SICK_LEAVE, UNPAID): Lưu lịch sử nhưng không trừ phép năm hay nghỉ bù
 
     // Lưu vào leave_histories
     const history = this.leaveHistoryRepo.create({
@@ -190,7 +223,11 @@ export class AnnualLeavesService {
         year,
         reason,
         location,
-        attachments
+        attachments,
+        leave_type,
+        document_number,
+        approved_by,
+        signed_date: signed_date ? new Date(signed_date) : undefined,
     });
     await this.leaveHistoryRepo.save(history);
 

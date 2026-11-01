@@ -11,6 +11,7 @@ import {
     ExportOutlined,
     CarOutlined,
     FileTextOutlined,
+    WarningOutlined,
 } from "@ant-design/icons";
 
 export interface SidebarMenuItem {
@@ -128,6 +129,14 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
                 textColor: "#fff",
                 color: "#FFC900",
                 path: "/quan_ly_sua_chua",
+                roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR"],
+            },
+            {
+                name: "Báo cáo tình trạng xe",
+                icon: <WarningOutlined />,
+                textColor: "#fff",
+                color: "#FFC900",
+                path: "/bao_cao_tinh_trang_xe",
                 roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR"],
             },
             {

@@ -18,6 +18,8 @@ import {
   Empty,
   Avatar,
   Radio,
+  Tooltip,
+  Upload,
 } from 'antd';
 import {
   PlusOutlined,
@@ -29,6 +31,7 @@ import dayjs from 'dayjs';
 import {
   getAnnualLeaves,
   recordLeave,
+  uploadLeaveAttachments,
   IAnnualLeave,
 } from '../../../apis/annualLeaves';
 import { IUser } from '../../../types/user.types';
@@ -62,6 +65,7 @@ export const LeavesTab: React.FC<LeavesTabProps> = ({
   // Modal Record Leave
   const [modalOpen, setModalOpen] = useState(false);
   const [modalLoading, setModalLoading] = useState(false);
+  const [fileList, setFileList] = useState<any[]>([]);
   const [form] = Form.useForm();
 
   const fetchLeaves = useCallback(async () => {
@@ -89,11 +93,60 @@ export const LeavesTab: React.FC<LeavesTabProps> = ({
     (r.m9_taken || 0) + (r.m10_taken || 0) + (r.m11_taken || 0) + (r.m12_taken || 0);
   const calcRemain = (r: IAnnualLeave) => calcTotal(r) - calcTaken(r);
 
+  const handleDateRangeChange = (dates: any) => {
+    if (dates && dates[0] && dates[1]) {
+      const diffDays = dates[1].startOf('day').diff(dates[0].startOf('day'), 'day') + 1;
+      if (diffDays > 0) {
+        form.setFieldsValue({ days: diffDays });
+      }
+    }
+  };
+
+  const uploadProps = {
+    onRemove: (file: any) => {
+      const index = fileList.indexOf(file);
+      const newFileList = fileList.slice();
+      newFileList.splice(index, 1);
+      setFileList(newFileList);
+    },
+    beforeUpload: (file: File) => {
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      const isImage = file.type.startsWith('image/');
+      if (!isPdf && !isImage) {
+        message.error('Vui lòng chọn file PDF hoặc hình ảnh giấy phép nghỉ!');
+        return Upload.LIST_IGNORE;
+      }
+      if (file.size / 1024 / 1024 > 10) {
+        message.error('Dung lượng file tối đa là 10MB!');
+        return Upload.LIST_IGNORE;
+      }
+      const uploadFile = {
+        uid: (file as any).uid || Math.random().toString(),
+        name: file.name,
+        status: 'done',
+        originFileObj: file,
+        type: file.type,
+        size: file.size,
+      };
+      setFileList([uploadFile]);
+      return false;
+    },
+    fileList,
+    maxCount: 1,
+  };
+
   const handleRecordLeave = async (values: any) => {
     setModalLoading(true);
     try {
       const startDate = values.date_range[0];
       const endDate = values.date_range[1];
+
+      let attachments: string[] = [];
+      if (fileList.length > 0) {
+        const uploadFiles = fileList.map((f) => (f.originFileObj || f) as File);
+        attachments = await uploadLeaveAttachments(uploadFiles);
+      }
+
       const payload = {
         user_id: values.user_id,
         year: selectedYear,
@@ -101,13 +154,16 @@ export const LeavesTab: React.FC<LeavesTabProps> = ({
         from_date: startDate.format('YYYY-MM-DD'),
         to_date: endDate.format('YYYY-MM-DD'),
         days_taken: Number(values.days),
+        leave_type: values.leave_type || 'ANNUAL',
         reason: values.reason,
+        attachments,
       };
 
       await recordLeave(payload);
       message.success('Ghi nhận đơn nghỉ phép thành công');
       setModalOpen(false);
       form.resetFields();
+      setFileList([]);
       fetchLeaves();
     } catch (e: any) {
       message.error(e.message || 'Lỗi khi ghi nhận nghỉ phép');
@@ -206,9 +262,28 @@ export const LeavesTab: React.FC<LeavesTabProps> = ({
       },
     },
     {
-      title: 'Còn tồn',
+      title: 'Quỹ nghỉ bù',
+      key: 'compensatory',
+      width: 105,
+      align: 'center' as const,
+      render: (_: any, r: IAnnualLeave) => {
+        const compQuota = Number(r.compensatory_leave_quota) || 0;
+        const compTaken = Number(r.compensatory_leave_taken) || 0;
+        const compRemain = compQuota - compTaken;
+        if (compQuota === 0 && compTaken === 0) return <span style={{ color: '#bfbfbf' }}>-</span>;
+        return (
+          <Tooltip title={`Cấp tích luỹ: ${compQuota} ngày | Đã nghỉ bù: ${compTaken} ngày`}>
+            <Tag color={compRemain < 0 ? 'error' : compRemain > 0 ? 'purple' : 'default'}>
+              Tồn: {compRemain}d
+            </Tag>
+          </Tooltip>
+        );
+      },
+    },
+    {
+      title: 'Còn tồn phép',
       key: 'rem',
-      width: 95,
+      width: 105,
       align: 'center' as const,
       render: (_: any, r: IAnnualLeave) => {
         const remain = calcRemain(r);
@@ -218,6 +293,35 @@ export const LeavesTab: React.FC<LeavesTabProps> = ({
           </Tag>
         );
       },
+    },
+    {
+      title: 'Hành động',
+      key: 'action',
+      width: 105,
+      align: 'center' as const,
+      render: (_: any, r: IAnnualLeave) => (
+        <Button
+          type="primary"
+          ghost
+          size="small"
+          icon={<PlusOutlined />}
+          onClick={() => {
+            if (r.user?.user_id) {
+              form.setFieldsValue({
+                user_id: r.user.user_id,
+                leave_type: 'ANNUAL',
+                days: 1,
+                date_range: [dayjs(), dayjs()],
+                reason: '',
+              });
+              setFileList([]);
+              setModalOpen(true);
+            }
+          }}
+        >
+          Ghi nhận
+        </Button>
+      ),
     },
   ];
 
@@ -317,6 +421,30 @@ export const LeavesTab: React.FC<LeavesTabProps> = ({
                       <div>Tồn cũ: <strong>{(item.leave_balance_n1 || 0) + (item.leave_balance_n2 || 0)}</strong></div>
                       <div>Đã nghỉ: <strong style={{ color: '#fa8c16' }}>{taken}</strong></div>
                     </div>
+
+                    <div style={{ marginTop: 10, display: 'flex', justifyContent: 'flex-end' }}>
+                      <Button
+                        type="primary"
+                        ghost
+                        size="small"
+                        icon={<PlusOutlined />}
+                        onClick={() => {
+                          if (item.user?.user_id) {
+                            form.setFieldsValue({
+                              user_id: item.user.user_id,
+                              leave_type: 'ANNUAL',
+                              days: 1,
+                              date_range: [dayjs(), dayjs()],
+                              reason: '',
+                            });
+                            setFileList([]);
+                            setModalOpen(true);
+                          }
+                        }}
+                      >
+                        Ghi nhận
+                      </Button>
+                    </div>
                   </Card>
                 </Col>
               );
@@ -338,7 +466,10 @@ export const LeavesTab: React.FC<LeavesTabProps> = ({
       <Modal
         title="Ghi nhận Nghỉ phép nhân viên"
         open={modalOpen}
-        onCancel={() => setModalOpen(false)}
+        onCancel={() => {
+          setModalOpen(false);
+          setFileList([]);
+        }}
         onOk={() => form.submit()}
         confirmLoading={modalLoading}
         destroyOnClose
@@ -357,30 +488,39 @@ export const LeavesTab: React.FC<LeavesTabProps> = ({
 
           <Row gutter={12}>
             <Col xs={24} sm={12}>
-              <Form.Item name="leave_type" label="Loại nghỉ" initialValue="ANNUAL" rules={[{ required: true }]}>
+              <Form.Item name="leave_type" label="Loại hình nghỉ" initialValue="ANNUAL" rules={[{ required: true }]}>
                 <Select>
-                  <Select.Option value="ANNUAL">Nghỉ phép năm</Select.Option>
-                  <Select.Option value="SICK">Nghỉ ốm / Khám bệnh</Select.Option>
-                  <Select.Option value="MATERNITY">Nghỉ thai sản</Select.Option>
-                  <Select.Option value="UNPAID">Nghỉ không hưởng lương</Select.Option>
-                  <Select.Option value="SPECIAL">Việc riêng (kết hôn, tang lễ)</Select.Option>
+                  <Select.Option value="ANNUAL">🏖️ Nghỉ phép năm (Trừ quỹ phép)</Select.Option>
+                  <Select.Option value="COMPENSATORY">⏰ Nghỉ bù ca/lễ (Trừ quỹ bù)</Select.Option>
+                  <Select.Option value="SPECIAL_PAID">💍 Việc riêng có lương (Cưới hỏi, tang...)</Select.Option>
+                  <Select.Option value="SICK_LEAVE">🏥 Nghỉ ốm / Thai sản / BHXH</Select.Option>
+                  <Select.Option value="UNPAID">🚫 Nghỉ việc riêng không lương</Select.Option>
                 </Select>
               </Form.Item>
             </Col>
 
             <Col xs={24} sm={12}>
               <Form.Item name="days" label="Số ngày nghỉ" rules={[{ required: true, message: 'Nhập số ngày' }]}>
-                <InputNumber min={0.5} max={30} step={0.5} style={{ width: '100%' }} />
+                <InputNumber min={0.5} max={30} step={0.5} style={{ width: '100%' }} placeholder="VD: 1, 0.5..." />
               </Form.Item>
             </Col>
           </Row>
 
           <Form.Item name="date_range" label="Thời gian nghỉ (Từ ngày - Đến ngày)" rules={[{ required: true, message: 'Chọn khoảng ngày' }]}>
-            <DatePicker.RangePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
+            <DatePicker.RangePicker style={{ width: '100%' }} format="DD/MM/YYYY" onChange={handleDateRangeChange} />
           </Form.Item>
 
           <Form.Item name="reason" label="Lý do nghỉ phép">
             <Input.TextArea rows={3} placeholder="Ghi chú thêm lý do..." />
+          </Form.Item>
+
+          <Form.Item label="Đính kèm file PDF nghỉ phép (Giấy nghỉ phép / Đơn xin nghỉ)">
+            <Upload {...uploadProps}>
+              <Button icon={<UploadOutlined />}>Tải lên file PDF giấy phép</Button>
+            </Upload>
+            <Text type="secondary" style={{ display: 'block', marginTop: 4, fontSize: 12 }}>
+              Hỗ trợ file PDF hoặc ảnh giấy phép nghỉ đã duyệt (tối đa 10MB)
+            </Text>
           </Form.Item>
         </Form>
       </Modal>

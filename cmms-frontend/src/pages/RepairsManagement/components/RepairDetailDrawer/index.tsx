@@ -146,7 +146,9 @@ export default function RepairDetailDrawer({
     setRejectReason("");
   };
 
-  const renderStatusTag = (status: string) => {
+  const renderStatusTag = (status?: string) => {
+    if (!status) return null;
+
     const labelMap: Record<string, string> = {
       WAITING_TECH: "Yêu cầu: Chờ KT tiếp nhận",
       WAITING_TEAM_LEAD: "Yêu cầu: Chờ Tổ trưởng duyệt",
@@ -969,6 +971,10 @@ export default function RepairDetailDrawer({
         data.status_acceptance === "acceptance_rejected"
       ? "REJECTED_B05"
       : null;
+
+  if (!data || !data.repair_id) {
+    return null;
+  }
 
   return (
     <>

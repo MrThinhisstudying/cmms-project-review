@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import { io } from "socket.io-client";
 import {
   Button,
@@ -38,6 +39,7 @@ import RepairAcceptanceForm from "./components/RepairAcceptanceForm";
 import PendingApprovalsModal from "./components/PendingApprovalsModal";
 import BreakdownAnalysisModal from "./components/BreakdownAnalysisModal";
 import { useDevicesContext } from "../../context/DevicesContext/DevicesContext";
+import { linkRepairDossier } from "../../apis/vehicleIncidentReports";
 import {
   IRepair,
   RepairUpsertPayload,
@@ -366,6 +368,31 @@ const RepairsManagement: React.FC = () => {
   const [selectedRepair, setSelectedRepair] = useState<IRepair | null>(null);
   const [saving, setSaving] = useState(false);
 
+  const [prefilledFromIncident, setPrefilledFromIncident] = useState<{
+    device_id?: number;
+    device?: any;
+    location_issue?: string;
+    recommendation?: string;
+    incidentReportId?: number;
+  } | null>(null);
+
+  const location = useLocation();
+  useEffect(() => {
+    if (location.state && (location.state as any).fromIncidentReport) {
+      const state = location.state as any;
+      setPrefilledFromIncident({
+        device_id: state.deviceId,
+        device: state.device,
+        location_issue: state.description || '', // II. MÔ TẢ TÌNH TRẠNG HƯ HỎNG: lấy đúng mô tả lỗi sự cố
+        recommendation: '', // III. KIẾN NGHỊ / BIỆN PHÁP KHẮC PHỤC: để trống theo yêu cầu
+        incidentReportId: state.incidentReportId,
+      });
+      setSelectedRepair(null);
+      setOpenForm(true);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location.state]);
+
   // Bulk actions state
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [bulkRepairsForAction, setBulkRepairsForAction] = useState<IRepair[]>([]);
@@ -434,7 +461,7 @@ const RepairsManagement: React.FC = () => {
   const handleSubmit = async (data: any) => {
     try {
       setSaving(true);
-      if (selectedRepair) {
+      if (selectedRepair && selectedRepair.repair_id) {
         // Updating always uses single RepairUpsertPayload
         await updateRepairItem(selectedRepair.repair_id, data as RepairUpsertPayload);
         notification.success({
@@ -444,7 +471,7 @@ const RepairsManagement: React.FC = () => {
         });
       } else {
         // Creating can be bulk or single
-        // AntD Select mode="multiple" assigns an array to the name="device_id" field.
+        let createdId: number | undefined;
         if (Array.isArray(data.device_id)) {
             // Bulk
             const bulkData: BulkRepairUpsertPayload = {
@@ -453,21 +480,38 @@ const RepairsManagement: React.FC = () => {
                recommendation: data.recommendation,
                note: data.note,
             };
-            await createBulkRepairItem(bulkData);
+            const bulkRes = await createBulkRepairItem(bulkData);
+            if (Array.isArray(bulkRes) && bulkRes.length > 0) {
+              createdId = bulkRes[0].repair_id;
+            } else if ((bulkRes as any)?.repair_id) {
+              createdId = (bulkRes as any).repair_id;
+            }
         } else {
             // Single fallback just in case
-            await createRepairItem(data as RepairUpsertPayload);
+            const singleRes = await createRepairItem(data as RepairUpsertPayload);
+            createdId = singleRes?.repair_id;
+        }
+
+        if (prefilledFromIncident?.incidentReportId && createdId) {
+          try {
+            await linkRepairDossier(prefilledFromIncident.incidentReportId, createdId);
+          } catch (linkErr) {
+            console.error("Auto link incident report error:", linkErr);
+          }
         }
         
         const nextApprover = (role === 'TECHNICIAN' || role === 'OPERATOR') ? 'Đội trưởng / Quản lý' : 'Ban Giám đốc';
         notification.success({
             message: "Tạo phiếu thành công",
             title: "Tạo phiếu thành công",
-            description: `Đã gửi thông báo cho ${nextApprover} duyệt.`
+            description: prefilledFromIncident?.incidentReportId
+              ? `Đã tạo phiếu sửa chữa #${createdId || ''} và tự động liên kết với sự cố #${prefilledFromIncident.incidentReportId}.`
+              : `Đã gửi thông báo cho ${nextApprover} duyệt.`
         });
       }
       setOpenForm(false);
       setSelectedRepair(null);
+      setPrefilledFromIncident(null);
     } catch (e) {
       notification.error({
         message: "Thao tác thất bại",
@@ -1388,15 +1432,17 @@ const RepairsManagement: React.FC = () => {
         onClose={() => {
           setOpenForm(false);
           setSelectedRepair(null);
+          setPrefilledFromIncident(null);
         }}
         onSubmit={handleSubmit}
         loading={saving}
         initialData={selectedRepair}
+        prefilledData={prefilledFromIncident}
       />
 
-      {selectedRepair && (
+      {selectedRepair && selectedRepair.repair_id && !openForm && !openInspection && !openAcceptance && (
         <RepairDetailDrawer
-          open={Boolean(selectedRepair) && !openForm && !openInspection && !openAcceptance}
+          open={Boolean(selectedRepair.repair_id) && !openForm && !openInspection && !openAcceptance}
           data={selectedRepair}
           onClose={() => setSelectedRepair(null)}
           onExport={(type) => selectedRepair && handleExport(selectedRepair.repair_id, type)}

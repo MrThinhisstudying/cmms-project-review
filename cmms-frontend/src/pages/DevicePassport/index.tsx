@@ -22,6 +22,8 @@ import {
   Segmented,
   DatePicker,
   Pagination,
+  AutoComplete,
+  Upload,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import {
@@ -45,14 +47,17 @@ import {
   ExclamationCircleOutlined,
   TableOutlined,
   CloseCircleOutlined,
+  CameraOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 
 import { getDeviceById } from '../../apis/devices';
 import { getMaintenancesByDevice, createMaintenanceTicket } from '../../apis/maintenance';
-import { getRepairsByDevice, createRepair } from '../../apis/repairs';
+import { getRepairsByDevice } from '../../apis/repairs';
 import { getAllUsers } from '../../apis/users';
 import { getDeviceGroup, IDeviceGroup } from '../../apis/device-groups';
+import { createPublicIncidentReport, searchReporters, uploadIncidentImages } from '../../apis/vehicleIncidentReports';
+import { optimizeImageBeforeUpload } from '../../utils/imageOptimizer';
 import { IDevice } from '../../types/devicesManagement.types';
 import { IMaintenance } from '../../types/maintenance.types';
 import { IRepair } from '../../types/repairs.types';
@@ -71,7 +76,6 @@ import TicketDetailModal from '../MaintenanceHistory/components/TicketDetailModa
 import EditMaintenanceDateModal from '../../components/EditMaintenanceDateModal';
 
 const { Title, Text } = Typography;
-const { TextArea } = Input;
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; tagColor: string }> = {
   MOI: { label: 'Mới tiếp nhận', color: '#1890ff', tagColor: 'blue' },
@@ -130,6 +134,10 @@ const DevicePassportPage: React.FC = () => {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [submittingReport, setSubmittingReport] = useState(false);
   const [reportForm] = Form.useForm();
+  const [reporterSuggestions, setReporterSuggestions] = useState<any[]>([]);
+  const [selectedReporter, setSelectedReporter] = useState<any | null>(null);
+  const [isManualReporter, setIsManualReporter] = useState(false);
+  const [incidentImages, setIncidentImages] = useState<File[]>([]);
 
   const deviceId = id ? Number(id) : null;
 
@@ -215,45 +223,94 @@ const DevicePassportPage: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
-  // Handle Quick Issue Report submission
-  const handleReportSubmit = async (values: any) => {
-    if (!device?.device_id) return;
-    const token = getToken();
-
-    if (!token || !user) {
-      notification.warning({
-        message: 'Yêu cầu đăng nhập',
-        title: 'Chưa đăng nhập',
-        description: 'Vui lòng đăng nhập hệ thống để thực hiện báo hỏng phương tiện.',
-      });
-      navigate(`/dang_nhap?returnUrl=${encodeURIComponent(window.location.pathname)}`);
+  // Handle Incident Report handlers
+  const handleSearchReporters = async (val: string) => {
+    if (!val || val.trim().length === 0) {
+      setReporterSuggestions([]);
       return;
     }
+    try {
+      const results = await searchReporters(val);
+      setReporterSuggestions(results || []);
+    } catch {
+      setReporterSuggestions([]);
+    }
+  };
 
+  const handleSelectReporter = (_: string, option: any) => {
+    const u = option.data;
+    setSelectedReporter(u);
+    reportForm.setFieldsValue({
+      reporter_name: u.name,
+      reporter_code: u.employee_code || '',
+      reporter_department: u.department || '',
+      reporter_phone: u.phone || '',
+    });
+  };
+
+  const handleBeforeUploadIncidentImage = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      notification.error({ title: 'Lỗi', message: 'Chỉ chấp nhận file ảnh!' });
+      return Upload.LIST_IGNORE;
+    }
+    try {
+      const compressed = await optimizeImageBeforeUpload(file, 1280, 0.75);
+      setIncidentImages(prev => [...prev.slice(0, 2), compressed]);
+    } catch (e) {
+      setIncidentImages(prev => [...prev.slice(0, 2), file]);
+    }
+    return false;
+  };
+
+  const handleIncidentReportSubmit = async (values: any) => {
+    if (!device?.device_id) return;
     setSubmittingReport(true);
     try {
-      await createRepair(
-        {
-          device_id: device.device_id,
-          location_issue: values.location_issue,
-          recommendation: values.defect_description,
-          note: values.note || '',
-        },
-        token
-      );
-      notification.success({
-        message: 'Báo hỏng thành công',
-        title: 'Đã gửi phiếu yêu cầu',
-        description: 'Phiếu yêu cầu sửa chữa đã được chuyển tới Đội ngũ Kỹ thuật xem xét.',
+      let imageUrls: string[] = [];
+      if (incidentImages.length > 0) {
+        try {
+          imageUrls = await uploadIncidentImages(incidentImages);
+        } catch (uploadErr) {
+          console.error('Upload ảnh thất bại:', uploadErr);
+        }
+      }
+
+      const reporterName = values.reporter_name || selectedReporter?.name || values.search_reporter;
+      if (!reporterName || !reporterName.trim()) {
+        notification.error({ title: 'Lỗi', message: 'Vui lòng cung cấp họ và tên người báo cáo!' });
+        setSubmittingReport(false);
+        return;
+      }
+
+      await createPublicIncidentReport({
+        device_id: device.device_id,
+        reporter_user_id: selectedReporter?.user_id,
+        reporter_name: reporterName.trim(),
+        reporter_code: values.reporter_code || selectedReporter?.employee_code,
+        reporter_department: values.reporter_department || selectedReporter?.department,
+        reporter_phone: values.reporter_phone || selectedReporter?.phone,
+        is_external_reporter: !selectedReporter?.user_id,
+        location_issue: values.location_issue,
+        description: values.description,
+        images: imageUrls,
       });
+
+      notification.success({
+        title: 'Thành công',
+        message: 'Báo cáo tình trạng xe thành công',
+        description: 'Thông tin đã được chuyển tới Đội ngũ Kỹ thuật xem xét và xử lý ngay.',
+      });
+
       setReportModalOpen(false);
       reportForm.resetFields();
-      fetchData(); // Refresh list
+      setIncidentImages([]);
+      setSelectedReporter(null);
+      setIsManualReporter(false);
     } catch (err: any) {
       notification.error({
-        message: 'Gửi yêu cầu thất bại',
-        title: 'Lỗi',
-        description: err?.message || 'Có lỗi xảy ra khi tạo phiếu.',
+        title: 'Thất bại',
+        message: 'Gửi báo cáo thất bại',
+        description: err?.response?.data?.message || err?.message || 'Có lỗi xảy ra khi gửi báo cáo.',
       });
     } finally {
       setSubmittingReport(false);
@@ -2248,80 +2305,186 @@ const DevicePassportPage: React.FC = () => {
           justifyContent: 'center',
         }}
       >
-        <div style={{ maxWidth: 800, width: '100%', display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ maxWidth: 800, width: '100%' }}>
           <Button
             type="primary"
             danger
             icon={<WarningOutlined />}
             size="large"
-            style={{ flex: 1, fontWeight: 600 }}
-            onClick={() => setReportModalOpen(true)}
+            block
+            style={{ fontWeight: 600, height: 46, borderRadius: 8, fontSize: 16 }}
+            onClick={() => {
+              reportForm.resetFields();
+              setIncidentImages([]);
+              setIsManualReporter(false);
+              setSelectedReporter(null);
+              setReportModalOpen(true);
+            }}
           >
-            🚨 Báo hỏng nhanh xe này
-          </Button>
-
-          <Button
-            icon={<HomeOutlined />}
-            size="large"
-            onClick={() => navigate('/quan_ly_ttb_pt')}
-          >
-            Trang thiết bị
+            🚨 Báo cáo tình trạng xe
           </Button>
         </div>
       </div>
 
-      {/* QUICK ISSUE REPORT MODAL */}
+      {/* VEHICLE STATUS / INCIDENT REPORT MODAL */}
       <Modal
         open={reportModalOpen}
         onCancel={() => setReportModalOpen(false)}
         title={
           <Space>
             <WarningOutlined style={{ color: '#f5222d', fontSize: 20 }} />
-            <span>Báo Hỏng Phương Tiện: {device.name}</span>
+            <span>Báo cáo tình trạng xe: <strong>{device.name}</strong></span>
           </Space>
         }
         footer={null}
         destroyOnClose
+        width={560}
       >
-        <div style={{ marginBottom: 12, background: '#fff1f0', border: '1px solid #ffa39e', borderRadius: 6, padding: '8px 12px', fontSize: 12 }}>
-          Xe: <strong>{device.name}</strong> | Biển số: <strong>{device.reg_number || 'NIL'}</strong> | Mã: <strong>{device.device_code || device.device_id}</strong>
+        <div style={{ marginBottom: 16, background: '#fff1f0', border: '1px solid #ffa39e', borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
+          <div>Xe: <strong>{device.name}</strong> {device.reg_number ? `| Biển số: ${device.reg_number}` : ''} | Mã: <strong>{device.device_code || device.device_id}</strong></div>
+          <div style={{ color: '#8c8c8c', fontSize: 12, marginTop: 4 }}>Phương tiện thuộc quản lý: {device.operating_scope || 'Cảng hàng không Côn Đảo'}</div>
         </div>
 
         <Form
           form={reportForm}
           layout="vertical"
-          onFinish={handleReportSubmit}
+          onFinish={handleIncidentReportSubmit}
           initialValues={{
             location_issue: device.location_coordinates || device.operating_scope || 'Sân đỗ tàu bay',
           }}
         >
+          {/* 1. Thông tin người báo cáo */}
+          <div style={{ marginBottom: 8, fontWeight: 600, color: '#262626' }}>
+            👤 Thông tin người báo cáo:
+          </div>
+
+          {!isManualReporter ? (
+            <>
+              <Form.Item
+                name="search_reporter"
+                label="Tìm kiếm nhân viên (Gõ Họ tên hoặc MSNV)"
+                rules={[{ required: true, message: 'Vui lòng chọn hoặc nhập thông tin người báo cáo' }]}
+              >
+                <AutoComplete
+                  options={reporterSuggestions.map(u => ({
+                    value: u.name,
+                    key: u.user_id,
+                    data: u,
+                    label: (
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span><strong>{u.name}</strong> ({u.employee_code || `ID: ${u.user_id}`})</span>
+                        <span style={{ color: '#888', fontSize: 12 }}>{u.department || ''}</span>
+                      </div>
+                    ),
+                  }))}
+                  onSearch={handleSearchReporters}
+                  onSelect={handleSelectReporter}
+                  placeholder="Gõ tên hoặc MSNV để chọn nhanh..."
+                />
+              </Form.Item>
+
+              {selectedReporter && (
+                <div style={{ background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, padding: '8px 12px', marginBottom: 16, fontSize: 12 }}>
+                  <div>Họ tên: <strong>{selectedReporter.name}</strong> | MSNV: <strong>{selectedReporter.employee_code || '-'}</strong></div>
+                  <div>Đơn vị: <strong>{selectedReporter.department || '-'}</strong> | SĐT: <strong>{selectedReporter.phone || '-'}</strong></div>
+                </div>
+              )}
+
+              <div style={{ textAlign: 'right', marginTop: -8, marginBottom: 16 }}>
+                <Button type="link" size="small" onClick={() => setIsManualReporter(true)}>
+                  ✍️ Tôi là nhân viên khác / Nhập thông tin tự do
+                </Button>
+              </div>
+            </>
+          ) : (
+            <div style={{ background: '#fafafa', border: '1px solid #e8e8e8', borderRadius: 8, padding: 12, marginBottom: 16 }}>
+              <Row gutter={12}>
+                <Col xs={24} sm={14}>
+                  <Form.Item name="reporter_name" label="Họ và tên" rules={[{ required: true, message: 'Nhập họ và tên' }]}>
+                    <Input placeholder="Ví dụ: Nguyễn Văn A" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={10}>
+                  <Form.Item name="reporter_code" label="Mã nhân viên / Thẻ">
+                    <Input placeholder="Ví dụ: NV-0123" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={12}>
+                <Col xs={24} sm={14}>
+                  <Form.Item name="reporter_department" label="Phòng ban / Đơn vị">
+                    <Input placeholder="Ví dụ: Đội Phục vụ sân đỗ, Vận hành..." />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={10}>
+                  <Form.Item name="reporter_phone" label="Số điện thoại">
+                    <Input placeholder="Số điện thoại liên hệ" />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <div style={{ textAlign: 'right' }}>
+                <Button type="link" size="small" onClick={() => setIsManualReporter(false)}>
+                  🔍 Quay lại tìm kiếm trong danh bạ
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* 2. Vị trí xe */}
           <Form.Item
             name="location_issue"
-            label="Vị trí xảy ra sự cố / Phương tiện đang đỗ"
-            rules={[{ required: true, message: 'Vui lòng nhập vị trí sự cố' }]}
+            label="Vị trí xảy ra sự cố / Xe đang đỗ"
+            rules={[{ required: true, message: 'Nhập vị trí xe' }]}
           >
-            <Input placeholder="Ví dụ: Vị trí đỗ số 15, Ga T1..." />
+            <Input placeholder="Ví dụ: Vị trí đỗ số 15, Ga T1, Bãi đỗ xe kỹ thuật..." />
           </Form.Item>
 
+          {/* 3. Mô tả sự cố */}
           <Form.Item
-            name="defect_description"
-            label="Mô tả hiện tượng hư hỏng / Sự cố"
-            rules={[{ required: true, message: 'Vui lòng mô tả chi tiết hư hỏng' }]}
+            name="description"
+            label="Nội dung báo cáo tình trạng xe / Hiện tượng hư hỏng"
+            rules={[{ required: true, message: 'Vui lòng mô tả chi tiết tình trạng xe' }]}
           >
-            <TextArea
+            <Input.TextArea
               rows={4}
-              placeholder="Mô tả cụ thể hiện tượng: xì dầu thủy lực, đề không nổ, lốp mòn rách, đèn chiếu sáng hỏng..."
+              placeholder="Mô tả cụ thể hiện tượng: xì dầu thủy lực, đề không nổ, lốp mòn rách, đèn chiếu sáng hỏng, kêu to bất thường..."
             />
           </Form.Item>
 
-          <Form.Item name="note" label="Ghi chú thêm (nếu có)">
-            <Input placeholder="Người bàn giao, số điện thoại liên hệ..." />
+          {/* 4. Hình ảnh hiện trường (Tự động nén Canvas) */}
+          <Form.Item label="Hình ảnh hiện trường (Tự động nén dung lượng, tối đa 3 ảnh)">
+            <Upload
+              listType="picture-card"
+              fileList={incidentImages.map((file, i) => ({
+                uid: String(i),
+                name: file.name,
+                status: 'done',
+                url: URL.createObjectURL(file),
+              }))}
+              beforeUpload={handleBeforeUploadIncidentImage}
+              onRemove={(file) => {
+                const idx = Number(file.uid);
+                setIncidentImages(prev => prev.filter((_, i) => i !== idx));
+              }}
+              accept="image/*"
+              maxCount={3}
+            >
+              {incidentImages.length < 3 && (
+                <div>
+                  <CameraOutlined style={{ fontSize: 20 }} />
+                  <div style={{ marginTop: 8, fontSize: 12 }}>Chụp / Chọn ảnh</div>
+                </div>
+              )}
+            </Upload>
+            <Typography.Text type="secondary" style={{ display: 'block', fontSize: 11, marginTop: -4 }}>
+              ⚡ Ảnh được nén tự động ngay trên trình duyệt (giảm 95% dung lượng), gửi mượt mà kể cả khi mạng 3G/4G yếu.
+            </Typography.Text>
           </Form.Item>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
             <Button onClick={() => setReportModalOpen(false)}>Hủy</Button>
             <Button type="primary" danger htmlType="submit" loading={submittingReport}>
-              Gửi yêu cầu sửa chữa
+              Gửi báo cáo tình trạng
             </Button>
           </div>
         </Form>

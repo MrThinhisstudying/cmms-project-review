@@ -21,6 +21,14 @@ export class CreateAnnualLeaveDto {
   @IsNumber()
   current_year_leave?: number;
 
+  @IsOptional()
+  @IsNumber()
+  compensatory_leave_quota?: number;
+
+  @IsOptional()
+  @IsNumber()
+  compensatory_leave_taken?: number;
+
   @IsOptional() @IsNumber() m1_taken?: number;
   @IsOptional() @IsNumber() m2_taken?: number;
   @IsOptional() @IsNumber() m3_taken?: number;

@@ -12,6 +12,7 @@ import { AuditProvider } from "../../context/AuditContext/AuditContext";
 import { MaintenanceTasksProvider } from "../../context/MaintenanceTasksContext/MaintenanceTasksContext";
 import { InventoryProvider } from "../../context/InventoryContext/InventoryContext";
 import { RepairsProvider } from "../../context/RepairsContext/RepairsContext";
+import { PendingIncidentReportsModal } from "../../components/PendingIncidentReportsModal";
 
 const { Content } = Layout;
 
@@ -40,6 +41,7 @@ const MainLayout = () => {
                   <InventoryProvider>
                     <AuditProvider>
                       <NotificationProvider>
+                        <PendingIncidentReportsModal />
                         <Layout style={{ minHeight: '100vh', background: '#f0f2f5' }}>
                           <Sidebar collapsed={collapsed} onCollapse={setCollapsed} isMobile={isMobile} />
                           <Layout style={{ background: '#f0f2f5' }}>

@@ -36,6 +36,18 @@ export class LeaveHistory {
   @Column({ type: 'int' })
   year: number;
 
+  @Column({ type: 'varchar', length: 50, default: 'ANNUAL' })
+  leave_type: string; // ANNUAL, COMPENSATORY, SPECIAL_PAID, SICK_LEAVE, UNPAID
+
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  document_number: string; // Số hiệu văn bản / giấy phép đóng dấu (VD: ĐXP-012/2026)
+
+  @Column({ type: 'varchar', length: 150, nullable: true })
+  approved_by: string; // Cấp ký duyệt (VD: Trưởng phòng Kỹ thuật)
+
+  @Column({ type: 'date', nullable: true })
+  signed_date: Date; // Ngày ký duyệt đóng dấu
+
   @Column({ type: 'text', nullable: true })
   reason: string;
 

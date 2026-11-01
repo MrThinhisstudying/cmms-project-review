@@ -28,6 +28,14 @@ export class AnnualLeave {
   @Column({ type: 'float', default: 0 })
   current_year_leave: number;
 
+  // Quỹ ngày nghỉ bù tích luỹ (Vd: làm thêm giờ, trực ca, trực lễ)
+  @Column({ type: 'float', default: 0 })
+  compensatory_leave_quota: number;
+
+  // Số ngày nghỉ bù đã sử dụng
+  @Column({ type: 'float', default: 0 })
+  compensatory_leave_taken: number;
+
   // Số lượng phép đã sử dụng theo từng tháng ( Tháng 1 -> 12)
   @Column({ type: 'float', default: 0 }) m1_taken: number;
   @Column({ type: 'float', default: 0 }) m2_taken: number;

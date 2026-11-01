@@ -1,6 +1,41 @@
 import { fetchClient } from '../utils/fetchClient';
 import { getToken } from '../utils/auth';
 
+export type LeaveType = 'ANNUAL' | 'COMPENSATORY' | 'SPECIAL_PAID' | 'SICK_LEAVE' | 'UNPAID';
+
+export const LEAVE_TYPE_CONFIG: Record<LeaveType, { label: string; color: string; desc: string; deductsFrom: 'ANNUAL' | 'COMPENSATORY' | 'NONE' }> = {
+    ANNUAL: {
+        label: 'Phép năm',
+        color: 'blue',
+        desc: 'Trừ vào quỹ phép năm',
+        deductsFrom: 'ANNUAL',
+    },
+    COMPENSATORY: {
+        label: 'Nghỉ bù ca/lễ',
+        color: 'purple',
+        desc: 'Trừ vào quỹ nghỉ bù tích luỹ (không trừ phép năm)',
+        deductsFrom: 'COMPENSATORY',
+    },
+    SPECIAL_PAID: {
+        label: 'Việc riêng có lương',
+        color: 'cyan',
+        desc: 'Hưởng nguyên lương (cưới hỏi, tang chế...)',
+        deductsFrom: 'NONE',
+    },
+    SICK_LEAVE: {
+        label: 'Ốm đau / Thai sản',
+        color: 'volcano',
+        desc: 'Hưởng chế độ BHXH',
+        deductsFrom: 'NONE',
+    },
+    UNPAID: {
+        label: 'Nghỉ không lương',
+        color: 'default',
+        desc: 'Việc riêng không hưởng lương',
+        deductsFrom: 'NONE',
+    },
+};
+
 export interface IAnnualLeave {
     id: number;
     user: any;
@@ -8,6 +43,8 @@ export interface IAnnualLeave {
     leave_balance_n2: number;
     leave_balance_n1: number;
     current_year_leave: number;
+    compensatory_leave_quota?: number;
+    compensatory_leave_taken?: number;
     m1_taken: number;
     m2_taken: number;
     m3_taken: number;
@@ -29,6 +66,10 @@ export interface IRecordLeavePayload {
     days_taken: number;
     applied_month: number;
     year: number;
+    leave_type?: LeaveType;
+    document_number?: string;
+    approved_by?: string;
+    signed_date?: string;
     reason?: string;
     location?: string;
     attachments?: string[];
@@ -43,6 +84,10 @@ export interface ILeaveHistory {
     days_taken: number;
     applied_month: number;
     year: number;
+    leave_type?: LeaveType;
+    document_number?: string;
+    approved_by?: string;
+    signed_date?: string;
     reason?: string;
     location?: string;
     attachments?: string[];

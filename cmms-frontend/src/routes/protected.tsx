@@ -20,6 +20,7 @@ import Employees from "../pages/Employees";
 import LaborContracts from "../pages/LaborContracts";
 import RewardDisciplines from "../pages/RewardDisciplines";
 import DevicePassportPage from "../pages/DevicePassport";
+import VehicleIncidentReportsPage from "../pages/VehicleIncidentReports";
 
 export const protectedRoutes = (userRole: string) => {
   const isFullAccess = ['admin', 'ADMIN', 'HR_MANAGER', 'DIRECTOR', 'UNIT_HEAD', 'TEAM_LEAD'].includes(userRole);
@@ -37,6 +38,7 @@ export const protectedRoutes = (userRole: string) => {
       { path: "/lay_vat_tu/*", element: <StockOutsPage /> },
       // Sửa chữa & Bảo dưỡng
       { path: "/quan_ly_sua_chua/*", element: <RepairsManagement /> },
+      { path: "/bao_cao_tinh_trang_xe/*", element: <VehicleIncidentReportsPage /> },
       { path: "/quan_ly_bao_duong/*", element: <MaintenanceManagement /> },
       { path: "/quy_trinh_bao_duong/*", element: <MaintenanceTasksPage /> },
       { path: "/maintenance-procedures/*", element: <MaintenanceProcedurePage /> },
@@ -94,6 +96,7 @@ export const protectedRoutes = (userRole: string) => {
           { path: "/profile", element: <Profile /> },
           { path: "/quan_ly_ttb_pt/*", element: <DevicesManagement /> },
           { path: "/quan_ly_sua_chua/*", element: <RepairsManagement /> },
+          { path: "/bao_cao_tinh_trang_xe/*", element: <VehicleIncidentReportsPage /> },
           { path: "/quan_ly_bao_duong/*", element: <MaintenanceManagement /> },
           { path: "/quy_trinh_bao_duong/*", element: <MaintenanceTasksPage /> },
           { path: "/quan_ly_vat_tu/*", element: <InventoryManagementPage /> },
