@@ -43,6 +43,13 @@ if [ -z "$REACT_APP_BASE_URL" ]; then
     exit 1
 fi
 
+if [[ "$REACT_APP_BASE_URL" =~ 103\.15\.50\.119 ]]; then
+    echo "❌ CẢNH BÁO: REACT_APP_BASE_URL đang chứa IP CŨ '103.15.50.119'!"
+    echo "   Mắt Bão đã chuyển IP máy chủ sang '103.110.128.209'."
+    echo "   Vui lòng sửa lại thành Tên miền hoặc IP mới (Ví dụ: http://103.110.128.209/api) trong file .env."
+    exit 1
+fi
+
 if [[ "$REACT_APP_BASE_URL" =~ localhost|127\.0\.0\.1|cmms_backend ]]; then
     echo "❌ LỖI: REACT_APP_BASE_URL đang trỏ về '$REACT_APP_BASE_URL'!"
     echo "   Vui lòng sửa thành Domain hoặc IP công khai kết thúc bằng /api trước khi deploy."

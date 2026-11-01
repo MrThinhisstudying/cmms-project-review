@@ -1,11 +1,25 @@
 # 🚀 PROMPT TRIỂN KHAI BẢN CẬP NHẬT (DEPLOY) LÊN PRODUCTION SERVER AN TOÀN TUYỆT ĐỐI
 
-> **Mục đích:** Tài liệu này cung cấp **System Prompt chuẩn** dành cho AI Agent hoặc Kỹ sư DevOps khi SSH vào Production Server để chẩn đoán sự cố, phục hồi hệ thống sau khi reboot và cập nhật code cho hệ thống **CMMS VCS**. Đảm bảo:
-> 1. **Chẩn đoán & Khắc phục nguyên nhân sập Server:** Điều tra nhanh nguyên nhân gây mất kết nối tên miền (OOM Killer, 100% Disk Full do Docker logs, hoặc container dừng hoạt động).
-> 2. **Kiểm tra đường dẫn file `.env` 100% chuẩn xác:** Tránh triệt để lỗi gõ nhầm `REACT_APP_BASE_URL` (sai domain, thiếu `/api`, thừa dấu gạch chéo `/`, hoặc nhầm `localhost`).
+> **Mục đích:** Tài liệu này cung cấp **System Prompt chuẩn** dành cho AI Agent hoặc Kỹ sư DevOps khi SSH vào Production Server để chẩn đoán sự cố, phục hồi hệ thống sau khi reboot/chuyển hạ tầng và cập nhật code cho hệ thống **CMMS VCS**. Đảm bảo:
+> 1. **Cập nhật hạ tầng Mắt Bão (01/11/2026):** Rà soát chuyển đổi từ **IP cũ (`103.15.50.119`)** sang **IP mới (`103.110.128.209`)**, hướng dẫn lấy lại mật khẩu SSH trên ID Portal và cấu hình lại DNS A Record.
+> 2. **Kiểm tra đường dẫn file `.env` 100% chuẩn xác:** Tránh triệt để lỗi gõ nhầm `REACT_APP_BASE_URL` (sai domain, thiếu `/api`, thừa dấu gạch chéo `/`, dùng IP cũ, hoặc nhầm `localhost`).
 > 3. **An toàn dữ liệu tuyệt đối (Zero Data Loss):** Tự động bật Database trước khi backup, sao lưu cả Database PostgreSQL (`pg_dump`) lẫn file đính kèm thực tế (`uploads/`).
 > 4. **Chống sụp/treo Server (Anti-OOM & Anti-Freeze):** Kích hoạt 4GB RAM ảo (SWAP), tinh chỉnh `vm.swappiness=10`, khóa RAM build 512MB và hạ độ ưu tiên tiến trình build (`nice -n 19`) để SSH không bị đơ kẹt.
 > 5. **Bảo vệ vĩnh viễn (Log Rotation & Auto Restart):** Đã tích hợp `restart: unless-stopped` và giới hạn kích thước log tối đa 20MB trong `docker-compose.yml`.
+
+---
+
+## 🔴 THÔNG TIN NÂNG CẤP HẠ TẦNG CLOUD SERVER MẮT BÃO
+*(Áp dụng từ đợt bảo trì đêm 31/10/2026 - rạng sáng 01/11/2026)*
+
+| Mục thông tin | Chi tiết |
+| :--- | :--- |
+| **Nhà cung cấp** | Cloud Server Mắt Bão |
+| **Địa chỉ IP CŨ** | `103.15.50.119` *(Không còn hoạt động)* |
+| **Địa chỉ IP MỚI** | **`103.110.128.209`** *(Địa chỉ chính thức)* |
+| **Lệnh SSH mới** | `ssh root@103.110.128.209` |
+| **Mật khẩu SSH** | Đã được hệ thống Mắt Bão tự động khởi tạo lại. Lấy tại: [https://id.matbao.net](https://id.matbao.net) |
+| **Bản ghi DNS A** | **Bắt buộc** trỏ tất cả bản ghi A của Tên miền sang **`103.110.128.209`** |
 
 ---
 
@@ -14,13 +28,13 @@
 *Copy toàn bộ nội dung trong khung markdown dưới đây để gửi cho AI Agent hoặc Kỹ sư thực hiện trên server:*
 
 ```markdown
-# NHIỆM VỤ: CHẨN ĐOÁN SỰ CỐ, PHỤC HỒI & CẬP NHẬT MÃ NGUỒN AN TOÀN TRÊN PRODUCTION
+# NHIỆM VỤ: PHỤC HỒI HỆ THỐNG SAU CHUYỂN HẠ TẦNG IP & CẬP NHẬT MÃ NGUỒN AN TOÀN
 
-Bạn đang thao tác trực tiếp trên Production Server của hệ thống CMMS VCS (sau khi server vừa được khởi động lại do sự cố không truy cập được tên miền).
+Bạn đang thao tác trực tiếp trên Production Server của hệ thống CMMS VCS (sau khi nhà mạng Mắt Bão nâng cấp hạ tầng và đổi IP máy chủ từ 103.15.50.119 sang 103.110.128.209).
 
 Mục tiêu:
-1. Chẩn đoán nhanh nguyên nhân gây sập máy chủ sáng nay.
-2. Dọn dẹp dung lượng ổ đĩa, giải phóng RAM và đảm bảo Docker daemon đang hoạt động.
+1. Xác nhận IP mới (103.110.128.209) và kiểm tra dung lượng ổ đĩa, đảm bảo Docker daemon hoạt động.
+2. Kiểm tra file cấu hình .env (ngăn chặn triệt để việc còn sót IP cũ 103.15.50.119 hoặc localhost).
 3. Khởi động trước Database để sao lưu an toàn 100% (không bị lỗi rỗng file backup).
 4. Đồng bộ mã nguồn mới nhất từ nhánh `main` trên GitHub.
 5. Build tuần tự và khởi động lại Backend, Frontend, Nginx Proxy Manager với cơ chế chống nghẽn CPU/RAM (Anti-Freeze).
@@ -28,8 +42,8 @@ Mục tiêu:
 ---
 
 ## ⚠️ 5 NGUYÊN TẮC BẤT DI BẤT DỊCH:
-1. **ĐẢM BẢO DATABASE CHẠY TRƯỚC KHI BACKUP:** Sau khi server reboot, container `cmms_db` có thể đang tắt. Phải `docker compose up -d db` và đợi `pg_isready` trước khi gõ lệnh `pg_dump`. File backup rỗng (0 bytes) $\rightarrow$ DỪNG LẠI NGAY LẬP TỨC.
-2. **KIỂM TRA ĐƯỜNG DẪN `.env` TRƯỚC KHI BUILD:** Biến `REACT_APP_BASE_URL` BẮT BUỘC kết thúc bằng `/api` (Ví dụ: `https://cmms.yourdomain.vn/api`), KHÔNG chứa `localhost` và KHÔNG có dấu gạch chéo `/` ở cuối cùng.
+1. **IP MỚI LÀ 103.110.128.209:** Tuyệt đối không để cấu hình `.env` trỏ về IP cũ `103.15.50.119` hoặc `localhost`. Biến `REACT_APP_BASE_URL` BẮT BUỘC kết thúc bằng `/api` (Ví dụ: `https://cmms.yourdomain.vn/api` hoặc `http://103.110.128.209/api`).
+2. **ĐẢM BẢO DATABASE CHẠY TRƯỚC KHI BACKUP:** Sau khi server reboot/di dời hạ tầng, container `cmms_db` có thể đang tắt. Phải `docker compose up -d db` và đợi `pg_isready` trước khi gõ lệnh `pg_dump`. File backup rỗng (0 bytes) $\rightarrow$ DỪNG LẠI NGAY LẬP TỨC.
 3. **CHỐNG TREO MÁY CHỦ KHI BUILD (ANTI-FREEZE):** Tuyệt đối KHÔNG gõ `docker compose build` đồng thời. Phải build tuần tự Backend rồi đến Frontend, luôn đi kèm lệnh `nice -n 19` để giữ kết nối SSH không bị đơ cứng.
 4. **BẢO VỆ Ổ CỨNG (ANTI-DISK-FULL):** Dọn sạch Docker log rác cũ và dangling images. Cấu hình log rotation 20MB trong `docker-compose.yml` để không bao giờ bị đầy ổ cứng 100%.
 5. **KHÔNG DÙNG DOCKER COMPOSE DOWN:** Giữ các dịch vụ đang chạy, chỉ recreate từng container sau khi build xong image mới để hạn chế tối đa thời gian downtime.
@@ -38,13 +52,14 @@ Mục tiêu:
 
 ## 🛠️ CÁC BƯỚC TRIỂN KHAI CHI TIẾT (STEP-BY-STEP):
 
-### BƯỚC 0: CHẨN ĐOÁN LỖI SẬP MẠNG SÁNG NAY & DỌN DẸP DUNG LƯỢNG SAU REBOOT
-1. Kiểm tra nguyên nhân máy chủ bị treo/sập sáng nay:
+### BƯỚC 0: KIỂM TRA HẠ TẦNG MỚI & DỌN DẸP DUNG LƯỢNG SAU REBOOT
+1. Kiểm tra địa chỉ IP mạng nội bộ và dung lượng ổ cứng:
 ```bash
-echo "🔍 1. Kiểm tra xem có tiến trình nào bị OOM Killer (hết RAM) bắn hạ không:"
-dmesg -T | grep -i -E "oom|out of memory|killed process" | tail -n 10 || echo "   -> Không thấy vết OOM trong dmesg gần đây."
+echo "🔍 1. Kiểm tra IP hiện tại của server:"
+curl -s ifconfig.me || ip a | grep 'inet ' | grep -v '127.0.0.1'
+echo ""
 
-echo "🔍 2. Kiểm tra dung lượng ổ đĩa (đặc biệt phân vùng /):"
+echo "🔍 2. Kiểm tra dung lượng ổ đĩa:"
 df -h
 
 echo "🔍 3. Kiểm tra trạng thái các container Docker:"
@@ -100,7 +115,7 @@ echo "✅ Bộ nhớ Swap sẵn sàng: $(free -h | awk '/Swap:/ {print $2}')"
 
 ---
 
-### BƯỚC 2: KIỂM TRA TOÀN DIỆN FILE CẤU HÌNH `.env`
+### BƯỚC 2: KIỂM TRA TOÀN DIỆN FILE CẤU HÌNH `.env` (CHẶN IP CŨ 103.15.50.119)
 ```bash
 echo "🔍 Đang rà soát biến môi trường .env..."
 set -a
@@ -114,11 +129,19 @@ fi
 
 echo "   -> REACT_APP_BASE_URL hiện tại: $REACT_APP_BASE_URL"
 
+# Kiểm tra nếu còn sót IP cũ của Mắt Bão
+if [[ "$REACT_APP_BASE_URL" =~ 103\.15\.50\.119 ]]; then
+    echo "❌ CẢNH BÁO NGUY HIỂM: REACT_APP_BASE_URL đang chứa IP CŨ '103.15.50.119'!"
+    echo "   Mắt Bão đã chuyển IP sang '103.110.128.209'."
+    echo "   Vui lòng sửa lại thành Tên miền hoặc IP mới (Ví dụ: http://103.110.128.209/api)."
+    exit 1
+fi
+
 # Kiểm tra nếu còn chứa localhost hoặc 127.0.0.1
 if [[ "$REACT_APP_BASE_URL" =~ localhost|127\.0\.0\.1|cmms_backend ]]; then
     echo "❌ CẢNH BÁO NGUY HIỂM: REACT_APP_BASE_URL đang chứa '$REACT_APP_BASE_URL'!"
     echo "   Trên Production, người dùng ngoài Internet sẽ KHÔNG thể kết nối được."
-    echo "   Vui lòng sửa thành Domain hoặc IP công khai (Ví dụ: https://cmms.yourdomain.vn/api)."
+    echo "   Vui lòng sửa thành Domain hoặc IP công khai mới (Ví dụ: https://cmms.yourdomain.vn/api)."
     exit 1
 fi
 
@@ -144,7 +167,7 @@ BACKUP_DIR="$HOME/backups_cmms"
 mkdir -p "$BACKUP_DIR"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 
-echo "🔄 1. Bật container Database (phòng trường hợp DB đang tắt sau khi reboot)..."
+echo "🔄 1. Bật container Database (phòng trường hợp DB đang tắt sau khi nâng cấp hạ tầng)..."
 docker compose up -d db
 
 echo "⏳ Đang đợi PostgreSQL sẵn sàng..."
@@ -239,7 +262,7 @@ END \$\$;
 echo "🔄 Khởi động Frontend container mới..."
 docker compose up -d --no-deps frontend
 
-echo "🔄 Khởi động/Đảm bảo Nginx Proxy Manager đang chạy đón traffic tên miền..."
+echo "🔄 Khởi động/Đảm bảo Nginx Proxy Manager đang chạy đón traffic từ IP mới 103.110.128.209..."
 docker compose up -d npm
 ```
 
@@ -262,7 +285,7 @@ docker logs --tail 15 nginx_proxy_manager
 # Dọn dẹp image dangling rác
 docker image prune -f
 
-echo "🎉 CHÚC MỪNG: BẢN CẬP NHẬT ĐÃ ĐƯỢC DEPLOY THÀNH CÔNG VÀ HỆ THỐNG ĐÃ TRỰC TUYẾN TRỞ LẠI!"
+echo "🎉 CHÚC MỪNG: BẢN CẬP NHẬT ĐÃ ĐƯỢC DEPLOY THÀNH CÔNG TRÊN HẠ TẦNG IP MỚI 103.110.128.209!"
 ```
 
 ---
