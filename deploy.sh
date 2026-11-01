@@ -11,7 +11,13 @@ if [ ! -f "docker-compose.yml" ] || [ ! -f ".env" ]; then
     exit 1
 fi
 
-# 2. KIỂM TRA & KÍCH HOẠT SWAP
+# 2. KHỞI ĐỘNG DOCKER DAEMON & BẢO VỆ HỆ THỐNG
+sudo systemctl is-active --quiet docker || sudo systemctl start docker || true
+
+# Tinh chỉnh Swappiness để tránh kernel đẩy dữ liệu ồ ạt làm đơ ổ đĩa (chống treo server)
+sudo sysctl vm.swappiness=10 >/dev/null 2>&1 || true
+
+# Kiểm tra & kích hoạt SWAP tối thiểu 4GB
 TOTAL_SWAP=$(free -m | awk '/Swap:/ {print $2}')
 if [ "$TOTAL_SWAP" -lt 2048 ]; then
     echo "⚠️ Swap nhỏ hơn 2GB ($TOTAL_SWAP MB). Đang kích hoạt 4GB Swap an toàn..."
@@ -25,7 +31,7 @@ if [ "$TOTAL_SWAP" -lt 2048 ]; then
         sudo swapon /swapfile || true
     fi
 fi
-echo "✅ Bộ nhớ Swap sẵn sàng."
+echo "✅ Bộ nhớ Swap sẵn sàng: $(free -h | awk '/Swap:/ {print $2}')"
 
 # 3. RÀ SOÁT BIẾN MÔI TRƯỜNG .ENV
 set -a
@@ -49,43 +55,55 @@ if [[ ! "$REACT_APP_BASE_URL" =~ /api$ ]]; then
 fi
 echo "✅ Cấu hình .env chuẩn xác: REACT_APP_BASE_URL=$REACT_APP_BASE_URL"
 
-# 4. BACKUP DỮ LIỆU
+# 4. SAO LƯU DỮ LIỆU AN TOÀN (TỰ BẬT DB NẾU VỪA REBOOT)
 BACKUP_DIR="$HOME/backups_cmms"
 mkdir -p "$BACKUP_DIR"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_FILE="$BACKUP_DIR/cmms_db_$TIMESTAMP.sql.gz"
 
-echo "💾 Đang sao lưu Database PostgreSQL..."
+echo "💾 Đang chuẩn bị sao lưu Database PostgreSQL..."
+# Nếu máy chủ vừa reboot, bật container DB lên trước
+docker compose up -d db
+
+echo "⏳ Đang đợi PostgreSQL sẵn sàng tiếp nhận kết nối..."
+for i in {1..30}; do
+    if docker exec cmms_db pg_isready -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-cmms_db}" >/dev/null 2>&1; then
+        echo "✅ PostgreSQL đã sẵn sàng."
+        break
+    fi
+    sleep 1
+done
+
 docker exec -t cmms_db pg_dump -U "${POSTGRES_USER:-postgres}" "${POSTGRES_DB:-cmms_db}" | gzip > "$BACKUP_FILE"
 if [ -s "$BACKUP_FILE" ]; then
-    echo "✅ Backup Database hoàn tất: $BACKUP_FILE"
+    echo "✅ Backup Database hoàn tất: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
 else
-    echo "❌ LỖI: Backup rỗng! Dừng tiến trình."
+    echo "❌ LỖI: File backup DB rỗng! Dừng tiến trình để bảo vệ dữ liệu."
     exit 1
 fi
 
-echo "💾 Đang sao lưu thư mục uploads..."
+echo "💾 Đang sao lưu thư mục uploads (chữ ký số, avatar, chứng chỉ)..."
 if [ -d "cmms-backend/uploads" ]; then
     tar -czf "$BACKUP_DIR/cmms_uploads_$TIMESTAMP.tar.gz" -C cmms-backend uploads || true
 elif [ -d "uploads" ]; then
     tar -czf "$BACKUP_DIR/cmms_uploads_$TIMESTAMP.tar.gz" uploads || true
 fi
 
-# 5. KÉO CODE MỚI
+# 5. KÉO CODE MỚI TỪ GITHUB
 echo "📥 Đang kéo mã nguồn mới nhất từ origin/main..."
 git fetch origin main
 git stash || true
 git checkout main
 git pull origin main
 
-# 6. BUILD TUẦN TỰ (CHỐNG SẬP RAM)
-echo "🏗️ Đang build Backend..."
-docker compose build backend
+# 6. BUILD TUẦN TỰ (CHỐNG NGHẼN CPU/RAM & CHỐNG RỚT SSH)
+echo "🏗️ Đang build Backend (điều tiết tài nguyên chống nghẽn I/O)..."
+nice -n 19 docker compose build backend
 
 echo "🏗️ Đang build Frontend..."
-docker compose build frontend
+nice -n 19 docker compose build frontend
 
-# 7. KHỞI ĐỘNG LẠI DỊCH VỤ & CHẠY MIGRATION
+# 7. KHỞI ĐỘNG LẠI DỊCH VỤ & CHẠY DATABASE MIGRATION
 echo "🔄 Khởi động lại Backend..."
 docker compose up -d --no-deps backend
 sleep 5
@@ -108,14 +126,16 @@ BEGIN
 END \$\$;
 " || true
 
-echo "🔄 Khởi động lại Frontend..."
+echo "🔄 Khởi động lại Frontend & Nginx Proxy Manager..."
 docker compose up -d --no-deps frontend
+docker compose up -d npm
 
-# 8. DỌN DẸP DUNG LƯỢNG
+# 8. DỌN DẸP DUNG LƯỢNG Ổ ĐĨA
 docker image prune -f
 
 echo "=================================================================="
 echo "🎉 DEPLOY THÀNH CÔNG VÀ AN TOÀN TUYỆT ĐỐI!"
 echo "Database Snapshot: $BACKUP_FILE"
 echo "Kiểm tra log: docker logs --tail 30 cmms_backend"
+echo "Kiểm tra proxy: docker logs --tail 30 nginx_proxy_manager"
 echo "=================================================================="

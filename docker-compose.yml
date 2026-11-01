@@ -2,6 +2,12 @@ services:
   db:
     image: postgres:16-alpine
     container_name: cmms_db
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -23,6 +29,12 @@ services:
       context: ./cmms-backend
       dockerfile: Dockerfile
     container_name: cmms_backend
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
     environment:
       NODE_ENV: ${NODE_ENV}
       PORT: ${BACKEND_PORT}
@@ -57,6 +69,12 @@ services:
       args:
         REACT_APP_BASE_URL: ${REACT_APP_BASE_URL}
     container_name: cmms_frontend
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
     depends_on:
       - backend
     networks:
@@ -66,6 +84,11 @@ services:
     image: jc21/nginx-proxy-manager:latest
     container_name: nginx_proxy_manager
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
     ports:
       - "80:80"
       - "443:443"
