@@ -23,6 +23,7 @@ import MaintenanceImportModal from "./components/MaintenanceImportModal";
 import BatchMaintenanceModal from "./components/BatchMaintenanceModal";
 import CreatePlanModal from "./components/CreatePlanModal";
 import { getDashboardOverview } from "../../apis/maintenance";
+import { getMaintenanceStatusInfo } from "../../utils/maintenanceDue";
 import moment from "moment";
 
 const { Option } = Select;
@@ -91,19 +92,22 @@ const MaintenanceManagement: React.FC = () => {
       result = result.filter((item) => item.level === filterLevel);
     }
 
-    // Lọc theo Trạng thái (Frontend logic)
+    // Lọc theo Trạng thái (Frontend logic chuẩn theo chu kỳ Tuần / Tháng)
     if (filterStatus) {
-      const today = moment().startOf("day");
       result = result.filter((item) => {
         if (item.status !== "active") return filterStatus === item.status;
-
         if (!item.next_maintenance_date) return false;
-        const nextDate = moment(item.next_maintenance_date).startOf("day");
-        const diffDays = nextDate.diff(today, "days");
 
-        if (filterStatus === "overdue") return diffDays < 0;
-        if (filterStatus === "warning") return diffDays >= 0 && diffDays <= 5;
-        if (filterStatus === "active") return diffDays > 5;
+        const info = getMaintenanceStatusInfo(item);
+        if (filterStatus === "overdue") return info.isOverdue;
+        if (filterStatus === "warning") {
+          return (
+            info.type === "near_due" ||
+            info.type === "in_cycle_last_day" ||
+            (info.type === "in_cycle" && (info.daysLeft ?? 99) <= 2)
+          );
+        }
+        if (filterStatus === "active") return !info.isOverdue;
         return false;
       });
     }
@@ -153,18 +157,24 @@ const MaintenanceManagement: React.FC = () => {
 
   // --- THỐNG KÊ NHANH CHO KPI CARDS ---
   const kpiStats = React.useMemo(() => {
-    const today = moment().startOf("day");
     let overdue = 0;
     let warning = 0;
     let normal = 0;
 
     allData.forEach((item) => {
-      if (!item.next_maintenance_date) return;
-      const nextDate = moment(item.next_maintenance_date).startOf("day");
-      const diffDays = nextDate.diff(today, "days");
-      if (diffDays < 0) overdue++;
-      else if (diffDays <= 5) warning++;
-      else normal++;
+      if (!item.next_maintenance_date || item.status !== "active") return;
+      const info = getMaintenanceStatusInfo(item);
+      if (info.isOverdue) {
+        overdue++;
+      } else if (
+        info.type === "near_due" ||
+        info.type === "in_cycle_last_day" ||
+        (info.type === "in_cycle" && (info.daysLeft ?? 99) <= 2)
+      ) {
+        warning++;
+      } else {
+        normal++;
+      }
     });
 
     return {

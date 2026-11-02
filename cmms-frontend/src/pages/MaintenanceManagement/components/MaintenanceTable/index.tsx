@@ -15,7 +15,11 @@ import { Modal } from "antd";
 import { StopOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
 import { cancelMaintenancePlan } from "../../../../apis/maintenance";
 import { getToken } from "../../../../utils/auth";
-import { renderMaintenanceStatusTag } from "../../../../utils/maintenanceDue";
+import {
+  renderMaintenanceStatusTag,
+  getMaintenanceStatusInfo,
+  getMaintenanceCycleDeadline,
+} from "../../../../utils/maintenanceDue";
 const { confirm } = Modal;
 // --- QUAN TRỌNG: CẬP NHẬT INTERFACE ĐỂ KHỚP VỚI TRANG CHA ---
 interface Props {
@@ -194,7 +198,7 @@ const MaintenanceTable: React.FC<Props> = ({
       title: "Ngày đến hạn (Dự kiến)",
       dataIndex: "next_maintenance_date",
       align: "center" as const,
-      width: 160,
+      width: 170,
       sorter: (a: any, b: any) => {
         const dateA = a.next_maintenance_date
           ? dayjs(a.next_maintenance_date).unix()
@@ -204,13 +208,13 @@ const MaintenanceTable: React.FC<Props> = ({
           : 0;
         return dateA - dateB;
       },
-      render: (date: string) => {
+      render: (date: string, record: IMaintenance) => {
         if (!date) return <span style={{ color: "#94a3b8" }}>-</span>;
-        const today = dayjs().startOf("day");
-        const nextD = dayjs(date).startOf("day");
-        const diff = nextD.diff(today, "day");
+        const statusInfo = getMaintenanceStatusInfo(record);
+        const deadline = getMaintenanceCycleDeadline(date, record.level);
 
-        if (diff < 0) {
+        // 1. Nếu thực sự quá hạn chu kỳ (Tuần quá 7 ngày, Tháng quá ngày 30/31)
+        if (statusInfo.isOverdue) {
           return (
             <div>
               <div style={{ fontWeight: 700, color: "#cf1322", fontSize: 13 }}>
@@ -218,12 +222,14 @@ const MaintenanceTable: React.FC<Props> = ({
                 {dayjs(date).format("DD/MM/YYYY")}
               </div>
               <Tag color="error" style={{ fontSize: 10, borderRadius: 4, marginTop: 2 }}>
-                Trễ {Math.abs(diff)} ngày
+                Trễ {statusInfo.overdueDays} ngày
               </Tag>
             </div>
           );
         }
-        if (diff <= 5) {
+
+        // 2. Nếu là ngày cuối cùng của chu kỳ bảo dưỡng
+        if (statusInfo.type === "in_cycle_last_day") {
           return (
             <div>
               <div style={{ fontWeight: 600, color: "#d46b08", fontSize: 13 }}>
@@ -231,13 +237,30 @@ const MaintenanceTable: React.FC<Props> = ({
                 {dayjs(date).format("DD/MM/YYYY")}
               </div>
               <Tag color="warning" style={{ fontSize: 10, borderRadius: 4, marginTop: 2 }}>
-                Còn {diff === 0 ? "Hôm nay" : `${diff} ngày`}
+                Hạn chót hôm nay
               </Tag>
             </div>
           );
         }
+
+        // 3. Đang trong chu kỳ bảo dưỡng hợp lệ (chưa quá hạn)
+        if (statusInfo.type === "in_cycle") {
+          return (
+            <div>
+              <div style={{ fontWeight: 600, color: "#0f172a", fontSize: 13 }}>
+                <CalendarOutlined style={{ marginRight: 5, color: "#1677ff" }} />
+                {dayjs(date).format("DD/MM/YYYY")}
+              </div>
+              <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>
+                Hạn: {deadline.format("DD/MM/YYYY")}
+              </div>
+            </div>
+          );
+        }
+
+        // 4. Các trạng thái khác (sắp tới ngày bắt đầu hoặc chưa tới ngày)
         return (
-          <div style={{ color: "#1e293b", fontSize: 13 }}>
+          <div style={{ color: "#475569", fontSize: 13 }}>
             <CalendarOutlined style={{ marginRight: 5, color: "#94a3b8" }} />
             {dayjs(date).format("DD/MM/YYYY")}
           </div>

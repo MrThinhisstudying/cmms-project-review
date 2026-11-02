@@ -115,25 +115,27 @@ export function getMaintenanceCycleDeadline(
   const norm = normalizeMaintenanceLevel(level);
 
   if (norm === "Tuần") {
+    // 1 chu kỳ tuần = 7 ngày (từ start đến hết start + 6 ngày). Sau ngày này mới quá hạn.
     return start.add(6, "day").endOf("day");
   }
   if (norm === "1M") {
-    return start.add(1, "month").subtract(1, "day").endOf("day");
+    // Trọn vẹn tháng (hết ngày 30 hoặc 31 của tháng). Quá ngày 30/31 mới quá hạn.
+    return start.endOf("month");
   }
   if (norm === "3M") {
-    return start.add(3, "month").subtract(1, "day").endOf("day");
+    return start.add(2, "month").endOf("month");
   }
   if (norm === "6M") {
-    return start.add(6, "month").subtract(1, "day").endOf("day");
+    return start.add(5, "month").endOf("month");
   }
   if (norm === "9M") {
-    return start.add(9, "month").subtract(1, "day").endOf("day");
+    return start.add(8, "month").endOf("month");
   }
   if (norm === "1Y") {
-    return start.add(1, "year").subtract(1, "day").endOf("day");
+    return start.add(11, "month").endOf("month");
   }
   if (norm === "2Y") {
-    return start.add(2, "year").subtract(1, "day").endOf("day");
+    return start.add(23, "month").endOf("month");
   }
 
   return start.add(6, "day").endOf("day");
