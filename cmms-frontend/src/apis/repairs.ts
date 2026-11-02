@@ -347,3 +347,16 @@ export const reviewLimitedUse = async (
   if (!res.ok) throw new Error(data.message || "Duyệt đề xuất SDHC thất bại");
   return data;
 };
+
+export const resetRepairRequest = async (id: number, token: string | null) => {
+  const res = await fetch(`${BASE_URL}/${id}/reset-request`, {
+    method: "POST",
+    headers: {
+      Authorization: token ? `Bearer ${token}` : "",
+      "Content-Type": "application/json",
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Đặt lại phiếu thất bại");
+  return data.data;
+};

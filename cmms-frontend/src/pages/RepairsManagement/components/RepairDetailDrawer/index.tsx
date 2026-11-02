@@ -13,6 +13,8 @@ import {
   Empty,
   Alert,
   Dropdown,
+  Popconfirm,
+  message,
 } from "antd";
 import {
   PrinterOutlined,
@@ -29,10 +31,13 @@ import {
   CalendarOutlined,
   CarOutlined,
   EditOutlined,
+  RollbackOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useRepairsContext } from "../../../../context/RepairsContext/RepairsContext";
 import { IRepair } from "../../../../types/repairs.types";
+import { resetRepairRequest } from "../../../../apis/repairs";
+import { getToken } from "../../../../utils/auth";
 import WarehouseItemBadge from "../WarehouseItemBadge";
 
 const { Title } = Typography;
@@ -304,6 +309,21 @@ export default function RepairDetailDrawer({
 
   // ADMIN: Chỉnh sửa nội dung phiếu bất kỳ lúc nào
   const isAdmin = role === "ADMIN";
+  const [resetting, setResetting] = React.useState(false);
+  const handleResetB03 = async () => {
+    if (!data) return;
+    try {
+      setResetting(true);
+      await resetRepairRequest(data.repair_id, getToken());
+      message.success("Đã hoàn tác phiếu về trạng thái Chờ kỹ thuật tiếp nhận (WAITING_TECH)");
+      onClose();
+    } catch (e: any) {
+      message.error(e?.message || "Đặt lại phiếu thất bại");
+    } finally {
+      setResetting(false);
+    }
+  };
+
   const showAdminEditB03 =
     isAdmin && data && data.status_request === "COMPLETED" && !showRedoB03;
   const showAdminEditB04 =
@@ -1249,10 +1269,25 @@ export default function RepairDetailDrawer({
                   Sửa B04
                 </Button>
               )}
-              {showAdminEditB05 && (
-                <Button type="primary" ghost onClick={onEditAcceptance} icon={<EditOutlined />} style={{ borderRadius: 6 }}>
-                  Sửa B05
-                </Button>
+              {/* Admin Reset B03 (Hoàn tác phiếu về Chờ tiếp nhận) */}
+              {isAdmin && data && data.status_inspection !== "inspection_admin_approved" && (
+                <Popconfirm
+                  title="Đặt lại phiếu về Chờ kỹ thuật tiếp nhận?"
+                  description="Toàn bộ tiến trình duyệt B03 sẽ được đưa về bước đầu (WAITING_TECH) để thực hiện lại quy trình duyệt 4 cấp."
+                  onConfirm={handleResetB03}
+                  okText="Đồng ý đặt lại"
+                  cancelText="Hủy"
+                  okButtonProps={{ danger: true }}
+                >
+                  <Button
+                    danger
+                    icon={<RollbackOutlined />}
+                    loading={resetting}
+                    style={{ borderRadius: 6, fontWeight: 500 }}
+                  >
+                    Đặt lại về Chờ duyệt (Reset B03)
+                  </Button>
+                </Popconfirm>
               )}
 
               {/* Duyệt / Từ chối phiếu */}

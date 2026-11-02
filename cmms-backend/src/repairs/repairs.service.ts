@@ -2596,4 +2596,39 @@ export class RepairsService {
 
         return await query.getCount();
     }
+
+    async resetRequestToWaitingTech(id: number, user: any) {
+        if (user.role !== UserRole.ADMIN) {
+            throw new ForbiddenException('Chỉ Quản trị viên mới có quyền đặt lại phiếu.');
+        }
+        const repair = await this.repairRepo.findOne({
+            where: { repair_id: id },
+            relations: ['device'],
+        });
+        if (!repair) throw new NotFoundException('Không tìm thấy phiếu');
+        if (repair.status_inspection === 'inspection_admin_approved') {
+            throw new BadRequestException('Phiếu đã hoàn tất Kiểm nghiệm, không thể đặt lại yêu cầu.');
+        }
+
+        repair.status_request = 'WAITING_TECH';
+        repair.approved_by_tech_request = null;
+        repair.approved_by_manager_request = null;
+        repair.approved_by_admin_request = null;
+        repair.canceled = false;
+        repair.canceled_at = null;
+        repair.rejection_reason = null;
+        repair.rejected_by = null;
+        if (repair.extra_config) {
+            delete repair.extra_config.approved_by_lead_request;
+        }
+
+        if (repair.device) {
+            repair.device.status = DeviceStatus.DANG_SU_DUNG;
+            await this.deviceRepo.save(repair.device);
+        }
+
+        const saved = await this.repairRepo.save(repair);
+        this.repairsGateway.notifyRepairUpdate();
+        return saved;
+    }
 }
