@@ -243,10 +243,24 @@ export default function RepairDetailDrawer({
   const canReviewAction = React.useMemo(() => {
     if (!data) return false;
     if (currentPhase === "request") {
+      const isTeamLead =
+        role === "TEAM_LEAD" ||
+        (currentUser as any)?.user_departments?.some(
+          (ud: any) => ud.role_in_dept === "LEAD" && ud.department?.level === "TO"
+        );
+      const isUnitHead =
+        role === "UNIT_HEAD" ||
+        (currentUser as any)?.user_departments?.some(
+          (ud: any) =>
+            ["LEAD", "DEPUTY_LEAD"].includes(ud.role_in_dept) &&
+            ud.department?.level === "DOI"
+        );
+
       return (
         role === "ADMIN" ||
         (role === "TECHNICIAN" && data.status_request === "WAITING_TECH") ||
-        (role === "UNIT_HEAD" && data.status_request === "WAITING_MANAGER") ||
+        (Boolean(isTeamLead) && data.status_request === "WAITING_TEAM_LEAD") ||
+        (Boolean(isUnitHead) && data.status_request === "WAITING_MANAGER") ||
         (role === "DIRECTOR" && data.status_request === "WAITING_DIRECTOR")
       );
     }
@@ -446,6 +460,115 @@ export default function RepairDetailDrawer({
           </div>
         </div>
       )}
+
+      {/* Tiến trình phê duyệt 4 cấp của B03 */}
+      <div style={{ marginTop: 18, borderTop: "1px dashed #e2e8f0", paddingTop: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 10 }}>
+          <CheckCircleOutlined style={{ marginRight: 6, color: "#1677ff" }} />
+          Tiến trình phê duyệt yêu cầu (B03):
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+            gap: 10,
+          }}
+        >
+          {/* Cấp 1: Kỹ thuật tiếp nhận */}
+          <div
+            style={{
+              background: data.status_request !== "WAITING_TECH" && data.status_request !== "REJECTED_B03" ? "#f0fdf4" : data.status_request === "WAITING_TECH" ? "#eff6ff" : "#f8fafc",
+              border: `1px solid ${data.status_request !== "WAITING_TECH" && data.status_request !== "REJECTED_B03" ? "#bbf7d0" : data.status_request === "WAITING_TECH" ? "#bfdbfe" : "#e2e8f0"}`,
+              borderRadius: 8,
+              padding: "10px 12px",
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>1. KỸ THUẬT VIÊN</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginTop: 2 }}>
+              {data.approved_by_tech_request?.name || (data.status_request !== "WAITING_TECH" && data.status_request !== "REJECTED_B03" ? "Đã tiếp nhận" : "Chờ tiếp nhận")}
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>
+              {data.status_request !== "WAITING_TECH" && data.status_request !== "REJECTED_B03" ? (
+                <Tag color="success" style={{ margin: 0, fontSize: 11 }}>Đã tiếp nhận</Tag>
+              ) : (
+                <Tag color="processing" style={{ margin: 0, fontSize: 11 }}>Đang xử lý</Tag>
+              )}
+            </div>
+          </div>
+
+          {/* Cấp 2: Tổ trưởng duyệt */}
+          <div
+            style={{
+              background: ["WAITING_MANAGER", "WAITING_DIRECTOR", "COMPLETED"].includes(data.status_request) ? "#f0fdf4" : data.status_request === "WAITING_TEAM_LEAD" ? "#eff6ff" : "#f8fafc",
+              border: `1px solid ${["WAITING_MANAGER", "WAITING_DIRECTOR", "COMPLETED"].includes(data.status_request) ? "#bbf7d0" : data.status_request === "WAITING_TEAM_LEAD" ? "#bfdbfe" : "#e2e8f0"}`,
+              borderRadius: 8,
+              padding: "10px 12px",
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>2. TỔ TRƯỞNG KỸ THUẬT</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginTop: 2 }}>
+              {(data.extra_config as any)?.approved_by_lead_request?.name || (["WAITING_MANAGER", "WAITING_DIRECTOR", "COMPLETED"].includes(data.status_request) ? "Đã duyệt" : "Chờ Tổ duyệt")}
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>
+              {["WAITING_MANAGER", "WAITING_DIRECTOR", "COMPLETED"].includes(data.status_request) ? (
+                <Tag color="success" style={{ margin: 0, fontSize: 11 }}>Đã duyệt</Tag>
+              ) : data.status_request === "WAITING_TEAM_LEAD" ? (
+                <Tag color="processing" style={{ margin: 0, fontSize: 11 }}>Chờ duyệt</Tag>
+              ) : (
+                <Tag style={{ margin: 0, fontSize: 11 }}>Chưa tới lượt</Tag>
+              )}
+            </div>
+          </div>
+
+          {/* Cấp 3: Cán bộ Đội duyệt */}
+          <div
+            style={{
+              background: ["WAITING_DIRECTOR", "COMPLETED"].includes(data.status_request) ? "#f0fdf4" : data.status_request === "WAITING_MANAGER" ? "#eff6ff" : "#f8fafc",
+              border: `1px solid ${["WAITING_DIRECTOR", "COMPLETED"].includes(data.status_request) ? "#bbf7d0" : data.status_request === "WAITING_MANAGER" ? "#bfdbfe" : "#e2e8f0"}`,
+              borderRadius: 8,
+              padding: "10px 12px",
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>3. CÁN BỘ ĐỘI</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginTop: 2 }}>
+              {data.approved_by_manager_request?.name || (["WAITING_DIRECTOR", "COMPLETED"].includes(data.status_request) ? "Đã duyệt" : "Chờ Đội duyệt")}
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>
+              {["WAITING_DIRECTOR", "COMPLETED"].includes(data.status_request) ? (
+                <Tag color="success" style={{ margin: 0, fontSize: 11 }}>Đã duyệt</Tag>
+              ) : data.status_request === "WAITING_MANAGER" ? (
+                <Tag color="processing" style={{ margin: 0, fontSize: 11 }}>Chờ duyệt</Tag>
+              ) : (
+                <Tag style={{ margin: 0, fontSize: 11 }}>Chưa tới lượt</Tag>
+              )}
+            </div>
+          </div>
+
+          {/* Cấp 4: Ban Giám Đốc duyệt */}
+          <div
+            style={{
+              background: data.status_request === "COMPLETED" ? "#f0fdf4" : data.status_request === "WAITING_DIRECTOR" ? "#eff6ff" : "#f8fafc",
+              border: `1px solid ${data.status_request === "COMPLETED" ? "#bbf7d0" : data.status_request === "WAITING_DIRECTOR" ? "#bfdbfe" : "#e2e8f0"}`,
+              borderRadius: 8,
+              padding: "10px 12px",
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>4. BAN GIÁM ĐỐC</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginTop: 2 }}>
+              {data.approved_by_admin_request?.name || (data.status_request === "COMPLETED" ? "Đã phê duyệt" : "Chờ Ban GĐ duyệt")}
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>
+              {data.status_request === "COMPLETED" ? (
+                <Tag color="success" style={{ margin: 0, fontSize: 11 }}>Hoàn tất</Tag>
+              ) : data.status_request === "WAITING_DIRECTOR" ? (
+                <Tag color="processing" style={{ margin: 0, fontSize: 11 }}>Chờ duyệt</Tag>
+              ) : (
+                <Tag style={{ margin: 0, fontSize: 11 }}>Chưa tới lượt</Tag>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 

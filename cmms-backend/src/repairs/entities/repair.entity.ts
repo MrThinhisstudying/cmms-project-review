@@ -34,7 +34,7 @@ export class Repair {
 
     @Index()
     @Column({default: 'WAITING_TECH'})
-    status_request: 'WAITING_TECH' | 'WAITING_MANAGER' | 'WAITING_DIRECTOR' | 'REJECTED_B03' | 'COMPLETED';
+    status_request: 'WAITING_TECH' | 'WAITING_TEAM_LEAD' | 'WAITING_MANAGER' | 'WAITING_DIRECTOR' | 'REJECTED_B03' | 'COMPLETED';
     
     @ManyToOne(() => User, {eager: true, nullable: true})
     @JoinColumn({name: 'approved_by_tech_request'})

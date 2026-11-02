@@ -560,36 +560,78 @@ export class RepairsService {
                 if (repair.status_request === 'WAITING_TECH') {
                     // Context-based: Phải thuộc Đội kỹ thuật mới được tiếp nhận
                     const isTechMember = await this.isMemberOfTechnicalUnit(user.user_id);
-                    if (!isTechMember) throw new ForbiddenException('Chỉ nhân viên thuộc Đội kỹ thuật mới được tiếp nhận phiếu.');
+                    if (!isTechMember && user.role !== UserRole.ADMIN) throw new ForbiddenException('Chỉ nhân viên thuộc Đội kỹ thuật mới được tiếp nhận phiếu.');
                     // Đội trưởng/Đội phó không được duyệt bước này
                     const isUnitLead = await this.isUnitLeadInTechnicalUnit(user.user_id);
-                    if (isUnitLead) throw new ForbiddenException('Lãnh đạo Đội không được phép duyệt ở bước Tiếp nhận kỹ thuật.');
+                    if (isUnitLead && user.role !== UserRole.ADMIN) throw new ForbiddenException('Lãnh đạo Đội không được phép duyệt ở bước Tiếp nhận kỹ thuật.');
 
-                    repair.status_request = 'WAITING_MANAGER';
+                    repair.status_request = 'WAITING_TEAM_LEAD';
                     repair.approved_by_tech_request = user; 
                     
+                    // Notify: Tổ trưởng thuộc Đội kỹ thuật (Tổ duyệt)
+                    const teamLeads = await this.userDepartmentRepo.find({
+                        where: { role_in_dept: 'LEAD' },
+                        relations: ['user', 'department'],
+                    });
+                    let techTeamLeads = teamLeads
+                        .filter(ud => ud.department?.level === 'TO' && ud.department?.is_technical && ud.user)
+                        .map(ud => ud.user);
+
+                    if (techTeamLeads.length === 0) {
+                        techTeamLeads = await this.userRepo.find({ where: { role: UserRole.TEAM_LEAD } });
+                    }
+
+                    for (const lead of techTeamLeads) {
+                         const msg = `Phiếu sửa chữa #${repair.repair_id} ("${repair.device?.name}") đã được kỹ thuật tiếp nhận và đang chờ Tổ trưởng duyệt.`;
+                         await this.notificationService.createForUser(lead, msg);
+                         this.repairsGateway.sendToUser(lead.user_id, msg);
+                    }
+                } else if (repair.status_request === 'WAITING_TEAM_LEAD') {
+                    // Context-based: Tổ trưởng thuộc Đội kỹ thuật
+                    const isTeamLead = await this.isTeamLeadInTechnicalUnit(user.user_id);
+                    if (!isTeamLead && user.role !== UserRole.ADMIN) {
+                        throw new ForbiddenException('Chỉ Tổ trưởng thuộc Đội kỹ thuật mới được duyệt bước này');
+                    }
+
+                    repair.status_request = 'WAITING_MANAGER';
+                    repair.extra_config = {
+                        ...(repair.extra_config || {}),
+                        approved_by_lead_request: {
+                            user_id: user.user_id,
+                            name: user.name,
+                            signed_at: new Date(),
+                        },
+                    };
+
                     // Notify: Đội trưởng/Đội phó Đội kỹ thuật
                     const unitLeads = await this.userDepartmentRepo.find({
                         where: { role_in_dept: In(['LEAD', 'DEPUTY_LEAD']) },
                         relations: ['user', 'department'],
                     });
-                    const techUnitLeads = unitLeads.filter(ud => ud.department?.level === 'DOI' && ud.department?.is_technical);
+                    let techUnitLeads = unitLeads
+                        .filter(ud => ud.department?.level === 'DOI' && ud.department?.is_technical && ud.user)
+                        .map(ud => ud.user);
+
+                    if (techUnitLeads.length === 0) {
+                        techUnitLeads = await this.userRepo.find({ where: { role: UserRole.UNIT_HEAD } });
+                    }
+
                     for (const ud of techUnitLeads) {
-                         const msg = `Phiếu sửa chữa #${repair.repair_id} ("${repair.device?.name}") đã được tiếp nhận kỹ thuật và đang chờ Đội trưởng/Đội phó duyệt.`;
-                         await this.notificationService.createForUser(ud.user, msg);
+                         const msg = `Phiếu sửa chữa #${repair.repair_id} ("${repair.device?.name}") đã được Tổ trưởng duyệt và đang chờ Đội trưởng/Đội phó duyệt.`;
+                         await this.notificationService.createForUser(ud, msg);
                          this.repairsGateway.sendToUser(ud.user_id, msg);
                     }
                 } else if (repair.status_request === 'WAITING_MANAGER') {
                     // Context-based: Đội trưởng/Đội phó Đội kỹ thuật
                     const isUnitLead = await this.isUnitLeadInTechnicalUnit(user.user_id);
-                    if (!isUnitLead) throw new ForbiddenException('Chỉ Đội trưởng/Đội phó Đội kỹ thuật mới được duyệt bước này');
+                    if (!isUnitLead && user.role !== UserRole.ADMIN) throw new ForbiddenException('Chỉ Đội trưởng/Đội phó Đội kỹ thuật mới được duyệt bước này');
                     repair.status_request = 'WAITING_DIRECTOR';
                     repair.approved_by_manager_request = user;
                     
                     // Notify Admin/Director
                     const admins = await this.userRepo.find({ where: [ { role: UserRole.ADMIN }, { role: UserRole.DIRECTOR } ] });
                     for (const admin of admins) {
-                        const msg = `Phiếu sửa chữa #${repair.repair_id} ("${repair.device?.name}") đã được Trưởng bộ phận duyệt và đang chờ Ban Giám đốc phê duyệt.`;
+                        const msg = `Phiếu sửa chữa #${repair.repair_id} ("${repair.device?.name}") đã được Cán bộ Đội duyệt và đang chờ Ban Giám đốc phê duyệt.`;
                         await this.notificationService.createForUser(admin, msg);
                         this.repairsGateway.sendToUser(admin.user_id, msg);
                     }

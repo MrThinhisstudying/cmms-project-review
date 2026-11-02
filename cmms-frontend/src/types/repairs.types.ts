@@ -66,6 +66,7 @@ export interface IRepair {
   note?: string;
 
   status_request: RequestStatus;
+  approved_by_tech_request?: IUser;
   approved_by_manager_request?: IUser;
   approved_by_admin_request?: IUser;
 
