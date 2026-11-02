@@ -318,7 +318,7 @@ export default function RepairDetailDrawer({
       );
     }
     return false;
-  }, [data, role, currentPhase]);
+  }, [data, role, currentPhase, currentUser]);
 
   // Redo Actions (khi phiếu bị từ chối)
   const showRedoB03 =
@@ -1682,6 +1682,11 @@ export default function RepairDetailDrawer({
               {showAdminEditB04 && (
                 <Button type="primary" ghost onClick={onEditInspection} icon={<EditOutlined />} style={{ borderRadius: 6 }}>
                   Sửa B04
+                </Button>
+              )}
+              {showAdminEditB05 && onEditAcceptance && (
+                <Button type="primary" ghost onClick={onEditAcceptance} icon={<EditOutlined />} style={{ borderRadius: 6 }}>
+                  Sửa B05
                 </Button>
               )}
               {/* Hoàn tác quá trình duyệt theo cấp (yêu cầu quyền RESET_REPAIR_WORKFLOW hoặc ADMIN) */}
