@@ -12,8 +12,7 @@ import {
   Descriptions,
   InputNumber,
   Form,
-  Tag,
-  Alert
+  Tag
 } from "antd";
 import {
   SaveOutlined,
@@ -199,6 +198,7 @@ export default function RepairAcceptanceForm({
     });
     setRejectReason("");
     setLocation(initialData.device.location_coordinates || "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialData?.repair_id, form]);
 
   // --- ACTIONS ---

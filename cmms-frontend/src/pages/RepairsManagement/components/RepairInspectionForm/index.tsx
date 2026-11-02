@@ -25,7 +25,6 @@ import {
   CloseOutlined,
   CheckCircleOutlined,
   DownloadOutlined,
-  UploadOutlined,
   CarOutlined,
   FileExcelOutlined
 } from "@ant-design/icons";
@@ -160,6 +159,7 @@ export default function RepairInspectionForm({
         inspection_other_opinions: initialData.inspection_other_opinions || ""
     });
     setReason("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialData?.repair_id, form]);
 
   // --- ACTIONS ---

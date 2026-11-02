@@ -3,8 +3,6 @@ import { Popover, Tag, Descriptions, Alert, Badge, Typography, Space } from "ant
 import {
   InboxOutlined,
   WarningOutlined,
-  CheckCircleOutlined,
-  InfoCircleOutlined,
 } from "@ant-design/icons";
 import { useInventoryContext } from "../../../../context/InventoryContext/InventoryContext";
 

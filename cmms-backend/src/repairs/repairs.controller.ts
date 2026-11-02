@@ -14,7 +14,6 @@ import {RequirePermissions} from 'src/auth/decorators/permissions.decorator';
 import {ApiTags} from '@nestjs/swagger';
 import {Response} from 'express';
 import { ExportDocxService } from './export-docx.service';
-import * as fs from 'fs';
 
 @ApiTags('Repairs')
 @Controller('repairs')

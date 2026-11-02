@@ -26,7 +26,6 @@ import { buildRepairPdfTemplate } from './utils/repair-pdf-template.util';
 import * as puppeteer from 'puppeteer';
 import { PDFDocument } from 'pdf-lib';
 import { CertificatesService } from '../certificates/certificates.service';
-import { CertificateType } from '../certificates/entities/user-certificate.entity';
 import { ActivityLogService } from '../common/services/activity-log.service';
 import { ActivityAction, ActivityEntityType } from '../common/entities/activity-log.entity';
 
@@ -669,26 +668,6 @@ export class RepairsService {
             }
         }
 
-        // Helper to check if user is a Group Lead for the device
-        const checkGroupLead = async () => {
-             // If User is simple TEAM_LEAD role globally, allow
-             if (user.role === UserRole.TEAM_LEAD) return true;
-             
-             // Check if User is Group Lead for this specific Device's Group
-             if (repair.device && repair.device.device_group) {
-                 const udgRepo = this.repairRepo.manager.getRepository('user_device_group'); 
-                 const udg = await udgRepo.findOne({ 
-                     where: { 
-                         user_id: user.user_id, 
-                         device_group: { id: repair.device.device_group.id },
-                         is_group_lead: true 
-                     } 
-                 });
-                 if (udg) return true;
-             }
-             return false;
-        };
-
         // --- B04 INSPECTION FLOW ---
         if (phase === 'inspection') {
             if (repair.status_request !== 'COMPLETED') throw new BadRequestException('Phiếu yêu cầu chưa hoàn tất');
@@ -964,7 +943,7 @@ export class RepairsService {
 
         
         // --- CONTEXT-BASED FILTER: Dựa trên user_department ---
-        let permittedDeptIds: number[] = [];
+        const permittedDeptIds: number[] = [];
         let needsDeptFilter = false;
 
         if (user && [UserRole.ADMIN, UserRole.DIRECTOR, UserRole.UNIT_HEAD].includes(user.role)) {
@@ -1150,6 +1129,8 @@ export class RepairsService {
 
         const [repairs, total] = await this.repairRepo.findAndCount({
             where: { device: { device_id: deviceId } },
+            skip,
+            take: limit,
             relations: [
                 'device',
                 'created_by',
@@ -1553,7 +1534,7 @@ export class RepairsService {
                     new TextRun({
                         text: title,
                         bold: true,
-                        size: 26,
+                        size: titleSize,
                     }),
                 ],
             }),
@@ -2466,7 +2447,7 @@ export class RepairsService {
         ];
     }
 
-    async exportPdf(id: number, type: 'B03' | 'B04' | 'B05' | 'COMBINED', hideNames: boolean = false, hideDates: boolean = false) {
+    async exportPdf(id: number, type: 'B03' | 'B04' | 'B05' | 'COMBINED', hideNames = false, hideDates = false) {
         const repair = await this.findOne(id);
 
         if (type === 'COMBINED') {
@@ -2498,7 +2479,7 @@ export class RepairsService {
         }
     }
 
-    private async generateSinglePdf(repair: Repair, type: 'B03' | 'B04' | 'B05', showSignature: boolean = false, hideNames: boolean = false, hideDates: boolean = false) {
+    private async generateSinglePdf(repair: Repair, type: 'B03' | 'B04' | 'B05', showSignature = false, hideNames = false, hideDates = false) {
         try {
             // embedFooter=false so we can use Puppeteer's native footer which supports dynamic page numbers
             const htmlContent = buildRepairPdfTemplate(repair, type, false, showSignature, hideNames, hideDates);
