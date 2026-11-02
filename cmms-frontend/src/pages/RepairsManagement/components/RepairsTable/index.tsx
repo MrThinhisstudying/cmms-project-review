@@ -163,44 +163,49 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
       borderColor = "#fecaca";
     } else if (
       statusKey === "COMPLETED" ||
-      statusKey === "acceptance_admin_approved"
+      statusKey === "acceptance_admin_approved" ||
+      statusKey === "inspection_admin_approved"
     ) {
       bg = "#ecfdf5";
       color = "#059669";
       dotColor = "#10b981";
       borderColor = "#a7f3d0";
-    } else if (statusKey === "WAITING_TECH" || statusKey === "WAITING_TEAM_LEAD") {
+    } else if (statusKey === "WAITING_TECH") {
+      // Cấp 1: Kỹ thuật viên tiếp nhận (Xanh dương)
       bg = "#eff6ff";
-      color = "#2563eb";
-      dotColor = "#3b82f6";
+      color = "#1d4ed8";
+      dotColor = "#2563eb";
       borderColor = "#bfdbfe";
+    } else if (
+      statusKey === "WAITING_TEAM_LEAD" ||
+      statusKey === "inspection_pending" ||
+      statusKey === "acceptance_pending"
+    ) {
+      // Cấp 2: Tổ trưởng duyệt (Xanh ngọc / Cyan)
+      bg = "#ecfeff";
+      color = "#0891b2";
+      dotColor = "#06b6d4";
+      borderColor = "#a5f3fc";
     } else if (
       statusKey === "WAITING_MANAGER" ||
       statusKey === "inspection_lead_approved" ||
       statusKey === "acceptance_lead_approved"
     ) {
-      bg = "#fffbeb";
-      color = "#d97706";
-      dotColor = "#f59e0b";
-      borderColor = "#fde68a";
-    } else if (
-      statusKey === "WAITING_DIRECTOR" ||
-      statusKey === "inspection_pending"
-    ) {
+      // Cấp 3: Cán bộ Đội duyệt (Tím)
       bg = "#f5f3ff";
       color = "#7c3aed";
       dotColor = "#8b5cf6";
       borderColor = "#ddd6fe";
     } else if (
+      statusKey === "WAITING_DIRECTOR" ||
       statusKey === "inspection_manager_approved" ||
-      statusKey === "acceptance_pending" ||
-      statusKey === "acceptance_manager_approved" ||
-      statusKey === "inspection_admin_approved"
+      statusKey === "acceptance_manager_approved"
     ) {
-      bg = "#ecfeff";
-      color = "#0891b2";
-      dotColor = "#06b6d4";
-      borderColor = "#a5f3fc";
+      // Cấp 4: Ban Giám Đốc duyệt (Vàng cam / Amber)
+      bg = "#fffbeb";
+      color = "#b45309";
+      dotColor = "#f59e0b";
+      borderColor = "#fde68a";
     }
 
     const badgeContent = (

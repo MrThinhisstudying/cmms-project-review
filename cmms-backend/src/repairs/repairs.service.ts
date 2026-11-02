@@ -2600,7 +2600,7 @@ export class RepairsService {
     async resetRequestToWaitingTech(id: number, user: any) {
         const hasPermission = user.role === UserRole.ADMIN || (Array.isArray(user.permissions) && user.permissions.includes('RESET_REPAIR_WORKFLOW'));
         if (!hasPermission) {
-            throw new ForbiddenException('Bạn không có quyền hoàn tác lại quá trình duyệt phiếu theo cấp.');
+            throw new ForbiddenException('Bạn không có quyền hoàn tác quá trình duyệt theo cấp.');
         }
         const repair = await this.repairRepo.findOne({
             where: { repair_id: id },

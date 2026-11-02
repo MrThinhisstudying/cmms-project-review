@@ -79,8 +79,8 @@ export const DEPARTMENT_PERMISSIONS = [
   },
   {
     code: "RESET_REPAIR_WORKFLOW",
-    name: "Hoàn tác lại quá trình duyệt phiếu theo cấp",
+    name: "Hoàn tác quá trình duyệt theo cấp",
     description:
-      "Cho phép hoàn tác lại toàn bộ quá trình phê duyệt phiếu yêu cầu sửa chữa (B03) về bước tiếp nhận ban đầu.",
+      "Cho phép hoàn tác toàn bộ quá trình phê duyệt phiếu yêu cầu sửa chữa (B03) về bước tiếp nhận ban đầu.",
   },
 ];

@@ -204,18 +204,38 @@ export default function RepairDetailDrawer({
       bg = "#ecfdf5";
       color = "#059669";
       dotColor = "#10b981";
-    } else if (status.startsWith("WAITING_")) {
+    } else if (status === "WAITING_TECH") {
+      // Cấp 1: Kỹ thuật viên tiếp nhận (Xanh dương)
       bg = "#eff6ff";
-      color = "#2563eb";
-      dotColor = "#3b82f6";
-    } else if (status.includes("lead_approved")) {
-      bg = "#fffbeb";
-      color = "#d97706";
-      dotColor = "#f59e0b";
-    } else {
+      color = "#1d4ed8";
+      dotColor = "#2563eb";
+    } else if (
+      status === "WAITING_TEAM_LEAD" ||
+      status === "inspection_pending" ||
+      status === "acceptance_pending"
+    ) {
+      // Cấp 2: Tổ trưởng duyệt (Xanh ngọc / Cyan)
+      bg = "#ecfeff";
+      color = "#0891b2";
+      dotColor = "#06b6d4";
+    } else if (
+      status === "WAITING_MANAGER" ||
+      status === "inspection_lead_approved" ||
+      status === "acceptance_lead_approved"
+    ) {
+      // Cấp 3: Cán bộ Đội duyệt (Tím)
       bg = "#f5f3ff";
       color = "#7c3aed";
       dotColor = "#8b5cf6";
+    } else if (
+      status === "WAITING_DIRECTOR" ||
+      status === "inspection_manager_approved" ||
+      status === "acceptance_manager_approved"
+    ) {
+      // Cấp 4: Ban Giám Đốc duyệt (Vàng cam / Amber)
+      bg = "#fffbeb";
+      color = "#b45309";
+      dotColor = "#f59e0b";
     }
 
     return (
@@ -321,7 +341,7 @@ export default function RepairDetailDrawer({
     try {
       setResetting(true);
       await resetRepairRequest(data.repair_id, getToken());
-      message.success("Hoàn tác lại quá trình duyệt phiếu theo cấp thành công!");
+      message.success("Hoàn tác quá trình duyệt theo cấp thành công!");
       if (onResetSuccess) {
         onResetSuccess();
       } else {
@@ -1279,10 +1299,10 @@ export default function RepairDetailDrawer({
                   Sửa B04
                 </Button>
               )}
-              {/* Hoàn tác lại quá trình duyệt phiếu theo cấp (yêu cầu quyền RESET_REPAIR_WORKFLOW hoặc ADMIN) */}
+              {/* Hoàn tác quá trình duyệt theo cấp (yêu cầu quyền RESET_REPAIR_WORKFLOW hoặc ADMIN) */}
               {canResetWorkflow && data && data.status_inspection !== "inspection_admin_approved" && (
                 <Popconfirm
-                  title="Hoàn tác lại quá trình duyệt phiếu theo cấp?"
+                  title="Hoàn tác quá trình duyệt theo cấp?"
                   description="Toàn bộ tiến trình duyệt phiếu sẽ được hoàn tác về bước tiếp nhận ban đầu (WAITING_TECH) để thực hiện lại quy trình duyệt."
                   onConfirm={handleResetB03}
                   okText="Đồng ý hoàn tác"
@@ -1295,7 +1315,7 @@ export default function RepairDetailDrawer({
                     loading={resetting}
                     style={{ borderRadius: 6, fontWeight: 500 }}
                   >
-                    Hoàn tác lại quá trình duyệt phiếu theo cấp
+                    Hoàn tác quá trình duyệt theo cấp
                   </Button>
                 </Popconfirm>
               )}

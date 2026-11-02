@@ -78,7 +78,7 @@ export class RepairsController {
     @Post(':id/reset-request')
     async resetRequest(@Param('id') id: string, @Req() req) {
         const repair = await this.repairService.resetRequestToWaitingTech(+id, req.user);
-        return {message: 'Hoàn tác lại quá trình duyệt phiếu theo cấp thành công', data: repair};
+        return {message: 'Hoàn tác quá trình duyệt theo cấp thành công', data: repair};
     }
 
     @UseGuards(JWTAuthGuard, PermissionsGuard)
