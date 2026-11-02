@@ -2632,4 +2632,96 @@ export class RepairsService {
         this.repairsGateway.notifyRepairUpdate();
         return saved;
     }
+
+    async resetInspectionToPending(id: number, user: any) {
+        const hasPermission = user.role === UserRole.ADMIN || (Array.isArray(user.permissions) && user.permissions.includes('RESET_REPAIR_WORKFLOW'));
+        if (!hasPermission) {
+            throw new ForbiddenException('Bạn không có quyền hoàn tác quá trình duyệt theo cấp.');
+        }
+        const repair = await this.repairRepo.findOne({
+            where: { repair_id: id },
+            relations: ['device'],
+        });
+        if (!repair) throw new NotFoundException('Không tìm thấy phiếu');
+        if (!repair.inspection_created_at && repair.status_inspection === 'inspection_pending') {
+            throw new BadRequestException('Biên bản kiểm nghiệm (B04) chưa được khởi tạo.');
+        }
+        if (repair.status_acceptance === 'acceptance_admin_approved') {
+            throw new BadRequestException('Phiếu đã hoàn tất Nghiệm thu (B05), không thể hoàn tác Kiểm nghiệm.');
+        }
+
+        // Nếu trước đó B04 đã được Ban GĐ duyệt (inspection_admin_approved), hoàn lại số lượng tồn kho vật tư
+        if (repair.status_inspection === 'inspection_admin_approved') {
+            const approvedStockOuts = await this.stockOutRepo.find({
+                where: { repair: { repair_id: id } as any, status: StockOutStatus.APPROVED },
+                relations: ['item'],
+            });
+            for (const so of approvedStockOuts) {
+                so.status = StockOutStatus.PENDING;
+                so.approved_by = null;
+                await this.stockOutRepo.save(so);
+
+                if (so.item) {
+                    const currentItem = await this.itemRepo.findOne({ where: { item_id: so.item.item_id } });
+                    if (currentItem) {
+                        currentItem.quantity = Number((currentItem.quantity + so.quantity).toFixed(4));
+                        await this.itemRepo.save(currentItem);
+                    }
+                }
+            }
+        }
+
+        repair.status_inspection = 'inspection_pending';
+        repair.approved_by_operator_lead_inspection = null;
+        repair.approved_by_manager_inspection = null;
+        repair.approved_by_admin_inspection = null;
+        repair.inspection_approved_at = null;
+        if ((repair.status_inspection as any) === 'REJECTED_B04' || repair.canceled) {
+            repair.canceled = false;
+            repair.canceled_at = null;
+            repair.rejection_reason = null;
+            repair.rejected_by = null;
+        }
+
+        const saved = await this.repairRepo.save(repair);
+        this.repairsGateway.notifyRepairUpdate();
+        return saved;
+    }
+
+    async resetAcceptanceToPending(id: number, user: any) {
+        const hasPermission = user.role === UserRole.ADMIN || (Array.isArray(user.permissions) && user.permissions.includes('RESET_REPAIR_WORKFLOW'));
+        if (!hasPermission) {
+            throw new ForbiddenException('Bạn không có quyền hoàn tác quá trình duyệt theo cấp.');
+        }
+        const repair = await this.repairRepo.findOne({
+            where: { repair_id: id },
+            relations: ['device'],
+        });
+        if (!repair) throw new NotFoundException('Không tìm thấy phiếu');
+        if (!repair.acceptance_created_at && repair.status_acceptance === 'acceptance_pending') {
+            throw new BadRequestException('Biên bản nghiệm thu (B05) chưa được khởi tạo.');
+        }
+
+        repair.status_acceptance = 'acceptance_pending';
+        repair.approved_by_operator_lead_acceptance = null;
+        repair.approved_by_manager_acceptance = null;
+        repair.approved_by_admin_acceptance = null;
+        repair.acceptance_approved_at = null;
+        if ((repair.status_acceptance as any) === 'REJECTED_B05' || repair.canceled) {
+            repair.canceled = false;
+            repair.canceled_at = null;
+            repair.rejection_reason = null;
+            repair.rejected_by = null;
+        }
+
+        // Chuyển lại trạng thái thiết bị đang sửa chữa nếu trước đó hoàn tất đã set Đang sử dụng
+        if (repair.device) {
+            repair.device.status = DeviceStatus.DANG_SUA_CHUA;
+            await this.deviceRepo.save(repair.device);
+        }
+
+        const saved = await this.repairRepo.save(repair);
+        this.repairsGateway.notifyRepairUpdate();
+        return saved;
+    }
 }

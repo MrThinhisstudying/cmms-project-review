@@ -82,6 +82,22 @@ export class RepairsController {
     }
 
     @UseGuards(JWTAuthGuard, PermissionsGuard)
+    @RequirePermissions('RESET_REPAIR_WORKFLOW')
+    @Post(':id/reset-inspection')
+    async resetInspection(@Param('id') id: string, @Req() req) {
+        const repair = await this.repairService.resetInspectionToPending(+id, req.user);
+        return {message: 'Hoàn tác quá trình duyệt theo cấp thành công', data: repair};
+    }
+
+    @UseGuards(JWTAuthGuard, PermissionsGuard)
+    @RequirePermissions('RESET_REPAIR_WORKFLOW')
+    @Post(':id/reset-acceptance')
+    async resetAcceptance(@Param('id') id: string, @Req() req) {
+        const repair = await this.repairService.resetAcceptanceToPending(+id, req.user);
+        return {message: 'Hoàn tác quá trình duyệt theo cấp thành công', data: repair};
+    }
+
+    @UseGuards(JWTAuthGuard, PermissionsGuard)
     @RequirePermissions('CREATE_REPAIR')
     @Patch(':id/inspection')
     async updateInspection(@Param('id') id: string, @Body() dto: UpdateInspectionDto, @Req() req) {

@@ -360,3 +360,29 @@ export const resetRepairRequest = async (id: number, token: string | null) => {
   if (!res.ok) throw new Error(data.message || "Đặt lại phiếu thất bại");
   return data.data;
 };
+
+export const resetRepairInspection = async (id: number, token: string | null) => {
+  const res = await fetch(`${BASE_URL}/${id}/reset-inspection`, {
+    method: "POST",
+    headers: {
+      Authorization: token ? `Bearer ${token}` : "",
+      "Content-Type": "application/json",
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Hoàn tác kiểm nghiệm thất bại");
+  return data.data;
+};
+
+export const resetRepairAcceptance = async (id: number, token: string | null) => {
+  const res = await fetch(`${BASE_URL}/${id}/reset-acceptance`, {
+    method: "POST",
+    headers: {
+      Authorization: token ? `Bearer ${token}` : "",
+      "Content-Type": "application/json",
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || "Hoàn tác nghiệm thu thất bại");
+  return data.data;
+};

@@ -36,7 +36,11 @@ import {
 import dayjs from "dayjs";
 import { useRepairsContext } from "../../../../context/RepairsContext/RepairsContext";
 import { IRepair } from "../../../../types/repairs.types";
-import { resetRepairRequest } from "../../../../apis/repairs";
+import {
+  resetRepairRequest,
+  resetRepairInspection,
+  resetRepairAcceptance,
+} from "../../../../apis/repairs";
 import { getToken } from "../../../../utils/auth";
 import WarehouseItemBadge from "../WarehouseItemBadge";
 
@@ -351,6 +355,44 @@ export default function RepairDetailDrawer({
       message.error(e?.message || "Hoàn tác phiếu thất bại");
     } finally {
       setResetting(false);
+    }
+  };
+
+  const [resettingB04, setResettingB04] = React.useState(false);
+  const handleResetB04 = async () => {
+    if (!data) return;
+    try {
+      setResettingB04(true);
+      await resetRepairInspection(data.repair_id, getToken());
+      message.success("Hoàn tác quá trình duyệt theo cấp (B04) thành công!");
+      if (onResetSuccess) {
+        onResetSuccess();
+      } else {
+        onClose();
+      }
+    } catch (e: any) {
+      message.error(e?.message || "Hoàn tác kiểm nghiệm thất bại");
+    } finally {
+      setResettingB04(false);
+    }
+  };
+
+  const [resettingB05, setResettingB05] = React.useState(false);
+  const handleResetB05 = async () => {
+    if (!data) return;
+    try {
+      setResettingB05(true);
+      await resetRepairAcceptance(data.repair_id, getToken());
+      message.success("Hoàn tác quá trình duyệt theo cấp (B05) thành công!");
+      if (onResetSuccess) {
+        onResetSuccess();
+      } else {
+        onClose();
+      }
+    } catch (e: any) {
+      message.error(e?.message || "Hoàn tác nghiệm thu thất bại");
+    } finally {
+      setResettingB05(false);
     }
   };
 
@@ -806,7 +848,7 @@ export default function RepairDetailDrawer({
               }).join(", ") || "Chưa thiết lập"}
             </div>
           </div>
-          <div style={{ textAlign: "right" }}>
+          <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
             <div style={{ fontSize: 12, color: "#64748b" }}>
               Ngày kiểm:{" "}
               <b style={{ color: "#0f172a" }}>
@@ -815,8 +857,180 @@ export default function RepairDetailDrawer({
                   : "-"}
               </b>
             </div>
-            <div style={{ marginTop: 4 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {renderStatusTag(data.status_inspection || "")}
+              {canResetWorkflow &&
+                data.status_acceptance !== "acceptance_admin_approved" &&
+                (data.inspection_created_at || data.status_inspection !== "inspection_pending") && (
+                  <Popconfirm
+                    title="Hoàn tác quá trình duyệt theo cấp?"
+                    description="Toàn bộ tiến trình duyệt phiếu kiểm nghiệm (B04) sẽ được hoàn tác về bước chờ Tổ trưởng duyệt ban đầu để thực hiện lại quy trình duyệt."
+                    onConfirm={handleResetB04}
+                    okText="Đồng ý hoàn tác"
+                    cancelText="Hủy"
+                    okButtonProps={{ danger: true }}
+                  >
+                    <Button
+                      size="small"
+                      danger
+                      icon={<RollbackOutlined />}
+                      loading={resettingB04}
+                      style={{ borderRadius: 6, fontSize: 12 }}
+                    >
+                      Hoàn tác
+                    </Button>
+                  </Popconfirm>
+                )}
+            </div>
+          </div>
+        </div>
+
+        {/* Tiến trình duyệt theo cấp B04 */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: 12,
+            marginTop: 4,
+          }}
+        >
+          {/* Cấp 1: Tổ trưởng duyệt */}
+          <div
+            style={{
+              background: [
+                "inspection_lead_approved",
+                "inspection_manager_approved",
+                "inspection_admin_approved",
+              ].includes(data.status_inspection || "")
+                ? "#f0fdf4"
+                : data.status_inspection === "inspection_pending"
+                ? "#ecfeff"
+                : "#f8fafc",
+              border: `1px solid ${
+                [
+                  "inspection_lead_approved",
+                  "inspection_manager_approved",
+                  "inspection_admin_approved",
+                ].includes(data.status_inspection || "")
+                  ? "#bbf7d0"
+                  : data.status_inspection === "inspection_pending"
+                  ? "#a5f3fc"
+                  : "#e2e8f0"
+              }`,
+              borderRadius: 8,
+              padding: "10px 12px",
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>1. TỔ TRƯỞNG KỸ THUẬT</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginTop: 2 }}>
+              {data.approved_by_operator_lead_inspection?.name ||
+                ([
+                  "inspection_lead_approved",
+                  "inspection_manager_approved",
+                  "inspection_admin_approved",
+                ].includes(data.status_inspection || "")
+                  ? "Đã duyệt"
+                  : "Chờ Tổ duyệt")}
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>
+              {[
+                "inspection_lead_approved",
+                "inspection_manager_approved",
+                "inspection_admin_approved",
+              ].includes(data.status_inspection || "") ? (
+                <Tag color="success" style={{ margin: 0, fontSize: 11 }}>Đã duyệt</Tag>
+              ) : data.status_inspection === "inspection_pending" ? (
+                <Tag color="cyan" style={{ margin: 0, fontSize: 11 }}>Chờ duyệt</Tag>
+              ) : (
+                <Tag style={{ margin: 0, fontSize: 11 }}>Chưa tới lượt</Tag>
+              )}
+            </div>
+          </div>
+
+          {/* Cấp 2: Cán bộ Đội duyệt */}
+          <div
+            style={{
+              background: [
+                "inspection_manager_approved",
+                "inspection_admin_approved",
+              ].includes(data.status_inspection || "")
+                ? "#f0fdf4"
+                : data.status_inspection === "inspection_lead_approved"
+                ? "#f5f3ff"
+                : "#f8fafc",
+              border: `1px solid ${
+                [
+                  "inspection_manager_approved",
+                  "inspection_admin_approved",
+                ].includes(data.status_inspection || "")
+                  ? "#bbf7d0"
+                  : data.status_inspection === "inspection_lead_approved"
+                  ? "#ddd6fe"
+                  : "#e2e8f0"
+              }`,
+              borderRadius: 8,
+              padding: "10px 12px",
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>2. CÁN BỘ ĐỘI</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginTop: 2 }}>
+              {data.approved_by_manager_inspection?.name ||
+                ([
+                  "inspection_manager_approved",
+                  "inspection_admin_approved",
+                ].includes(data.status_inspection || "")
+                  ? "Đã duyệt"
+                  : "Chờ Đội duyệt")}
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>
+              {[
+                "inspection_manager_approved",
+                "inspection_admin_approved",
+              ].includes(data.status_inspection || "") ? (
+                <Tag color="success" style={{ margin: 0, fontSize: 11 }}>Đã duyệt</Tag>
+              ) : data.status_inspection === "inspection_lead_approved" ? (
+                <Tag color="purple" style={{ margin: 0, fontSize: 11 }}>Chờ duyệt</Tag>
+              ) : (
+                <Tag style={{ margin: 0, fontSize: 11 }}>Chưa tới lượt</Tag>
+              )}
+            </div>
+          </div>
+
+          {/* Cấp 3: Ban Giám Đốc duyệt */}
+          <div
+            style={{
+              background:
+                data.status_inspection === "inspection_admin_approved"
+                  ? "#f0fdf4"
+                  : data.status_inspection === "inspection_manager_approved"
+                  ? "#fffbeb"
+                  : "#f8fafc",
+              border: `1px solid ${
+                data.status_inspection === "inspection_admin_approved"
+                  ? "#bbf7d0"
+                  : data.status_inspection === "inspection_manager_approved"
+                  ? "#fde68a"
+                  : "#e2e8f0"
+              }`,
+              borderRadius: 8,
+              padding: "10px 12px",
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>3. BAN GIÁM ĐỐC</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginTop: 2 }}>
+              {data.approved_by_admin_inspection?.name ||
+                (data.status_inspection === "inspection_admin_approved"
+                  ? "Đã phê duyệt"
+                  : "Chờ Ban GĐ duyệt")}
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>
+              {data.status_inspection === "inspection_admin_approved" ? (
+                <Tag color="success" style={{ margin: 0, fontSize: 11 }}>Hoàn tất</Tag>
+              ) : data.status_inspection === "inspection_manager_approved" ? (
+                <Tag color="gold" style={{ margin: 0, fontSize: 11 }}>Chờ duyệt</Tag>
+              ) : (
+                <Tag style={{ margin: 0, fontSize: 11 }}>Chưa tới lượt</Tag>
+              )}
             </div>
           </div>
         </div>
@@ -971,7 +1185,7 @@ export default function RepairDetailDrawer({
                 .join(", ") || "Chưa thiết lập"}
             </div>
           </div>
-          <div style={{ textAlign: "right" }}>
+          <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
             <div style={{ fontSize: 12, color: "#64748b" }}>
               Ngày nghiệm thu:{" "}
               <b style={{ color: "#0f172a" }}>
@@ -980,8 +1194,179 @@ export default function RepairDetailDrawer({
                   : "-"}
               </b>
             </div>
-            <div style={{ marginTop: 4 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               {renderStatusTag(data.status_acceptance || "")}
+              {canResetWorkflow &&
+                (data.acceptance_created_at || data.status_acceptance !== "acceptance_pending") && (
+                  <Popconfirm
+                    title="Hoàn tác quá trình duyệt theo cấp?"
+                    description="Toàn bộ tiến trình duyệt phiếu nghiệm thu (B05) sẽ được hoàn tác về bước chờ Tổ trưởng duyệt ban đầu để thực hiện lại quy trình duyệt."
+                    onConfirm={handleResetB05}
+                    okText="Đồng ý hoàn tác"
+                    cancelText="Hủy"
+                    okButtonProps={{ danger: true }}
+                  >
+                    <Button
+                      size="small"
+                      danger
+                      icon={<RollbackOutlined />}
+                      loading={resettingB05}
+                      style={{ borderRadius: 6, fontSize: 12 }}
+                    >
+                      Hoàn tác
+                    </Button>
+                  </Popconfirm>
+                )}
+            </div>
+          </div>
+        </div>
+
+        {/* Tiến trình duyệt theo cấp B05 */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: 12,
+            marginTop: 4,
+          }}
+        >
+          {/* Cấp 1: Tổ trưởng duyệt */}
+          <div
+            style={{
+              background: [
+                "acceptance_lead_approved",
+                "acceptance_manager_approved",
+                "acceptance_admin_approved",
+              ].includes(data.status_acceptance || "")
+                ? "#f0fdf4"
+                : data.status_acceptance === "acceptance_pending"
+                ? "#ecfeff"
+                : "#f8fafc",
+              border: `1px solid ${
+                [
+                  "acceptance_lead_approved",
+                  "acceptance_manager_approved",
+                  "acceptance_admin_approved",
+                ].includes(data.status_acceptance || "")
+                  ? "#bbf7d0"
+                  : data.status_acceptance === "acceptance_pending"
+                  ? "#a5f3fc"
+                  : "#e2e8f0"
+              }`,
+              borderRadius: 8,
+              padding: "10px 12px",
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>1. TỔ TRƯỞNG KỸ THUẬT</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginTop: 2 }}>
+              {data.approved_by_operator_lead_acceptance?.name ||
+                ([
+                  "acceptance_lead_approved",
+                  "acceptance_manager_approved",
+                  "acceptance_admin_approved",
+                ].includes(data.status_acceptance || "")
+                  ? "Đã duyệt"
+                  : "Chờ Tổ duyệt")}
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>
+              {[
+                "acceptance_lead_approved",
+                "acceptance_manager_approved",
+                "acceptance_admin_approved",
+              ].includes(data.status_acceptance || "") ? (
+                <Tag color="success" style={{ margin: 0, fontSize: 11 }}>Đã duyệt</Tag>
+              ) : data.status_acceptance === "acceptance_pending" ? (
+                <Tag color="cyan" style={{ margin: 0, fontSize: 11 }}>Chờ duyệt</Tag>
+              ) : (
+                <Tag style={{ margin: 0, fontSize: 11 }}>Chưa tới lượt</Tag>
+              )}
+            </div>
+          </div>
+
+          {/* Cấp 2: Cán bộ Đội duyệt */}
+          <div
+            style={{
+              background: [
+                "acceptance_manager_approved",
+                "acceptance_admin_approved",
+              ].includes(data.status_acceptance || "")
+                ? "#f0fdf4"
+                : data.status_acceptance === "acceptance_lead_approved"
+                ? "#f5f3ff"
+                : "#f8fafc",
+              border: `1px solid ${
+                [
+                  "acceptance_manager_approved",
+                  "acceptance_admin_approved",
+                ].includes(data.status_acceptance || "")
+                  ? "#bbf7d0"
+                  : data.status_acceptance === "acceptance_lead_approved"
+                  ? "#ddd6fe"
+                  : "#e2e8f0"
+              }`,
+              borderRadius: 8,
+              padding: "10px 12px",
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>2. CÁN BỘ ĐỘI</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginTop: 2 }}>
+              {data.approved_by_manager_acceptance?.name ||
+                ([
+                  "acceptance_manager_approved",
+                  "acceptance_admin_approved",
+                ].includes(data.status_acceptance || "")
+                  ? "Đã duyệt"
+                  : "Chờ Đội duyệt")}
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>
+              {[
+                "acceptance_manager_approved",
+                "acceptance_admin_approved",
+              ].includes(data.status_acceptance || "") ? (
+                <Tag color="success" style={{ margin: 0, fontSize: 11 }}>Đã duyệt</Tag>
+              ) : data.status_acceptance === "acceptance_lead_approved" ? (
+                <Tag color="purple" style={{ margin: 0, fontSize: 11 }}>Chờ duyệt</Tag>
+              ) : (
+                <Tag style={{ margin: 0, fontSize: 11 }}>Chưa tới lượt</Tag>
+              )}
+            </div>
+          </div>
+
+          {/* Cấp 3: Ban Giám Đốc duyệt */}
+          <div
+            style={{
+              background:
+                data.status_acceptance === "acceptance_admin_approved"
+                  ? "#f0fdf4"
+                  : data.status_acceptance === "acceptance_manager_approved"
+                  ? "#fffbeb"
+                  : "#f8fafc",
+              border: `1px solid ${
+                data.status_acceptance === "acceptance_admin_approved"
+                  ? "#bbf7d0"
+                  : data.status_acceptance === "acceptance_manager_approved"
+                  ? "#fde68a"
+                  : "#e2e8f0"
+              }`,
+              borderRadius: 8,
+              padding: "10px 12px",
+            }}
+          >
+            <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b" }}>3. BAN GIÁM ĐỐC</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginTop: 2 }}>
+              {data.approved_by_admin_acceptance?.name ||
+                (data.status_acceptance === "acceptance_admin_approved"
+                  ? "Đã phê duyệt"
+                  : "Chờ Ban GĐ duyệt")}
+            </div>
+            <div style={{ fontSize: 11, marginTop: 4 }}>
+              {data.status_acceptance === "acceptance_admin_approved" ? (
+                <Tag color="success" style={{ margin: 0, fontSize: 11 }}>Hoàn tất</Tag>
+              ) : data.status_acceptance === "acceptance_manager_approved" ? (
+                <Tag color="gold" style={{ margin: 0, fontSize: 11 }}>Chờ duyệt</Tag>
+              ) : (
+                <Tag style={{ margin: 0, fontSize: 11 }}>Chưa tới lượt</Tag>
+              )}
             </div>
           </div>
         </div>
@@ -1300,25 +1685,79 @@ export default function RepairDetailDrawer({
                 </Button>
               )}
               {/* Hoàn tác quá trình duyệt theo cấp (yêu cầu quyền RESET_REPAIR_WORKFLOW hoặc ADMIN) */}
-              {canResetWorkflow && data && data.status_inspection !== "inspection_admin_approved" && (
-                <Popconfirm
-                  title="Hoàn tác quá trình duyệt theo cấp?"
-                  description="Toàn bộ tiến trình duyệt phiếu sẽ được hoàn tác về bước tiếp nhận ban đầu (WAITING_TECH) để thực hiện lại quy trình duyệt."
-                  onConfirm={handleResetB03}
-                  okText="Đồng ý hoàn tác"
-                  cancelText="Hủy"
-                  okButtonProps={{ danger: true }}
-                >
-                  <Button
-                    danger
-                    icon={<RollbackOutlined />}
-                    loading={resetting}
-                    style={{ borderRadius: 6, fontWeight: 500 }}
-                  >
-                    Hoàn tác quá trình duyệt theo cấp
-                  </Button>
-                </Popconfirm>
-              )}
+              {canResetWorkflow && data && (() => {
+                if (currentPhase === "request" && data.status_inspection !== "inspection_admin_approved") {
+                  return (
+                    <Popconfirm
+                      title="Hoàn tác quá trình duyệt theo cấp?"
+                      description="Toàn bộ tiến trình duyệt phiếu yêu cầu (B03) sẽ được hoàn tác về bước tiếp nhận ban đầu (WAITING_TECH) để thực hiện lại quy trình duyệt."
+                      onConfirm={handleResetB03}
+                      okText="Đồng ý hoàn tác"
+                      cancelText="Hủy"
+                      okButtonProps={{ danger: true }}
+                    >
+                      <Button
+                        danger
+                        icon={<RollbackOutlined />}
+                        loading={resetting}
+                        style={{ borderRadius: 6, fontWeight: 500 }}
+                      >
+                        Hoàn tác quá trình duyệt theo cấp
+                      </Button>
+                    </Popconfirm>
+                  );
+                }
+                if (
+                  currentPhase === "inspection" &&
+                  (data.inspection_created_at || data.status_inspection !== "inspection_pending") &&
+                  data.status_acceptance !== "acceptance_admin_approved"
+                ) {
+                  return (
+                    <Popconfirm
+                      title="Hoàn tác quá trình duyệt theo cấp?"
+                      description="Toàn bộ tiến trình duyệt phiếu kiểm nghiệm (B04) sẽ được hoàn tác về bước chờ Tổ trưởng duyệt ban đầu để thực hiện lại quy trình duyệt."
+                      onConfirm={handleResetB04}
+                      okText="Đồng ý hoàn tác"
+                      cancelText="Hủy"
+                      okButtonProps={{ danger: true }}
+                    >
+                      <Button
+                        danger
+                        icon={<RollbackOutlined />}
+                        loading={resettingB04}
+                        style={{ borderRadius: 6, fontWeight: 500 }}
+                      >
+                        Hoàn tác quá trình duyệt theo cấp
+                      </Button>
+                    </Popconfirm>
+                  );
+                }
+                if (
+                  (currentPhase === "acceptance" || currentPhase === "completed") &&
+                  (data.acceptance_created_at || data.status_acceptance !== "acceptance_pending")
+                ) {
+                  return (
+                    <Popconfirm
+                      title="Hoàn tác quá trình duyệt theo cấp?"
+                      description="Toàn bộ tiến trình duyệt phiếu nghiệm thu (B05) sẽ được hoàn tác về bước chờ Tổ trưởng duyệt ban đầu để thực hiện lại quy trình duyệt."
+                      onConfirm={handleResetB05}
+                      okText="Đồng ý hoàn tác"
+                      cancelText="Hủy"
+                      okButtonProps={{ danger: true }}
+                    >
+                      <Button
+                        danger
+                        icon={<RollbackOutlined />}
+                        loading={resettingB05}
+                        style={{ borderRadius: 6, fontWeight: 500 }}
+                      >
+                        Hoàn tác quá trình duyệt theo cấp
+                      </Button>
+                    </Popconfirm>
+                  );
+                }
+                return null;
+              })()}
 
               {/* Duyệt / Từ chối phiếu */}
               {canReviewAction && (
