@@ -13,6 +13,9 @@ export function sanitizeSnapshot(entityName: string, obj: any) {
     delete clone.maintenances;
     delete clone.device_group;
     delete clone.deviceType;
+    delete clone.stock_outs;
+    delete clone.inspection_committee;
+    delete clone.acceptance_committee;
     return clone;
 }
 
@@ -30,5 +33,5 @@ export function computeShallowDiff(beforeObj: any, afterObj: any) {
     return Object.keys(changed).length ? changed : undefined;
 }
 
-export const TRACKED_ENTITIES = new Set(['User', 'Device', 'Maintenance', 'Department', 'Notification']);
+export const TRACKED_ENTITIES = new Set(['User', 'Device', 'Maintenance', 'Department', 'Notification', 'Repair']);
 export const isTrackedEntity = (name: string) => TRACKED_ENTITIES.has(name);
