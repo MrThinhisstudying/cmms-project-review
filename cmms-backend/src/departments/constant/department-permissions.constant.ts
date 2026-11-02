@@ -66,6 +66,11 @@ export const DEPARTMENT_PERMISSIONS = [
         description: 'Cho phép xuất các báo cáo tổng hợp liên quan đến tình trạng thiết bị, công tác bảo dưỡng, sửa chữa và kiểm định trong đơn vị.',
     },
     {
+        code: 'RESET_REPAIR_WORKFLOW',
+        name: 'Hoàn tác lại quá trình duyệt phiếu theo cấp',
+        description: 'Cho phép hoàn tác lại toàn bộ quá trình phê duyệt phiếu yêu cầu sửa chữa (B03) về bước tiếp nhận ban đầu.',
+    },
+    {
         code: 'can_approve_request',
         name: 'Duyệt yêu cầu ban đầu',
         description: 'Cho phép duyệt yêu cầu sửa chữa (Bước 1 -> Bước 2)',

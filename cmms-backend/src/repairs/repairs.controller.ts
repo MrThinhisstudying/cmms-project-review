@@ -73,11 +73,12 @@ export class RepairsController {
         return {message: 'Cập nhật phiếu thành công', data: repair};
     }
 
-    @UseGuards(JWTAuthGuard)
+    @UseGuards(JWTAuthGuard, PermissionsGuard)
+    @RequirePermissions('RESET_REPAIR_WORKFLOW')
     @Post(':id/reset-request')
     async resetRequest(@Param('id') id: string, @Req() req) {
         const repair = await this.repairService.resetRequestToWaitingTech(+id, req.user);
-        return {message: 'Đã hoàn tác phiếu về Chờ kỹ thuật tiếp nhận', data: repair};
+        return {message: 'Hoàn tác lại quá trình duyệt phiếu theo cấp thành công', data: repair};
     }
 
     @UseGuards(JWTAuthGuard, PermissionsGuard)

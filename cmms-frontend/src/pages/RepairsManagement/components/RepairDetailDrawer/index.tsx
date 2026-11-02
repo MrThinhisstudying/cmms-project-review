@@ -62,6 +62,7 @@ interface RepairDetailDrawerProps {
     reason?: string,
     phase?: "request" | "inspection" | "acceptance"
   ) => void;
+  onResetSuccess?: () => void;
 }
 
 export default function RepairDetailDrawer({
@@ -78,6 +79,7 @@ export default function RepairDetailDrawer({
   onEditAcceptance,
   currentUser,
   onReview,
+  onResetSuccess,
 }: RepairDetailDrawerProps) {
   const [rejectModalOpen, setRejectModalOpen] = React.useState(false);
   const [rejectReason, setRejectReason] = React.useState("");
@@ -307,18 +309,26 @@ export default function RepairDetailDrawer({
       data?.status_acceptance === "acceptance_rejected") &&
     (role === "TECHNICIAN" || role === "ADMIN");
 
-  // ADMIN: Chỉnh sửa nội dung phiếu bất kỳ lúc nào
   const isAdmin = role === "ADMIN";
+  // Quyền hoàn tác quy trình duyệt phiếu (không cấp đại trà, yêu cầu quyền RESET_REPAIR_WORKFLOW hoặc ADMIN)
+  const canResetWorkflow =
+    isAdmin ||
+    ((currentUser as any)?.permissions || []).includes("RESET_REPAIR_WORKFLOW");
+
   const [resetting, setResetting] = React.useState(false);
   const handleResetB03 = async () => {
     if (!data) return;
     try {
       setResetting(true);
       await resetRepairRequest(data.repair_id, getToken());
-      message.success("Đã hoàn tác phiếu về trạng thái Chờ kỹ thuật tiếp nhận (WAITING_TECH)");
-      onClose();
+      message.success("Hoàn tác lại quá trình duyệt phiếu theo cấp thành công!");
+      if (onResetSuccess) {
+        onResetSuccess();
+      } else {
+        onClose();
+      }
     } catch (e: any) {
-      message.error(e?.message || "Đặt lại phiếu thất bại");
+      message.error(e?.message || "Hoàn tác phiếu thất bại");
     } finally {
       setResetting(false);
     }
@@ -1269,13 +1279,13 @@ export default function RepairDetailDrawer({
                   Sửa B04
                 </Button>
               )}
-              {/* Admin Reset B03 (Hoàn tác phiếu về Chờ tiếp nhận) */}
-              {isAdmin && data && data.status_inspection !== "inspection_admin_approved" && (
+              {/* Hoàn tác lại quá trình duyệt phiếu theo cấp (yêu cầu quyền RESET_REPAIR_WORKFLOW hoặc ADMIN) */}
+              {canResetWorkflow && data && data.status_inspection !== "inspection_admin_approved" && (
                 <Popconfirm
-                  title="Đặt lại phiếu về Chờ kỹ thuật tiếp nhận?"
-                  description="Toàn bộ tiến trình duyệt B03 sẽ được đưa về bước đầu (WAITING_TECH) để thực hiện lại quy trình duyệt 4 cấp."
+                  title="Hoàn tác lại quá trình duyệt phiếu theo cấp?"
+                  description="Toàn bộ tiến trình duyệt phiếu sẽ được hoàn tác về bước tiếp nhận ban đầu (WAITING_TECH) để thực hiện lại quy trình duyệt."
                   onConfirm={handleResetB03}
-                  okText="Đồng ý đặt lại"
+                  okText="Đồng ý hoàn tác"
                   cancelText="Hủy"
                   okButtonProps={{ danger: true }}
                 >
@@ -1285,7 +1295,7 @@ export default function RepairDetailDrawer({
                     loading={resetting}
                     style={{ borderRadius: 6, fontWeight: 500 }}
                   >
-                    Đặt lại về Chờ duyệt (Reset B03)
+                    Hoàn tác lại quá trình duyệt phiếu theo cấp
                   </Button>
                 </Popconfirm>
               )}

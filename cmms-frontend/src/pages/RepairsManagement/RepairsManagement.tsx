@@ -1458,6 +1458,10 @@ const RepairsManagement: React.FC = () => {
           onReview={(action, reason, phase) => {
             if (selectedRepair) handleReview(selectedRepair.repair_id, action, reason, phase || "request");
           }}
+          onResetSuccess={() => {
+            reload();
+            setSelectedRepair(null);
+          }}
         />
       )}
 
