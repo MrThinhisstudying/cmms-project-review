@@ -14,6 +14,7 @@ import {
   CarOutlined,
   MoreOutlined,
   CalendarOutlined,
+  RollbackOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { IRepair } from "../../../../types/repairs.types";
@@ -30,6 +31,7 @@ interface RepairsTableProps {
   ) => void;
   onEdit?: (item: IRepair) => void;
   onView?: (item: IRepair) => void;
+  onReset?: (item: IRepair) => void;
   onOpenInspection?: (item: IRepair) => void;
   onOpenAcceptance?: (item: IRepair) => void;
   onDelete?: (id: number) => void;
@@ -53,6 +55,7 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
   rows,
   onEdit,
   onView,
+  onReset,
   onOpenInspection,
   onOpenAcceptance,
   onDelete,
@@ -60,6 +63,7 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
   canUpdate,
   userRole,
   currentUser,
+  hasPermission,
   selectedRowKeys,
   onSelectChange,
 }) => {
@@ -593,7 +597,37 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
           });
         }
 
-        // 5. Xóa phiếu (Admin)
+        // 5. Hoàn tác quá trình duyệt theo cấp
+        const canResetWorkflow =
+          userRole === "ADMIN" ||
+          userRole === "DIRECTOR" ||
+          hasPermission("RESET_REPAIR_WORKFLOW");
+
+        if (canResetWorkflow && !record.canceled) {
+          menuItems.push({
+            type: "divider",
+          });
+          menuItems.push({
+            key: "reset_workflow",
+            icon: <RollbackOutlined style={{ color: "#fa8c16" }} />,
+            label: (
+              <Popconfirm
+                title="Hoàn tác quá trình duyệt theo cấp?"
+                description="Toàn bộ tiến trình duyệt ở giai đoạn hiện tại sẽ được hoàn tác về bước tiếp nhận ban đầu để duyệt lại."
+                onConfirm={() => onReset?.(record)}
+                okText="Đồng ý hoàn tác"
+                cancelText="Hủy"
+                okButtonProps={{ danger: true }}
+              >
+                <span style={{ color: "#d4380d", fontWeight: 500 }}>
+                  Hoàn tác quá trình duyệt theo cấp
+                </span>
+              </Popconfirm>
+            ),
+          });
+        }
+
+        // 6. Xóa phiếu (Admin)
         if (userRole === "ADMIN") {
           menuItems.push({
             type: "divider",

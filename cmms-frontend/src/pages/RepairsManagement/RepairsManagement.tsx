@@ -41,6 +41,12 @@ import BreakdownAnalysisModal from "./components/BreakdownAnalysisModal";
 import { useDevicesContext } from "../../context/DevicesContext/DevicesContext";
 import { linkRepairDossier } from "../../apis/vehicleIncidentReports";
 import {
+  resetRepairRequest,
+  resetRepairInspection,
+  resetRepairAcceptance,
+} from "../../apis/repairs";
+import { getToken } from "../../utils/auth";
+import {
   IRepair,
   RepairUpsertPayload,
   BulkRepairUpsertPayload,
@@ -433,6 +439,38 @@ const RepairsManagement: React.FC = () => {
     setBulkRepairsForAction(selectedRepairs);
     setSelectedRepair(selectedRepairs[0]);
     setOpenAcceptance(true);
+  };
+
+  // Hoàn tác quy trình duyệt theo cấp trực tiếp từ danh sách
+  const handleResetRepair = async (repair: IRepair) => {
+    try {
+      const token = getToken();
+      if (!token) {
+        message.error("Vui lòng đăng nhập lại để thực hiện");
+        return;
+      }
+      let phase: "request" | "inspection" | "acceptance" = "request";
+      if (repair.status_request === "COMPLETED") {
+        if (repair.status_inspection === "inspection_admin_approved") {
+          phase = "acceptance";
+        } else {
+          phase = "inspection";
+        }
+      }
+
+      if (phase === "request") {
+        await resetRepairRequest(repair.repair_id, token);
+      } else if (phase === "inspection") {
+        await resetRepairInspection(repair.repair_id, token);
+      } else {
+        await resetRepairAcceptance(repair.repair_id, token);
+      }
+
+      message.success("Hoàn tác quá trình duyệt theo cấp thành công!");
+      reload();
+    } catch (err: any) {
+      message.error(err?.response?.data?.message || err?.message || "Hoàn tác thất bại");
+    }
   };
 
   // Sync selectedRepair with latest data from repairs list
@@ -1392,6 +1430,7 @@ const RepairsManagement: React.FC = () => {
                 setOpenAcceptance(true);
               }}
               onExport={(r, t, opts) => handleExport(r.repair_id, t, opts)}
+              onReset={handleResetRepair}
               canReview={perms.includes("APPROVE_REPAIR") || role === "ADMIN"}
               canDelete={perms.includes("DELETE_REPAIR") || role === "ADMIN"}
               canUpdate={perms.includes("UPDATE_REPAIR") || role === "ADMIN"}

@@ -334,9 +334,10 @@ export default function RepairDetailDrawer({
     (role === "TECHNICIAN" || role === "ADMIN");
 
   const isAdmin = role === "ADMIN";
-  // Quyền hoàn tác quy trình duyệt phiếu (không cấp đại trà, yêu cầu quyền RESET_REPAIR_WORKFLOW hoặc ADMIN)
+  // Quyền hoàn tác quy trình duyệt phiếu (không cấp đại trà, yêu cầu quyền RESET_REPAIR_WORKFLOW hoặc ADMIN/DIRECTOR)
   const canResetWorkflow =
     isAdmin ||
+    role === "DIRECTOR" ||
     ((currentUser as any)?.permissions || []).includes("RESET_REPAIR_WORKFLOW");
 
   const [resetting, setResetting] = React.useState(false);
@@ -555,9 +556,31 @@ export default function RepairDetailDrawer({
 
       {/* Tiến trình phê duyệt 4 cấp của B03 */}
       <div style={{ marginTop: 18, borderTop: "1px dashed #e2e8f0", paddingTop: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 10 }}>
-          <CheckCircleOutlined style={{ marginRight: 6, color: "#1677ff" }} />
-          Tiến trình phê duyệt yêu cầu (B03):
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>
+            <CheckCircleOutlined style={{ marginRight: 6, color: "#1677ff" }} />
+            Tiến trình phê duyệt yêu cầu (B03):
+          </div>
+          {canResetWorkflow && (
+            <Popconfirm
+              title="Hoàn tác quá trình duyệt theo cấp?"
+              description="Toàn bộ tiến trình duyệt phiếu yêu cầu (B03) sẽ được hoàn tác về bước tiếp nhận ban đầu (WAITING_TECH) để thực hiện lại quy trình duyệt."
+              onConfirm={handleResetB03}
+              okText="Đồng ý hoàn tác"
+              cancelText="Hủy"
+              okButtonProps={{ danger: true }}
+            >
+              <Button
+                danger
+                size="small"
+                icon={<RollbackOutlined />}
+                loading={resetting}
+                style={{ borderRadius: 6, fontWeight: 500 }}
+              >
+                Hoàn tác
+              </Button>
+            </Popconfirm>
+          )}
         </div>
         <div
           style={{
