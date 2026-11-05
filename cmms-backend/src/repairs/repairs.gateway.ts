@@ -64,6 +64,16 @@ export class RepairsGateway implements OnGatewayInit, OnGatewayConnection, OnGat
     this.server.emit('dashboard_refresh', { timestamp: new Date() });
   }
 
+  // ==================== WORK TASKS (REALTIME) ====================
+  /** Broadcast: dữ liệu công việc / bình luận / tiến độ thay đổi */
+  notifyTaskUpdate(payload?: { taskId?: number; action?: string; actorId?: number }) {
+    this.server.emit('task_updated', {
+      timestamp: new Date(),
+      ...(payload || {}),
+    });
+    this.server.emit('dashboard_refresh', { timestamp: new Date() });
+  }
+
   // ==================== PROFILE REQUESTS ====================
   /** Broadcast: có yêu cầu cập nhật profile mới */
   notifyProfileRequestUpdate() {

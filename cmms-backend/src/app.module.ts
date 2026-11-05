@@ -36,6 +36,7 @@ import { AnnualLeavesModule } from './annual-leaves/annual-leaves.module';
 import { ActivityLogModule } from './common/modules/activity-log.module';
 import { ShiftDebtsModule } from './shift-debts/shift-debts.module';
 import { VehicleIncidentReportsModule } from './vehicle-incident-reports/vehicle-incident-reports.module';
+import { TasksModule } from './tasks/tasks.module';
 
 @Module({
     imports: [
@@ -94,6 +95,7 @@ import { VehicleIncidentReportsModule } from './vehicle-incident-reports/vehicle
         ActivityLogModule,
         ShiftDebtsModule,
         VehicleIncidentReportsModule,
+        TasksModule,
     ],
     controllers: [AppController],
     providers: [

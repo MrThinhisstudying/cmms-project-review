@@ -29,6 +29,7 @@ import { createProfileRequest, getMyRequests, IProfileRequest } from '../../../.
 import { createLaborContract } from '../../../../apis/laborContracts';
 import { createRewardDiscipline } from '../../../../apis/rewardDisciplines';
 import { LEAVE_TYPE_CONFIG, LeaveType, recordLeave, uploadLeaveAttachments, getAnnualLeavesByUser, getLeaveHistoriesByUser } from '../../../../apis/annualLeaves';
+import { IUserTaskSummary } from '../../../../types/tasks.types';
 
 // ─────────────────────────── Types ───────────────────────────
 interface ProfileModalProps {
@@ -49,7 +50,7 @@ const getRoleLabel = (role: string | undefined) => {
     return map[role?.toUpperCase() || ''] || role;
 };
 
-type SectionKey = 'info' | 'certificates' | 'cccm' | 'contracts' | 'history' | 'leaves' | 'my_requests';
+type SectionKey = 'info' | 'certificates' | 'cccm' | 'contracts' | 'history' | 'leaves' | 'tasks_kpi' | 'my_requests';
 
 const NAV_ITEMS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
     { key: 'info', label: 'Thông tin cá nhân', icon: <UserOutlined /> },
@@ -58,6 +59,7 @@ const NAV_ITEMS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
     { key: 'contracts', label: 'Hợp đồng lao động', icon: <FileTextOutlined /> },
     { key: 'history', label: 'Khen thưởng / Kỷ luật', icon: <TrophyOutlined /> },
     { key: 'leaves', label: 'Phép năm', icon: <CalendarOutlined /> },
+    { key: 'tasks_kpi', label: 'Hiệu suất & Công việc', icon: <AuditOutlined /> },
     { key: 'my_requests', label: 'Lịch sử yêu cầu', icon: <IdcardOutlined /> },
 ];
 
@@ -100,6 +102,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
     const [editCertificates, setEditCertificates] = useState<any[]>([]);
 
     const [myRequests, setMyRequests] = useState<IProfileRequest[]>([]);
+    const [taskSummary, setTaskSummary] = useState<IUserTaskSummary | null>(null);
 
     const [loadedTabs, setLoadedTabs] = useState<Record<string, boolean>>({});
 
@@ -225,6 +228,16 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     const data = await getMyRequests().catch(() => []);
                     setMyRequests(data);
                     setLoadedTabs(prev => ({ ...prev, my_requests: true }));
+                } finally { setHistoryLoading(false); }
+            }
+            if (activeSection === 'tasks_kpi' && !loadedTabsRef.current.tasks_kpi) {
+                loadedTabsRef.current.tasks_kpi = true;
+                setHistoryLoading(true);
+                try {
+                    const { getUserTaskSummary } = await import('../../../../apis/tasks');
+                    const data = await getUserTaskSummary(user.user_id).catch(() => null);
+                    setTaskSummary(data);
+                    setLoadedTabs(prev => ({ ...prev, tasks_kpi: true }));
                 } finally { setHistoryLoading(false); }
             }
         };
@@ -1498,7 +1511,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                                 <div className="pf-card-top">
                                     <span style={{ fontWeight: 600 }}>{req.request_type === 'UPDATE_INFO' ? 'Cập nhật TT' : 'Tải lên Bằng cấp'}</span>
                                     <Tag color={req.status === 'PENDING' ? 'orange' : req.status === 'APPROVED' ? 'green' : 'red'}>
-                                        {req.status === 'PENDING' ? '⏳ Chờ duyệt' : req.status === 'APPROVED' ? '✅ Đã duyệt' : '❌ Від chối'}
+                                        {req.status === 'PENDING' ? '⏳ Chờ duyệt' : req.status === 'APPROVED' ? '✅ Đã duyệt' : '❌ Từ chối'}
                                     </Tag>
                                 </div>
                                 <div className="pf-card-date" style={{ marginTop: 6 }}>Gửi ngày: {dayjs(req.created_at).format('DD/MM/YYYY HH:mm')}</div>
@@ -1516,6 +1529,195 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
         );
     };
 
+    // ── SECTION 8: Tasks & KPI Summary (360° Integration) ──
+    const renderTasksKpiSection = () => {
+        if (historyLoading && !loadedTabs.tasks_kpi) {
+            return <div className="pf-loading"><Spin tip="Đang tải dữ liệu hiệu suất công việc..." /></div>;
+        }
+        if (!taskSummary) {
+            return (
+                <div className="pf-section">
+                    <Empty description="Chưa có dữ liệu công việc & KPI" />
+                </div>
+            );
+        }
+
+        const gradeColorMap: Record<string, { bg: string; color: string; border: string }> = {
+            'A+': { bg: '#dcfce7', color: '#15803d', border: '#86efac' },
+            'A': { bg: '#dbeafe', color: '#1d4ed8', border: '#93c5fd' },
+            'B': { bg: '#fef3c7', color: '#b45309', border: '#fde68a' },
+            'C': { bg: '#fee2e2', color: '#b91c1c', border: '#fca5a5' },
+        };
+        const gStyle = gradeColorMap[taskSummary.grade] || gradeColorMap.B;
+
+        return (
+            <div className="pf-section">
+                <div
+                    style={{
+                        background: '#ffffff',
+                        borderRadius: 14,
+                        padding: '16px 20px',
+                        border: '1px solid #dbe3ee',
+                        marginBottom: 16,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        flexWrap: 'wrap',
+                        gap: 12,
+                    }}
+                >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div
+                            style={{
+                                width: 42,
+                                height: 42,
+                                borderRadius: 10,
+                                background: '#eff6ff',
+                                color: '#2563eb',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontSize: 20,
+                            }}
+                        >
+                            <TrophyOutlined />
+                        </div>
+                        <div>
+                            <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a' }}>
+                                Tổng hợp Hiệu suất Công việc & Điểm KPI Thi đua
+                            </div>
+                            <div style={{ fontSize: 12.5, color: '#64748b' }}>
+                                Tự động liên thông từ Phân hệ Quản lý Công việc & Giao việc nội bộ
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        style={{
+                            padding: '6px 16px',
+                            borderRadius: 999,
+                            background: gStyle.bg,
+                            color: gStyle.color,
+                            border: `1px solid ${gStyle.border}`,
+                            fontWeight: 800,
+                            fontSize: 13.5,
+                        }}
+                    >
+                        Xếp loại hiện tại: Loại {taskSummary.grade} — {taskSummary.gradeLabel}
+                    </div>
+                </div>
+
+                <Row gutter={[14, 14]} style={{ marginBottom: 16 }}>
+                    <Col xs={12} sm={6}>
+                        <div style={{ background: '#ffffff', borderRadius: 12, padding: 14, border: '1px solid #dbe3ee', textAlign: 'center' }}>
+                            <div style={{ fontSize: 12, color: '#64748b' }}>Tổng việc được giao</div>
+                            <div style={{ fontSize: 24, fontWeight: 800, color: '#2563eb', marginTop: 4 }}>{taskSummary.totalAssigned}</div>
+                        </div>
+                    </Col>
+                    <Col xs={12} sm={6}>
+                        <div style={{ background: '#ffffff', borderRadius: 12, padding: 14, border: '1px solid #dbe3ee', textAlign: 'center' }}>
+                            <div style={{ fontSize: 12, color: '#64748b' }}>Đã hoàn thành (Đúng hạn)</div>
+                            <div style={{ fontSize: 24, fontWeight: 800, color: '#16a34a', marginTop: 4 }}>
+                                {taskSummary.completedTotal} <span style={{ fontSize: 13, fontWeight: 600 }}>({taskSummary.onTimeRate}%)</span>
+                            </div>
+                        </div>
+                    </Col>
+                    <Col xs={12} sm={6}>
+                        <div style={{ background: '#ffffff', borderRadius: 12, padding: 14, border: '1px solid #dbe3ee', textAlign: 'center' }}>
+                            <div style={{ fontSize: 12, color: '#64748b' }}>Đang làm / Quá hạn</div>
+                            <div style={{ fontSize: 24, fontWeight: 800, color: taskSummary.overdueUnfinished > 0 ? '#dc2626' : '#0284c7', marginTop: 4 }}>
+                                {taskSummary.inProgress} / <span style={{ color: '#dc2626' }}>{taskSummary.overdueUnfinished}</span>
+                            </div>
+                        </div>
+                    </Col>
+                    <Col xs={12} sm={6}>
+                        <div style={{ background: '#ffffff', borderRadius: 12, padding: 14, border: '1px solid #dbe3ee', textAlign: 'center' }}>
+                            <div style={{ fontSize: 12, color: '#64748b' }}>Tổng điểm KPI tích lũy</div>
+                            <div style={{ fontSize: 24, fontWeight: 800, color: '#d97706', marginTop: 4 }}>
+                                {taskSummary.netKpiScore} <span style={{ fontSize: 12, fontWeight: 600 }}>điểm</span>
+                            </div>
+                        </div>
+                    </Col>
+                </Row>
+
+                <div style={{ background: '#ffffff', borderRadius: 14, padding: 18, border: '1px solid #dbe3ee' }}>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 12 }}>
+                        Danh sách công việc gần đây ({taskSummary.recentTasks.length})
+                    </div>
+                    {taskSummary.recentTasks.length === 0 ? (
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa được giao công việc nào" />
+                    ) : (
+                        <Table
+                            rowKey="id"
+                            size="small"
+                            pagination={{ pageSize: 5 }}
+                            dataSource={taskSummary.recentTasks}
+                            columns={[
+                                {
+                                    title: 'Mã CV',
+                                    dataIndex: 'code',
+                                    key: 'code',
+                                    width: 115,
+                                    render: (c: string) => <Tag color="blue" style={{ fontWeight: 700 }}>{c}</Tag>,
+                                },
+                                {
+                                    title: 'Nội dung công việc',
+                                    dataIndex: 'title',
+                                    key: 'title',
+                                    render: (t: string) => <span style={{ fontWeight: 600, color: '#0f172a' }}>{t}</span>,
+                                },
+                                {
+                                    title: 'Người giao',
+                                    key: 'assigner',
+                                    width: 150,
+                                    render: (_: unknown, r) => r.assigner?.name || '—',
+                                },
+                                {
+                                    title: 'Hạn hoàn thành',
+                                    dataIndex: 'deadline',
+                                    key: 'deadline',
+                                    width: 135,
+                                    render: (d: string) => dayjs(d).format('DD/MM/YYYY'),
+                                },
+                                {
+                                    title: 'Trạng thái',
+                                    dataIndex: 'status',
+                                    key: 'status',
+                                    width: 135,
+                                    render: (st: string) => {
+                                        const map: Record<string, { label: string; color: string }> = {
+                                            NEW: { label: 'Mới giao', color: 'blue' },
+                                            CHANGE_REQUESTED: { label: 'Xin điều chỉnh', color: 'orange' },
+                                            IN_PROGRESS: { label: 'Đang thực hiện', color: 'processing' },
+                                            PENDING_REVIEW: { label: 'Chờ nghiệm thu', color: 'purple' },
+                                            COMPLETED: { label: 'Đã hoàn thành', color: 'success' },
+                                            REJECTED: { label: 'Yêu cầu làm lại', color: 'error' },
+                                        };
+                                        const cfg = map[st] || { label: st, color: 'default' };
+                                        return <Tag color={cfg.color}>{cfg.label}</Tag>;
+                                    },
+                                },
+                                {
+                                    title: 'Điểm KPI',
+                                    dataIndex: 'kpi_score',
+                                    key: 'kpi_score',
+                                    width: 100,
+                                    align: 'center',
+                                    render: (sc?: number | null) =>
+                                        sc !== null && sc !== undefined ? (
+                                            <Tag color="gold" style={{ fontWeight: 700 }}>+{sc} đ</Tag>
+                                        ) : (
+                                            <span style={{ color: '#94a3b8' }}>—</span>
+                                        ),
+                                },
+                            ]}
+                        />
+                    )}
+                </div>
+            </div>
+        );
+    };
+
     // ── Section Router ──
     const renderActiveSection = () => {
         switch (activeSection) {
@@ -1525,6 +1727,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
             case 'contracts': return renderContractsSection();
             case 'history': return renderHistorySection();
             case 'leaves': return renderLeavesSection();
+            case 'tasks_kpi': return renderTasksKpiSection();
             case 'my_requests': return renderMyRequestsSection();
             default: return null;
         }

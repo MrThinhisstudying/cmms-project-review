@@ -12,6 +12,7 @@ import {
     CarOutlined,
     FileTextOutlined,
     WarningOutlined,
+    CheckSquareOutlined,
 } from "@ant-design/icons";
 
 export interface SidebarMenuItem {
@@ -37,6 +38,14 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
         textColor: "#fff",
         color: "#FFC900",
         path: "/trang_chu",
+        roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR", "HR_MANAGER"],
+    },
+    {
+        name: "Quản lý công việc",
+        icon: <CheckSquareOutlined />,
+        textColor: "#fff",
+        color: "#FFC900",
+        path: "/quan_ly_cong_viec",
         roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR", "HR_MANAGER"],
     },
     // --- Nhân sự & Đào tạo ---
