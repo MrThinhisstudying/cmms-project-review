@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Card,
   Typography,
@@ -6,7 +7,6 @@ import {
   Button,
   Space,
   Tag,
-  Upload,
   message,
   Dropdown,
   Select,
@@ -22,6 +22,12 @@ import {
   SearchOutlined,
   ExportOutlined,
   UploadOutlined,
+  DownloadOutlined,
+  DownOutlined,
+  SettingOutlined,
+  ThunderboltOutlined,
+  ClearOutlined,
+  CheckSquareOutlined,
   PlusOutlined,
   ApartmentOutlined,
   AppstoreOutlined,
@@ -35,11 +41,12 @@ import {
 } from '@ant-design/icons';
 import { ICreateUser, IUser } from '../../types/user.types';
 import { ILaborContract, getLaborContracts } from '../../apis/laborContracts';
-import { getAllUsers, createUser, deleteUser } from '../../apis/users';
+import { getAllUsers, createUser, updateUser, deleteUser, syncUserDepartments } from '../../apis/users';
 import { getToken } from '../../utils/auth';
 import ProfileDrawer from '../Users/components/ProfileModal';
-import { exportUsersToExcel, parseExcelFile } from '../../utils/excelHelper';
+import { exportUsersToExcel, exportUserTemplate } from '../../utils/excelHelper';
 import ExportModal from './components/ExportModal';
+import UserImportModal from '../Users/components/UserImportModal';
 import { useDepartmentsContext } from '../../context/DepartmentsContext/DepartmentsContext';
 import { getDeviceGroups, IDeviceGroup } from '../../apis/device-groups';
 import UserModal from '../Users/components/UserModal';
@@ -93,37 +100,48 @@ const getActiveContractsMap = (contractsList: ILaborContract[]): Record<number, 
   return activeMap;
 };
 
+const VALID_TABS = ['employees', 'contracts', 'certificates', 'leaves', 'rewards', 'approvals'];
+
 const Employees: React.FC = () => {
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md; // Mobile if < 768px
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [users, setUsers] = useState<IUser[]>([]);
   const [contracts, setContracts] = useState<Record<number, ILaborContract>>({});
   const [loading, setLoading] = useState(false);
-  const [importing, setImporting] = useState(false);
 
   // Filters
   const [searchText, setSearchText] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [quickFilter, setQuickFilter] = useState<string | null>(null);
+  const [quickFilter, setQuickFilter] = useState<string | null>(() => {
+    const qf = searchParams.get('filter');
+    return qf ? qf : null;
+  });
   const [departmentFilter, setDepartmentFilter] = useState<number | null>(null);
   const [roleFilter, setRoleFilter] = useState<string | null>(null);
   const [contractFilter, setContractFilter] = useState<string | null>(null);
+  const [partyFilter, setPartyFilter] = useState<'PARTY_MEMBER' | 'NON_PARTY' | null>(null);
 
   // View Mode: Cards or Table
   const [viewMode, setViewMode] = useState<'TABLE' | 'CARDS'>('TABLE');
 
-  // Active Tab
-  const [activeTab, setActiveTab] = useState('employees');
+  // Active Tab synced with URL query ?tab=...
+  const [activeTab, setActiveTab] = useState(() => {
+    const t = searchParams.get('tab');
+    return t && VALID_TABS.includes(t) ? t : 'employees';
+  });
   const [pendingCount, setPendingCount] = useState(0);
 
   const { departments } = useDepartmentsContext();
   const [deviceGroups, setDeviceGroups] = useState<IDeviceGroup[]>([]);
   const [openUserModal, setOpenUserModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<IUser | null>(null);
   const [userModalSubmitting, setUserModalSubmitting] = useState(false);
   const [openDeptModal, setOpenDeptModal] = useState(false);
+  const [openImportModal, setOpenImportModal] = useState(false);
   const [openExportModal, setOpenExportModal] = useState(false);
-  const [exportScope] = useState<'ALL' | 'SELECTED'>('ALL');
+  const [exportScope, setExportScope] = useState<'ALL' | 'FILTERED' | 'SELECTED'>('ALL');
 
   const [selectedUser, setSelectedUser] = useState<IUser | null>(null);
   const [openProfileDrawer, setOpenProfileDrawer] = useState(false);
@@ -131,6 +149,31 @@ const Employees: React.FC = () => {
   const { user: currentAuthUser } = useAuthContext();
   const canWrite = ['ADMIN', 'HR_MANAGER'].includes(currentAuthUser?.role || '');
   const canDelete = canWrite;
+
+  // Sync URL query params when user navigates from HRDashboard
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t && VALID_TABS.includes(t) && t !== activeTab) {
+      setActiveTab(t);
+    }
+    const qf = searchParams.get('filter');
+    if (qf) {
+      setQuickFilter(qf);
+      if (qf === 'PARTY_MEMBER') {
+        setPartyFilter('PARTY_MEMBER');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const handleTabChange = (nextTab: string) => {
+    setActiveTab(nextTab);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', nextTab);
+      return next;
+    }, { replace: true });
+  };
 
   // Auto-switch viewMode on mobile / tablet
   useEffect(() => {
@@ -181,10 +224,38 @@ const Employees: React.FC = () => {
     setOpenProfileDrawer(true);
   };
 
-  const handleEdit = (user: IUser) => {
-    setSelectedUser(user);
-    setOpenProfileDrawer(true);
+  const handleOpenCreateModal = () => {
+    setEditingUser(null);
+    setOpenUserModal(true);
   };
+
+  const handleEdit = (user: IUser) => {
+    setEditingUser(user);
+    setOpenUserModal(true);
+  };
+
+  const handleResetFilters = () => {
+    setSearchText('');
+    setDepartmentFilter(null);
+    setRoleFilter(null);
+    setContractFilter(null);
+    setPartyFilter(null);
+    setQuickFilter(null);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('filter');
+      return next;
+    }, { replace: true });
+  };
+
+  const hasAnyFilter = Boolean(
+    searchText.trim() ||
+      departmentFilter ||
+      roleFilter ||
+      contractFilter ||
+      partyFilter ||
+      quickFilter
+  );
 
   const handleDelete = async (user: IUser) => {
     try {
@@ -192,86 +263,80 @@ const Employees: React.FC = () => {
       await deleteUser(user.user_id, token);
       message.success(`Đã xoá nhân viên "${user.name}"`);
       fetchData();
-    } catch (error: any) {
-      message.error(error.message || 'Xoá nhân viên thất bại');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Xoá nhân viên thất bại';
+      message.error(errorMessage);
     }
   };
 
-  const handleExportExcel = async () => {
+  const handleDownloadTemplate = async () => {
+    try {
+      message.loading({ content: 'Đang chuẩn bị file mẫu...', key: 'template' });
+      await exportUserTemplate(departments);
+      message.success({ content: 'Đã tải xuống file mẫu nhập nhân sự!', key: 'template' });
+    } catch {
+      message.error({ content: 'Lỗi tải file mẫu Excel', key: 'template' });
+    }
+  };
+
+  const handleQuickExportExcel = async (targetList: IUser[]) => {
     try {
       message.loading({ content: 'Đang xuất Excel...', key: 'export' });
-      await exportUsersToExcel(users);
-      message.success({ content: 'Xuất Excel thành công!', key: 'export' });
-    } catch (err) {
+      await exportUsersToExcel(targetList);
+      message.success({
+        content: `Xuất nhanh thành công (${targetList.length} nhân sự)!`,
+        key: 'export',
+      });
+    } catch {
       message.error({ content: 'Lỗi xuất Excel', key: 'export' });
     }
   };
 
-  const handleImportFile = async (file: File) => {
-    try {
-      setImporting(true);
-      message.loading({ content: 'Đang phân tích...', key: 'import' });
-      const rows = await parseExcelFile(file, users);
-      if (rows.length === 0) {
-        message.warning({ content: 'File không có dữ liệu', key: 'import' });
-        return false;
-      }
-      const token = getToken();
-      let newCount = 0,
-        errorCount = 0;
-      for (const row of rows) {
-        try {
-          if (!row.isExisting && row.email) {
-            const payload: ICreateUser = {
-              name: row.name,
-              employee_code: row.employee_code,
-              email: row.email,
-              password: 'Vcs@123456',
-              role: 'OPERATOR',
-              status: 'active',
-              position: row.position,
-              gender: row.gender || undefined,
-              ethnicity: row.ethnicity || undefined,
-              date_of_birth: row.date_of_birth || undefined,
-              place_of_birth: row.place_of_birth || undefined,
-              phone_number: row.phone_number || undefined,
-              citizen_identification_card: row.citizen_identification_card || '000000000000',
-              cccd_issue_date: row.cccd_issue_date || undefined,
-              permanent_address: row.permanent_address || undefined,
-              temporary_address: row.temporary_address || undefined,
-              hometown: row.hometown || undefined,
-            };
-            await createUser(payload, token);
-            newCount++;
-          }
-        } catch (err) {
-          errorCount++;
-        }
-      }
-      message.success({
-        content: `Thêm mới: ${newCount} | Lỗi: ${errorCount}`,
-        key: 'import',
-        duration: 5,
-      });
-      fetchData();
-    } catch (err: any) {
-      message.error({ content: err.message || 'Lỗi xử lý file', key: 'import' });
-    } finally {
-      setImporting(false);
+  const handleOpenCustomExport = () => {
+    if (selectedRowKeys.length > 0) {
+      setExportScope('SELECTED');
+    } else {
+      setExportScope('ALL');
     }
-    return false;
+    setOpenExportModal(true);
   };
 
-  const handleCreateUser = async (values: ICreateUser) => {
+  const handleSaveUser = async (
+    values: ICreateUser & {
+      dept_assignments?: Array<{ dept_id: number; role_in_dept: string; is_primary: boolean }>;
+    }
+  ) => {
     setUserModalSubmitting(true);
     try {
       const token = getToken();
-      await createUser(values, token);
-      message.success('Thêm nhân viên thành công!');
+      const { dept_assignments, ...userValues } = values;
+      let savedUserId: number | undefined;
+
+      if (editingUser) {
+        await updateUser(editingUser.user_id, userValues, token);
+        savedUserId = editingUser.user_id;
+        message.success(`Đã cập nhật thông tin nhân viên "${editingUser.name}"!`);
+      } else {
+        const res = await createUser(userValues, token);
+        savedUserId = res?.data?.user_id;
+        message.success('Thêm nhân viên thành công!');
+      }
+
+      if (savedUserId && dept_assignments && dept_assignments.length > 0) {
+        try {
+          await syncUserDepartments(savedUserId, dept_assignments, token);
+        } catch (syncErr) {
+          console.error('Sync departments failed:', syncErr);
+          message.warning('Lưu phân công đơn vị chưa hoàn tất, vui lòng kiểm tra lại.');
+        }
+      }
+
       setOpenUserModal(false);
+      setEditingUser(null);
       fetchData();
-    } catch (err: any) {
-      message.error(err.message || 'Lỗi tạo nhân viên');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Lỗi lưu thông tin nhân viên';
+      message.error(errorMessage);
     } finally {
       setUserModalSubmitting(false);
     }
@@ -309,6 +374,8 @@ const Employees: React.FC = () => {
       result = result.filter((u) => !!contracts[u.user_id]);
     } else if (quickFilter === 'NO_CONTRACT') {
       result = result.filter((u) => !contracts[u.user_id]);
+    } else if (quickFilter === 'PARTY_MEMBER') {
+      result = result.filter((u) => !!u.is_party_member);
     } else if (quickFilter === 'NO_SIG') {
       result = result.filter((u) => !u.signature_url);
     }
@@ -321,24 +388,85 @@ const Employees: React.FC = () => {
       }
     }
 
+    if (partyFilter === 'PARTY_MEMBER') {
+      result = result.filter((u) => !!u.is_party_member);
+    } else if (partyFilter === 'NON_PARTY') {
+      result = result.filter((u) => !u.is_party_member);
+    }
+
     return result;
-  }, [users, searchText, departmentFilter, roleFilter, quickFilter, contractFilter, contracts]);
+  }, [users, searchText, departmentFilter, roleFilter, quickFilter, contractFilter, partyFilter, contracts]);
 
   // Quick Stats
   const stats = useMemo(() => {
     const withContract = users.filter((u) => contracts[u.user_id]).length;
     const noContract = users.length - withContract;
+    const partyMembers = users.filter((u) => u.is_party_member).length;
     const noSig = users.filter((u) => !u.signature_url).length;
-    return { total: users.length, withContract, noContract, noSig };
+    return { total: users.length, withContract, noContract, partyMembers, noSig };
   }, [users, contracts]);
+
+  // Import Dropdown Menu Items
+  const importMenuItems: MenuProps['items'] = [
+    {
+      key: 'import-modal',
+      icon: <UploadOutlined />,
+      label: 'Nhập dữ liệu từ Excel (Xem trước)',
+      onClick: () => setOpenImportModal(true),
+    },
+    {
+      key: 'download-template',
+      icon: <DownloadOutlined />,
+      label: 'Tải file mẫu Excel (.xlsx)',
+      onClick: handleDownloadTemplate,
+    },
+  ];
+
+  // Export Dropdown Menu Items
+  const exportMenuItems: MenuProps['items'] = [
+    {
+      key: 'export-custom',
+      icon: <SettingOutlined />,
+      label: 'Xuất tùy chọn nâng cao (Đa sheet)...',
+      onClick: handleOpenCustomExport,
+    },
+    {
+      key: 'export-quick',
+      icon: <ThunderboltOutlined />,
+      label: `Xuất nhanh danh sách hiện tại (${filteredUsers.length})`,
+      onClick: () => handleQuickExportExcel(filteredUsers),
+    },
+  ];
 
   // Mobile More Actions Menu
   const mobileActionItems: MenuProps['items'] = [
+    ...(canWrite
+      ? [
+          {
+            key: 'import-modal',
+            icon: <UploadOutlined />,
+            label: 'Nhập nhân sự từ Excel',
+            onClick: () => setOpenImportModal(true),
+          },
+          {
+            key: 'download-template',
+            icon: <DownloadOutlined />,
+            label: 'Tải file mẫu Excel (.xlsx)',
+            onClick: handleDownloadTemplate,
+          },
+        ]
+      : []),
     {
-      key: 'export',
+      key: 'export-custom',
       icon: <ExportOutlined />,
-      label: 'Xuất file Excel',
-      onClick: handleExportExcel,
+      label: 'Xuất Excel tùy chọn',
+      onClick: handleOpenCustomExport,
+    },
+    {
+      key: 'export-quick',
+      icon: <ThunderboltOutlined />,
+      label: `Xuất nhanh Excel (${filteredUsers.length})`,
+      onClick: () => handleQuickExportExcel(filteredUsers),
     },
     ...(canWrite
       ? [
@@ -416,16 +544,48 @@ const Employees: React.FC = () => {
               <Select
                 placeholder="Loại HĐLĐ"
                 allowClear
-                style={{ width: isMobile ? '100%' : 140 }}
+                style={{ width: isMobile ? '100%' : 145 }}
                 value={contractFilter}
                 onChange={setContractFilter}
               >
-                <Select.Option value="THU_VIEC">Thử việc</Select.Option>
-                <Select.Option value="XAC_DINH_1_NAM">1 năm</Select.Option>
-                <Select.Option value="XAC_DINH_3_NAM">3 năm</Select.Option>
-                <Select.Option value="KHONG_XAC_DINH">Vô thời hạn</Select.Option>
+                <Select.Option value="1_MONTH">Học việc</Select.Option>
+                <Select.Option value="PROBATION">Thử việc</Select.Option>
+                <Select.Option value="12_MONTHS">HĐ 12 tháng</Select.Option>
+                <Select.Option value="24_MONTHS">HĐ 24 tháng</Select.Option>
+                <Select.Option value="36_MONTHS">HĐ 36 tháng</Select.Option>
+                <Select.Option value="INDEFINITE">Vô thời hạn</Select.Option>
                 <Select.Option value="NONE">Chưa có HĐ</Select.Option>
               </Select>
+
+              <Select
+                placeholder="Đảng viên / Quần chúng"
+                allowClear
+                style={{ width: isMobile ? '100%' : 175 }}
+                value={partyFilter}
+                onChange={(val) => {
+                  setPartyFilter(val || null);
+                  if (val === 'PARTY_MEMBER') {
+                    setQuickFilter('PARTY_MEMBER');
+                  } else if (quickFilter === 'PARTY_MEMBER') {
+                    setQuickFilter(null);
+                  }
+                }}
+              >
+                <Select.Option value="PARTY_MEMBER">⭐ Đảng viên</Select.Option>
+                <Select.Option value="NON_PARTY">Quần chúng</Select.Option>
+              </Select>
+
+              {hasAnyFilter && (
+                <Button
+                  type="dashed"
+                  size="middle"
+                  icon={<ClearOutlined />}
+                  onClick={handleResetFilters}
+                  style={{ color: '#ef4444', borderColor: '#fca5a5' }}
+                >
+                  Xóa lọc
+                </Button>
+              )}
             </Space>
 
             <Space wrap>
@@ -441,19 +601,23 @@ const Employees: React.FC = () => {
 
               {canWrite && !isMobile && (
                 <>
-                  <Upload
-                    beforeUpload={handleImportFile}
-                    showUploadList={false}
-                    accept=".xlsx,.xls"
-                  >
-                    <Button icon={<UploadOutlined />} loading={importing}>
+                  <Space.Compact>
+                    <Button icon={<UploadOutlined />} onClick={() => setOpenImportModal(true)}>
                       Nhập Excel
                     </Button>
-                  </Upload>
+                    <Dropdown menu={{ items: importMenuItems }} trigger={['click']} placement="bottomRight">
+                      <Button icon={<DownOutlined />} title="Tùy chọn nhập & tải file mẫu" />
+                    </Dropdown>
+                  </Space.Compact>
 
-                  <Button icon={<ExportOutlined />} onClick={handleExportExcel}>
-                    Xuất Excel
-                  </Button>
+                  <Space.Compact>
+                    <Button icon={<ExportOutlined />} onClick={handleOpenCustomExport}>
+                      Xuất Excel
+                    </Button>
+                    <Dropdown menu={{ items: exportMenuItems }} trigger={['click']} placement="bottomRight">
+                      <Button icon={<DownOutlined />} title="Tùy chọn xuất Excel" />
+                    </Dropdown>
+                  </Space.Compact>
 
                   <Button icon={<ApartmentOutlined />} onClick={() => setOpenDeptModal(true)}>
                     Phòng ban
@@ -465,7 +629,7 @@ const Employees: React.FC = () => {
                 <Button
                   type="primary"
                   icon={<PlusOutlined />}
-                  onClick={() => setOpenUserModal(true)}
+                  onClick={handleOpenCreateModal}
                 >
                   Thêm mới
                 </Button>
@@ -478,6 +642,58 @@ const Employees: React.FC = () => {
               )}
             </Space>
           </div>
+
+          {/* Contextual Bulk Action Bar when rows are selected */}
+          {selectedRowKeys.length > 0 && viewMode === 'TABLE' && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '10px 16px',
+                marginBottom: 12,
+                background: '#eff6ff',
+                border: '1px solid #bfdbfe',
+                borderRadius: 8,
+                flexWrap: 'wrap',
+                gap: 8,
+              }}
+            >
+              <Space size={8}>
+                <CheckSquareOutlined style={{ color: '#2563eb', fontSize: 16 }} />
+                <Text strong style={{ color: '#1e3a8a', fontSize: 13 }}>
+                  Đã chọn {selectedRowKeys.length} nhân sự trên bảng
+                </Text>
+              </Space>
+              <Space size={8} wrap>
+                <Button
+                  size="small"
+                  type="primary"
+                  icon={<SettingOutlined />}
+                  onClick={() => {
+                    setExportScope('SELECTED');
+                    setOpenExportModal(true);
+                  }}
+                >
+                  Xuất tùy chọn ({selectedRowKeys.length})
+                </Button>
+                <Button
+                  size="small"
+                  icon={<ThunderboltOutlined />}
+                  onClick={() =>
+                    handleQuickExportExcel(
+                      users.filter((u) => selectedRowKeys.includes(u.user_id))
+                    )
+                  }
+                >
+                  Xuất nhanh (.xlsx)
+                </Button>
+                <Button size="small" onClick={() => setSelectedRowKeys([])}>
+                  Bỏ chọn
+                </Button>
+              </Space>
+            </div>
+          )}
 
           {/* Body: Cards or Table */}
           {viewMode === 'CARDS' ? (
@@ -660,6 +876,28 @@ const Employees: React.FC = () => {
               </Tag.CheckableTag>
             )}
 
+            <Tag.CheckableTag
+              checked={quickFilter === 'PARTY_MEMBER'}
+              onChange={(c) => {
+                setQuickFilter(c ? 'PARTY_MEMBER' : null);
+                setPartyFilter(c ? 'PARTY_MEMBER' : null);
+              }}
+              style={{
+                fontSize: 12,
+                padding: '3px 10px',
+                borderRadius: 12,
+                ...(quickFilter !== 'PARTY_MEMBER'
+                  ? {
+                      color: '#cf1322',
+                      backgroundColor: '#fff1f0',
+                      borderColor: '#ffa39e',
+                    }
+                  : {}),
+              }}
+            >
+              ⭐ Đảng viên: {stats.partyMembers}
+            </Tag.CheckableTag>
+
             {pendingCount > 0 && (
               <Tag
                 color="red"
@@ -670,7 +908,7 @@ const Employees: React.FC = () => {
                   cursor: 'pointer',
                   fontWeight: 600,
                 }}
-                onClick={() => setActiveTab('approvals')}
+                onClick={() => handleTabChange('approvals')}
               >
                 🔔 {pendingCount} yêu cầu chờ duyệt
               </Tag>
@@ -685,7 +923,7 @@ const Employees: React.FC = () => {
         >
           <Tabs
             activeKey={activeTab}
-            onChange={setActiveTab}
+            onChange={handleTabChange}
             items={tabItems}
             type="card"
             size={isMobile ? 'small' : 'middle'}
@@ -695,8 +933,12 @@ const Employees: React.FC = () => {
         {/* Modals */}
         <UserModal
           open={openUserModal}
-          onCancel={() => setOpenUserModal(false)}
-          onOk={handleCreateUser}
+          onCancel={() => {
+            setOpenUserModal(false);
+            setEditingUser(null);
+          }}
+          onOk={handleSaveUser}
+          initialValues={editingUser}
           departments={departments}
           deviceGroups={deviceGroups}
           loading={userModalSubmitting}
@@ -710,10 +952,19 @@ const Employees: React.FC = () => {
           }}
         />
 
+        <UserImportModal
+          open={openImportModal}
+          onClose={() => setOpenImportModal(false)}
+          onSuccess={fetchData}
+          existingUsers={users}
+          departments={departments}
+        />
+
         <ExportModal
           open={openExportModal}
           onCancel={() => setOpenExportModal(false)}
           users={users}
+          filteredUsers={filteredUsers}
           selectedRowKeys={selectedRowKeys}
           contracts={contracts}
           defaultScope={exportScope}

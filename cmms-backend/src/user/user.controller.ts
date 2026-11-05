@@ -162,7 +162,13 @@ export class UserController {
     @UseInterceptors(
         FileInterceptor('file', {
             storage: diskStorage({
-                destination: './uploads/signatures',
+                destination: (req, file, cb) => {
+                    const uploadPath = join(process.cwd(), 'uploads', 'signatures');
+                    if (!fs.existsSync(uploadPath)) {
+                        fs.mkdirSync(uploadPath, { recursive: true });
+                    }
+                    cb(null, uploadPath);
+                },
                 filename: (req, file, cb) => {
                     const randomName = Array(32)
                         .fill(null)
@@ -172,7 +178,7 @@ export class UserController {
                 },
             }),
             fileFilter: (req, file, cb) => {
-                if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
+                if (!file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
                     return cb(new Error('Only image files are allowed!'), false);
                 }
                 cb(null, true);
@@ -187,13 +193,32 @@ export class UserController {
         try {
              if (!file) throw new HttpException('File is required', HttpStatus.BAD_REQUEST);
 
-             // Compress signature (keep PNG for transparency)
+             const existingUser = await this.userService.findOne({ where: { user_id: Number(id) } }).catch(() => null);
+             const oldSignatureUrl = existingUser?.signature_url;
+
+             // Compress signature (keep PNG for transparency, max 600x240)
              const filePath = join(process.cwd(), 'uploads', 'signatures', file.filename);
-             const result = await compressImage(filePath, { keepPng: true, skipBelowBytes: 500 * 1024 });
+             const result = await compressImage(filePath, {
+                 keepPng: true,
+                 maxWidth: 600,
+                 maxHeight: 240,
+                 quality: 80,
+                 skipBelowBytes: 25 * 1024,
+             });
              const finalFilename = require('path').basename(result.outputPath);
              const signatureUrl = `/uploads/signatures/${finalFilename}`;
 
              await this.userService.updateProfile(id, { signature_url: signatureUrl });
+
+             // Xóa file chữ ký cũ trên ổ cứng để tránh rác
+             if (oldSignatureUrl && oldSignatureUrl !== signatureUrl && oldSignatureUrl.startsWith('/uploads/signatures/')) {
+                 const oldFilePath = join(process.cwd(), oldSignatureUrl.replace(/^\//, ''));
+                 if (fs.existsSync(oldFilePath)) {
+                     try { fs.unlinkSync(oldFilePath); } catch { /* ignore */ }
+                 }
+             }
+
+             this.gateway.notifyUserUpdate(Number(id));
              return {
                  message: 'Cập nhật chữ ký thành công',
                  data: { signature_url: signatureUrl }
@@ -236,12 +261,31 @@ export class UserController {
         try {
              if (!file) throw new HttpException('File is required', HttpStatus.BAD_REQUEST);
 
+             const existingUser = await this.userService.findOne({ where: { user_id: Number(id) } }).catch(() => null);
+             const oldAvatarUrl = existingUser?.avatar;
+
              const filePath = join(process.cwd(), 'uploads', 'avatars', file.filename);
-             const result = await compressImage(filePath, { keepPng: false, skipBelowBytes: 300 * 1024 });
+             const result = await compressImage(filePath, {
+                 keepPng: false,
+                 maxWidth: 320,
+                 maxHeight: 320,
+                 quality: 78,
+                 skipBelowBytes: 15 * 1024,
+             });
              const finalFilename = require('path').basename(result.outputPath);
              const avatarUrl = `/uploads/avatars/${finalFilename}`;
 
              await this.userService.updateProfile(id, { avatar: avatarUrl });
+
+             // Xóa file ảnh đại diện cũ trên ổ cứng để tránh tồn đọng file rác
+             if (oldAvatarUrl && oldAvatarUrl !== avatarUrl && oldAvatarUrl.startsWith('/uploads/avatars/')) {
+                 const oldFilePath = join(process.cwd(), oldAvatarUrl.replace(/^\//, ''));
+                 if (fs.existsSync(oldFilePath)) {
+                     try { fs.unlinkSync(oldFilePath); } catch { /* ignore */ }
+                 }
+             }
+
+             this.gateway.notifyUserUpdate(Number(id));
              return {
                  message: 'Cập nhật ảnh đại diện thành công',
                  data: { avatar: avatarUrl }

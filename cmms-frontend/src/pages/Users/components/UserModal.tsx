@@ -98,6 +98,7 @@ const UserModal: React.FC<UserModalProps> = ({
           status: 'active',
           role: 'OPERATOR',
           is_group_lead: false,
+          is_party_member: false,
           dept_assignments: [],
         });
         setCurrentSignature(null);
@@ -519,9 +520,18 @@ const UserModal: React.FC<UserModalProps> = ({
                         />
                       </Form.Item>
                     </Col>
-                    <Col span={16}>
+                    <Col span={10}>
                       <Form.Item name="hometown" label="Quê quán">
                         <Input placeholder="Xã/Phường, Huyện/Quận, Tỉnh/Thành phố" />
+                      </Form.Item>
+                    </Col>
+                    <Col span={6}>
+                      <Form.Item
+                        name="is_party_member"
+                        label="Đảng viên"
+                        valuePropName="checked"
+                      >
+                        <Switch checkedChildren="Đảng viên" unCheckedChildren="Quần chúng" />
                       </Form.Item>
                     </Col>
                   </Row>

@@ -94,6 +94,10 @@ export class User {
     @Column({ nullable: true })
     ethnicity?: string;
 
+    @ApiProperty({ description: 'Là Đảng viên?' })
+    @Column({ type: 'boolean', default: false })
+    is_party_member?: boolean;
+
     @ApiProperty({ description: 'Ngày cấp CCCD' })
     @Column({ type: 'date', nullable: true })
     cccd_issue_date?: Date;

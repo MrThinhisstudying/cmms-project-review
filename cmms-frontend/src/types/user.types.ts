@@ -15,6 +15,7 @@ export interface IUser {
   place_of_birth?: string;
   gender?: string;
   ethnicity?: string;
+  is_party_member?: boolean;
   cccd_issue_date?: string;
   permanent_address?: string;
   temporary_address?: string;
@@ -53,6 +54,7 @@ export interface ICreateUser {
   place_of_birth?: string;
   gender?: string;
   ethnicity?: string;
+  is_party_member?: boolean;
   cccd_issue_date?: string;
   permanent_address?: string;
   temporary_address?: string;

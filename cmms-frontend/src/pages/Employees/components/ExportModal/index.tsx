@@ -54,6 +54,7 @@ const FIELD_GROUPS: FieldGroup[] = [
       { key: 'phone_number', label: 'SĐT' },
       { key: 'gender', label: 'Giới tính' },
       { key: 'ethnicity', label: 'Dân tộc' },
+      { key: 'is_party_member', label: 'Đảng viên' },
       { key: 'date_of_birth', label: 'Ngày sinh' },
       { key: 'place_of_birth', label: 'Nơi sinh' },
       { key: 'citizen_identification_card', label: 'CCCD' },
@@ -144,21 +145,30 @@ const FIELD_GROUPS: FieldGroup[] = [
 // ═══════════════════════════════════════════════
 // Props
 // ═══════════════════════════════════════════════
+export type ExportScope = 'ALL' | 'FILTERED' | 'SELECTED';
+
 interface ExportModalProps {
   open: boolean;
   onCancel: () => void;
   users: IUser[];
+  filteredUsers?: IUser[];
   selectedRowKeys: React.Key[];
   contracts: Record<number, ILaborContract>;
   /** Nếu mở từ Bulk Actions thì mặc định scope = SELECTED */
-  defaultScope?: 'ALL' | 'SELECTED';
+  defaultScope?: ExportScope;
 }
 
 const ExportModal: React.FC<ExportModalProps> = ({
-  open, onCancel, users, selectedRowKeys, contracts, defaultScope = 'ALL'
+  open,
+  onCancel,
+  users,
+  filteredUsers,
+  selectedRowKeys,
+  contracts,
+  defaultScope = 'ALL',
 }) => {
-  // Scope: ALL hoặc SELECTED
-  const [scope, setScope] = useState<'ALL' | 'SELECTED'>(defaultScope);
+  // Scope: ALL, FILTERED hoặc SELECTED
+  const [scope, setScope] = useState<ExportScope>(defaultScope);
   // Selected fields per group
   const [checkedFields, setCheckedFields] = useState<Record<string, string[]>>(() => {
     const init: Record<string, string[]> = {};
@@ -169,16 +179,24 @@ const ExportModal: React.FC<ExportModalProps> = ({
   const [certFilter, setCertFilter] = useState<'expiring' | 'expired' | null>(null);
   const [exporting, setExporting] = useState(false);
 
+  const hasActiveFilter = Boolean(filteredUsers && filteredUsers.length !== users.length);
+
   // Reset khi mở modal
   React.useEffect(() => {
     if (open) {
-      setScope(defaultScope);
+      if (selectedRowKeys.length > 0 && defaultScope === 'SELECTED') {
+        setScope('SELECTED');
+      } else if (hasActiveFilter) {
+        setScope('FILTERED');
+      } else {
+        setScope(defaultScope);
+      }
       setCertFilter(null);
       const init: Record<string, string[]> = {};
       FIELD_GROUPS.forEach(g => { init[g.groupKey] = [...g.defaults]; });
       setCheckedFields(init);
     }
-  }, [open, defaultScope]);
+  }, [open, defaultScope, hasActiveFilter, selectedRowKeys.length]);
 
   // Tổng số trường đã chọn
   const totalSelected = useMemo(() =>
@@ -188,10 +206,28 @@ const ExportModal: React.FC<ExportModalProps> = ({
   // Target users
   const targetUsers = useMemo(() => {
     if (scope === 'SELECTED') return users.filter(u => selectedRowKeys.includes(u.user_id));
+    if (scope === 'FILTERED' && filteredUsers) return filteredUsers;
     return users;
-  }, [scope, users, selectedRowKeys]);
+  }, [scope, users, filteredUsers, selectedRowKeys]);
 
   // ── Handlers ──
+  const handleSelectPreset = (mode: 'DEFAULT' | 'ALL_PERSONAL' | 'ALL_SHEETS' | 'NONE') => {
+    const next: Record<string, string[]> = {};
+    FIELD_GROUPS.forEach(g => {
+      if (mode === 'DEFAULT') {
+        next[g.groupKey] = [...g.defaults];
+      } else if (mode === 'ALL_PERSONAL') {
+        next[g.groupKey] = g.groupKey === 'personal' || g.groupKey === 'department'
+          ? g.fields.map(f => f.key)
+          : [];
+      } else if (mode === 'ALL_SHEETS') {
+        next[g.groupKey] = g.fields.map(f => f.key);
+      } else {
+        next[g.groupKey] = [];
+      }
+    });
+    setCheckedFields(next);
+  };
   const handleGroupCheckAll = (groupKey: string, checked: boolean) => {
     const group = FIELD_GROUPS.find(g => g.groupKey === groupKey);
     if (!group) return;
@@ -299,9 +335,10 @@ const ExportModal: React.FC<ExportModalProps> = ({
       await exportUsersToExcelCustom(config);
       message.success(`Xuất Excel thành công (${targetUsers.length} nhân viên)`);
       onCancel();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      message.error(err.message || 'Lỗi xuất Excel');
+      const errorMessage = err instanceof Error ? err.message : 'Lỗi xuất Excel';
+      message.error(errorMessage);
     } finally {
       setExporting(false);
     }
@@ -419,6 +456,19 @@ const ExportModal: React.FC<ExportModalProps> = ({
               <Radio value="ALL" style={{ fontSize: 13 }}>
                 Tất cả nhân viên <Tag style={{ marginLeft: 4 }}>{users.length}</Tag>
               </Radio>
+              {filteredUsers && (
+                <Radio value="FILTERED" style={{ fontSize: 13 }} disabled={!hasActiveFilter}>
+                  Danh sách theo bộ lọc hiện tại
+                  <Tag color={hasActiveFilter ? 'cyan' : 'default'} style={{ marginLeft: 4 }}>
+                    {filteredUsers.length}
+                  </Tag>
+                  {!hasActiveFilter && (
+                    <Text type="secondary" style={{ fontSize: 11, marginLeft: 4 }}>
+                      (Chưa áp dụng bộ lọc)
+                    </Text>
+                  )}
+                </Radio>
+              )}
               <Radio value="SELECTED" style={{ fontSize: 13 }} disabled={selectedRowKeys.length === 0}>
                 Nhân viên đã chọn
                 <Tag color={selectedRowKeys.length > 0 ? 'blue' : 'default'} style={{ marginLeft: 4 }}>
@@ -435,7 +485,29 @@ const ExportModal: React.FC<ExportModalProps> = ({
         <Divider style={{ margin: '12px 0' }} />
 
         {/* ── Chọn trường ── */}
-        <Text strong style={{ fontSize: 13, marginBottom: 8, display: 'block' }}>Chọn trường thông tin</Text>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 8,
+            flexWrap: 'wrap',
+            gap: 8,
+          }}
+        >
+          <Text strong style={{ fontSize: 13 }}>Chọn trường thông tin</Text>
+          <Space size={6} wrap>
+            <Button size="small" onClick={() => handleSelectPreset('ALL_PERSONAL')}>
+              Đầy đủ TT cá nhân
+            </Button>
+            <Button size="small" onClick={() => handleSelectPreset('ALL_SHEETS')}>
+              Chọn tất cả (Đa sheet)
+            </Button>
+            <Button size="small" onClick={() => handleSelectPreset('NONE')}>
+              Bỏ chọn
+            </Button>
+          </Space>
+        </div>
         <Collapse
           items={collapseItems}
           defaultActiveKey={['personal']}

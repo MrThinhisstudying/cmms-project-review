@@ -1,4 +1,4 @@
-import { IUser } from '../types/user.types';
+import { IUser, IDepartment } from '../types/user.types';
 import { IEmployeeCertificate, ITrainingProgram } from '../types/certificates.types';
 import { ILaborContract } from '../apis/laborContracts';
 import { IRewardDiscipline } from '../apis/rewardDisciplines';
@@ -18,6 +18,7 @@ const EXCEL_HEADERS: { header: string; field: keyof IUser | string; width: numbe
     { header: 'Bộ phận', field: '__department__', width: 20 },
     { header: 'GIỚI TÍNH', field: 'gender', width: 10 },
     { header: 'DÂN TỘC', field: 'ethnicity', width: 12 },
+    { header: 'ĐẢNG VIÊN', field: 'is_party_member', width: 14 },
     { header: 'NGÀY SINH', field: 'date_of_birth', width: 15 },
     { header: 'NƠI SINH', field: 'place_of_birth', width: 15 },
     { header: 'EMAIL', field: 'email', width: 30 },
@@ -146,6 +147,8 @@ export const exportUsersToExcel = async (users: IUser[]): Promise<void> => {
                 row[h.header] = index + 1;
             } else if (h.field === '__department__') {
                 row[h.header] = user.department?.name || '';
+            } else if (h.field === 'is_party_member') {
+                row[h.header] = user.is_party_member ? 'Đảng viên' : '';
             } else if (h.field === 'date_of_birth' || h.field === 'cccd_issue_date') {
                 row[h.header] = formatDateForExcel((user as unknown as Record<string, string | undefined>)[h.field]);
             } else {
@@ -166,17 +169,25 @@ export const exportUsersToExcel = async (users: IUser[]): Promise<void> => {
 
 /**
  * EXPORT: Tải file Excel mẫu để import danh sách tài khoản / nhân sự
+ * Bao gồm 3 sheet:
+ * - Sheet 1: Mau_Nhap_Nhan_Su (Dữ liệu mẫu)
+ * - Sheet 2: Huong_Dan (Quy tắc nhập liệu)
+ * - Sheet 3: DS_Phong_Ban (Danh mục bộ phận hiện có để tra cứu)
  */
-export const exportUserTemplate = async (): Promise<void> => {
+export const exportUserTemplate = async (departments: IDepartment[] = []): Promise<void> => {
+    const deptSample1 = departments[0]?.name || 'Đội xe sân đỗ';
+    const deptSample2 = departments[1]?.name || departments[0]?.name || 'Đội kỹ thuật bảo dưỡng';
+
     const sampleRows = [
         {
             'STT': 1,
             'HỌ TÊN': 'Nguyễn Văn An',
             'MSNV': 'NV001',
             'CHỨC VỤ': 'Nhân viên vận hành',
-            'Bộ phận': 'Đội xe sân đỗ',
+            'Bộ phận': deptSample1,
             'GIỚI TÍNH': 'Nam',
             'DÂN TỘC': 'Kinh',
+            'ĐẢNG VIÊN': 'Có',
             'NGÀY SINH': '15/05/1990',
             'NƠI SINH': 'Hà Nội',
             'EMAIL': 'nguyenvanan@vcs.vn',
@@ -192,9 +203,10 @@ export const exportUserTemplate = async (): Promise<void> => {
             'HỌ TÊN': 'Trần Thị Bình',
             'MSNV': 'NV002',
             'CHỨC VỤ': 'Kỹ thuật viên bảo dưỡng',
-            'Bộ phận': 'Đội kỹ thuật bảo dưỡng',
+            'Bộ phận': deptSample2,
             'GIỚI TÍNH': 'Nữ',
             'DÂN TỘC': 'Kinh',
+            'ĐẢNG VIÊN': '',
             'NGÀY SINH': '22/10/1993',
             'NƠI SINH': 'TP. Hồ Chí Minh',
             'EMAIL': 'tranthibinh@vcs.vn',
@@ -204,7 +216,7 @@ export const exportUserTemplate = async (): Promise<void> => {
             'NƠI THƯỜNG TRÚ': 'Số 456 Đường Nguyễn Văn Linh, Q.7, TP.HCM',
             'NƠI TẠM TRÚ': 'Số 456 Đường Nguyễn Văn Linh, Q.7, TP.HCM',
             'QUÊ QUÁN': 'Long An',
-        }
+        },
     ];
 
     const ws = XLSX.utils.json_to_sheet(sampleRows);
@@ -212,6 +224,35 @@ export const exportUserTemplate = async (): Promise<void> => {
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Mau_Nhap_Nhan_Su');
+
+    // Sheet 2: Hướng dẫn nhập liệu
+    const instructions = [
+        { 'HƯỚNG DẪN NHẬP HỒ SƠ NHÂN SỰ TỪ EXCEL': '1. Cột HỌ TÊN và EMAIL là bắt buộc đối với hồ sơ nhân viên tạo mới.' },
+        { 'HƯỚNG DẪN NHẬP HỒ SƠ NHÂN SỰ TỪ EXCEL': '2. Cột MSNV (Mã số nhân viên): Nếu trùng với MSNV đã có trên hệ thống, hệ thống sẽ tự động CẬP NHẬT hồ sơ hiện có thay vì tạo mới.' },
+        { 'HƯỚNG DẪN NHẬP HỒ SƠ NHÂN SỰ TỪ EXCEL': '3. Cột Bộ phận: Điền tên Phòng ban / Đội / Tổ khớp với sheet "DS_Phong_Ban" để hệ thống tự động gán đúng đơn vị.' },
+        { 'HƯỚNG DẪN NHẬP HỒ SƠ NHÂN SỰ TỪ EXCEL': '4. Cột ĐẢNG VIÊN: Điền "Có" hoặc "Đảng viên" nếu là Đảng viên; điền "Không" hoặc để trống nếu là Quần chúng.' },
+        { 'HƯỚNG DẪN NHẬP HỒ SƠ NHÂN SỰ TỪ EXCEL': '5. Cột NGÀY SINH và NGÀY CẤP (CCCD): Nhập theo định dạng chuẩn DD/MM/YYYY (ví dụ: 15/05/1990).' },
+        { 'HƯỚNG DẪN NHẬP HỒ SƠ NHÂN SỰ TỪ EXCEL': '6. Cột SĐT và CCCD: Nên định dạng kiểu Text hoặc nhập đủ số 0 ở đầu (hệ thống tự động bù số 0 đầu cho SĐT 9 chữ số).' },
+        { 'HƯỚNG DẪN NHẬP HỒ SƠ NHÂN SỰ TỪ EXCEL': '7. Trước khi lưu chính thức, bạn sẽ được xem trước (Preview) toàn bộ danh sách để kiểm tra trạng thái Tạo mới / Cập nhật / Lỗi.' },
+    ];
+    const wsHelp = XLSX.utils.json_to_sheet(instructions);
+    wsHelp['!cols'] = [{ wch: 115 }];
+    XLSX.utils.book_append_sheet(wb, wsHelp, 'Huong_Dan');
+
+    // Sheet 3: Danh sách Phòng ban / Bộ phận hiện có trong hệ thống
+    if (departments.length > 0) {
+        const deptLookup = departments.map((d, idx) => ({
+            'STT': idx + 1,
+            'ID ĐƠN VỊ': d.dept_id,
+            'TÊN BỘ PHẬN / PHÒNG BAN': d.name,
+            'CẤP ĐƠN VỊ': d.level || 'PHONG_BAN',
+            'MÔ TẢ': d.description || '',
+        }));
+        const wsDept = XLSX.utils.json_to_sheet(deptLookup);
+        wsDept['!cols'] = [{ wch: 6 }, { wch: 12 }, { wch: 32 }, { wch: 16 }, { wch: 35 }];
+        XLSX.utils.book_append_sheet(wb, wsDept, 'DS_Phong_Ban');
+    }
+
     await saveWorkbook(wb, 'Mau_Import_Danh_Sach_Nhan_Su_VCS.xlsx');
 };
 
@@ -226,6 +267,7 @@ export interface ParsedRow {
     department_name: string;
     gender: string;
     ethnicity: string;
+    is_party_member?: boolean;
     date_of_birth: string | null;
     place_of_birth: string;
     email: string;
@@ -291,6 +333,14 @@ export const parseExcelFile = async (
                         phone = '0' + phone;
                     }
 
+                    const partyRaw = getVal(['ĐẢNG VIÊN', 'ĐẢNGVIÊN', 'PARTYMEMBER']).toLowerCase();
+                    let isPartyMember: boolean | undefined = undefined;
+                    if (['có', 'co', 'đảng viên', 'dang vien', 'yes', 'x', '1', 'true'].includes(partyRaw)) {
+                        isPartyMember = true;
+                    } else if (['không', 'khong', 'quần chúng', 'quan chung', 'no', '0', 'false'].includes(partyRaw)) {
+                        isPartyMember = false;
+                    }
+
                     return {
                         rowIndex: idx + 2, // Excel row (1-based + header)
                         name: getVal(['HỌ TÊN', 'HỌ VÀ TÊN', 'TÊN', 'NAME']),
@@ -299,6 +349,7 @@ export const parseExcelFile = async (
                         department_name: getVal(['BỘ PHẬN', 'PHÒNG BAN', 'DEPARTMENT']),
                         gender: getVal(['GIỚI TÍNH', 'GIỚITÍNH', 'GENDER']),
                         ethnicity: getVal(['DÂN TỘC', 'DÂNTỘC', 'ETHNICITY']),
+                        is_party_member: isPartyMember,
                         date_of_birth: parseDate(row[Object.keys(row).find(k => k.trim().toUpperCase().includes('SINH') && k.trim().toUpperCase().includes('NGÀY')) || 'NGÀY SINH'] as string),
                         place_of_birth: getVal(['NƠI SINH', 'PLACE OF BIRTH']),
                         email: getVal(['EMAIL', 'E-MAIL']),
@@ -346,6 +397,7 @@ const CUSTOM_FIELD_MAP: Record<string, { header: string; width: number }> = {
     phone_number: { header: 'SĐT', width: 15 },
     gender: { header: 'GIỚI TÍNH', width: 10 },
     ethnicity: { header: 'DÂN TỘC', width: 12 },
+    is_party_member: { header: 'ĐẢNG VIÊN', width: 14 },
     date_of_birth: { header: 'NGÀY SINH', width: 15 },
     place_of_birth: { header: 'NƠI SINH', width: 15 },
     citizen_identification_card: { header: 'CCCD', width: 15 },
@@ -500,6 +552,9 @@ function getUserFieldValue(user: IUser, field: string): string {
     const dateFields = ['date_of_birth', 'cccd_issue_date'];
     if (dateFields.includes(field)) {
         return formatDateForExcel((user as any)[field]);
+    }
+    if (field === 'is_party_member') {
+        return user.is_party_member ? 'Đảng viên' : '';
     }
     if (field === 'dept_name') {
         const depts = (user as any).user_departments;

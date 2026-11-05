@@ -21,6 +21,7 @@ import dayjs from 'dayjs';
 import ProfileModal from '../Users/components/ProfileModal';
 import { getToken } from '../../utils/auth';
 import { getLaborContracts, ILaborContract } from '../../apis/laborContracts';
+import { getPendingRequests } from '../../apis/profileRequests';
 import { useNavigate } from 'react-router-dom';
 
 const { Title, Text } = Typography;
@@ -157,6 +158,7 @@ const HRDashboard: React.FC = () => {
     const [stats, setStats] = useState({
         totalUsers: 0,
         activeUsers: 0,
+        partyMembers: 0,
         expiringCerts: 0,
     });
 
@@ -164,6 +166,7 @@ const HRDashboard: React.FC = () => {
     const [expiringCerts, setExpiringCerts] = useState<IEmployeeCertificate[]>([]);
     const [expiringContracts, setExpiringContracts] = useState<ILaborContract[]>([]);
     const [activeContractsCount, setActiveContractsCount] = useState(0);
+    const [pendingRequestsCount, setPendingRequestsCount] = useState(0);
     const [qualStats, setQualStats] = useState<any>(null);
     const [loading, setLoading] = useState(false);
 
@@ -184,18 +187,21 @@ const HRDashboard: React.FC = () => {
         setCertLoading(true);
         try {
             const token = getToken();
-            const [usersList, certs, qStats, cData, allCertificates] = await Promise.all([
+            const [usersList, certs, qStats, cData, allCertificates, pendingReqs] = await Promise.all([
                 getAllUsers(token, {}).catch(() => []),
                 certificatesApi.getExpiringCertificates(90).catch(() => []),
                 certificatesApi.getQualificationStats().catch(() => null),
                 getLaborContracts().catch(() => []),
                 certificatesApi.getAllCertificates().catch(() => []),
+                getPendingRequests().catch(() => []),
             ]);
 
             const users = Array.isArray(usersList) ? usersList : [];
             setAllUsers(users);
             const total = users.length;
-            const active = users.filter((u: any) => u.status === 'ACTIVE' || u.status === 'active').length;
+            const active = users.filter((u: IUser) => u.status === 'ACTIVE' || u.status === 'active').length;
+            const partyCount = users.filter((u: IUser) => u.is_party_member).length;
+            setPendingRequestsCount(Array.isArray(pendingReqs) ? pendingReqs.length : 0);
 
             // Filter expiring & active contracts
             const now = dayjs();
@@ -214,6 +220,7 @@ const HRDashboard: React.FC = () => {
             setStats({
                 totalUsers: total,
                 activeUsers: active,
+                partyMembers: partyCount,
                 expiringCerts: certs.length,
             });
             setExpiringCerts(certs);
@@ -744,7 +751,16 @@ const HRDashboard: React.FC = () => {
                         </Text>
                     </div>
 
-                    <Space>
+                    <Space wrap>
+                        {pendingRequestsCount > 0 && (
+                            <Button
+                                danger
+                                onClick={() => navigate('/quan_ly_nhan_vien?tab=approvals')}
+                                style={{ borderRadius: 8, fontWeight: 600 }}
+                            >
+                                🔔 {pendingRequestsCount} yêu cầu chờ phê duyệt
+                            </Button>
+                        )}
                         <Button 
                             icon={<ReloadOutlined />} 
                             onClick={fetchDashboardData} 
@@ -764,11 +780,15 @@ const HRDashboard: React.FC = () => {
                     </Space>
                 </div>
 
-                {/* ── 1. Modern KPI Metric Cards ── */}
+                {/* ── 1. Modern KPI Metric Cards (Interactive) ── */}
                 <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
                     {/* Card 1: Tổng nhân sự */}
                     <Col xs={24} sm={12} lg={6}>
-                        <div className="hr-kpi-card">
+                        <div
+                            className="hr-kpi-card"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => navigate('/quan_ly_nhan_vien?tab=employees')}
+                        >
                             <div className="hr-kpi-header">
                                 <span className="hr-kpi-label">Tổng quy mô nhân sự</span>
                                 <div className="hr-kpi-icon-wrap" style={{ background: '#eff6ff', color: '#2563eb' }}>
@@ -779,14 +799,26 @@ const HRDashboard: React.FC = () => {
                             <div className="hr-kpi-sub">
                                 <span style={{ color: '#10b981', fontWeight: 600 }}>{stats.activeUsers} hoạt động</span>
                                 <span style={{ color: '#94a3b8' }}>•</span>
-                                <span style={{ color: '#64748b' }}>Tỷ lệ: {stats.totalUsers > 0 ? Math.round((stats.activeUsers / stats.totalUsers) * 100) : 0}%</span>
+                                <span
+                                    style={{ color: '#cf1322', fontWeight: 600 }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate('/quan_ly_nhan_vien?tab=employees&filter=PARTY_MEMBER');
+                                    }}
+                                >
+                                    ⭐ {stats.partyMembers} Đảng viên
+                                </span>
                             </div>
                         </div>
                     </Col>
 
                     {/* Card 2: Tuân thủ & Bằng cấp */}
                     <Col xs={24} sm={12} lg={6}>
-                        <div className="hr-kpi-card">
+                        <div
+                            className="hr-kpi-card"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => navigate('/quan_ly_nhan_vien?tab=certificates')}
+                        >
                             <div className="hr-kpi-header">
                                 <span className="hr-kpi-label">Hồ sơ & Trình độ văn bằng</span>
                                 <div className="hr-kpi-icon-wrap" style={{ background: '#f0fdf4', color: '#10b981' }}>
@@ -795,14 +827,23 @@ const HRDashboard: React.FC = () => {
                             </div>
                             <div className="hr-kpi-value">{qualStats?.totalDegrees || 0}</div>
                             <div className="hr-kpi-sub">
-                                <span style={{ color: '#64748b' }}>Đã hoàn thiện hồ sơ chuẩn hóa</span>
+                                <span style={{ color: '#2563eb', fontWeight: 500 }}>
+                                    Xem danh mục Bằng cấp & CCCM <RightOutlined style={{ fontSize: 10 }} />
+                                </span>
                             </div>
                         </div>
                     </Col>
 
                     {/* Card 3: Cảnh báo khẩn cấp */}
                     <Col xs={24} sm={12} lg={6}>
-                        <div className="hr-kpi-card" style={{ borderColor: totalWarnings > 0 ? '#fecaca' : '#e2e8f0' }}>
+                        <div
+                            className="hr-kpi-card"
+                            style={{ borderColor: totalWarnings > 0 ? '#fecaca' : '#e2e8f0', cursor: 'pointer' }}
+                            onClick={() => {
+                                const el = document.getElementById('hr-warning-center');
+                                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }}
+                        >
                             <div className="hr-kpi-header">
                                 <span className="hr-kpi-label">Cảnh báo rủi ro sắp/quá hạn</span>
                                 <div className="hr-kpi-icon-wrap" style={{ background: totalWarnings > 0 ? '#fef2f2' : '#f0fdf4', color: totalWarnings > 0 ? '#ef4444' : '#10b981' }}>
@@ -824,7 +865,11 @@ const HRDashboard: React.FC = () => {
 
                     {/* Card 4: Tình trạng Hợp đồng */}
                     <Col xs={24} sm={12} lg={6}>
-                        <div className="hr-kpi-card">
+                        <div
+                            className="hr-kpi-card"
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => navigate('/quan_ly_nhan_vien?tab=contracts')}
+                        >
                             <div className="hr-kpi-header">
                                 <span className="hr-kpi-label">Hợp đồng lao động hiệu lực</span>
                                 <div className="hr-kpi-icon-wrap" style={{ background: '#faf5ff', color: '#8b5cf6' }}>
@@ -873,6 +918,7 @@ const HRDashboard: React.FC = () => {
                 </Row>
 
                 {/* ── 3. Actionable Warning Center ── */}
+                <div id="hr-warning-center">
                 <Card 
                     variant="borderless" 
                     styles={{ body: { padding: '16px 20px' } }} 
@@ -887,6 +933,7 @@ const HRDashboard: React.FC = () => {
                     </div>
                     <Tabs items={warningTabs} defaultActiveKey="cccm" size="middle" />
                 </Card>
+                </div>
 
                 {/* ── 4. Detailed Talent Compliance Matrix ── */}
                 <Card 

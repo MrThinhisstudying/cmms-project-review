@@ -83,8 +83,13 @@ export const EmployeeTable: React.FC<EmployeeTableProps> = ({
               style={{ backgroundColor: '#1890ff', flexShrink: 0 }}
             />
             <div>
-              <div style={{ fontWeight: 600, color: '#1f1f1f', fontSize: 13.5 }}>
-                {record.name}
+              <div style={{ fontWeight: 600, color: '#1f1f1f', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span>{record.name}</span>
+                {record.is_party_member && (
+                  <Tag color="red" style={{ margin: 0, fontSize: 10.5, lineHeight: '16px', padding: '0 5px', borderRadius: 4 }}>
+                    ⭐ Đảng viên
+                  </Tag>
+                )}
               </div>
               <div style={{ fontSize: 12, color: '#8c8c8c' }}>
                 MSNV: {record.employee_code || `NV-${record.user_id}`}

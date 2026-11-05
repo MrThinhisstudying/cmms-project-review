@@ -52,6 +52,7 @@ const FIELD_LABEL_MAP: Record<string, string> = {
   place_of_birth: 'Nơi sinh',
   gender: 'Giới tính',
   ethnicity: 'Dân tộc',
+  is_party_member: 'Đảng viên',
   religion: 'Tôn giáo',
   nationality: 'Quốc tịch',
   permanent_address: 'Địa chỉ thường trú',

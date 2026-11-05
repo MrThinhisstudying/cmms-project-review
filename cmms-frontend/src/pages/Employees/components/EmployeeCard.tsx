@@ -186,6 +186,11 @@ export const EmployeeCard: React.FC<EmployeeCardProps> = ({
               <Tag color={roleColor} style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>
                 {roleName}
               </Tag>
+              {user.is_party_member && (
+                <Tag color="red" style={{ margin: 0, fontSize: 11, borderRadius: 4 }}>
+                  ⭐ Đảng viên
+                </Tag>
+              )}
             </div>
           </div>
         </div>

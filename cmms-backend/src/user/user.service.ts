@@ -119,6 +119,7 @@ export class UserService {
 
          if (data.name) user.name = data.name;
          if (data.email) user.email = data.email;
+         if (data.avatar !== undefined) user.avatar = data.avatar;
          if (data.signature_url) user.signature_url = data.signature_url;
          if (data.phone_number !== undefined) user.phone_number = data.phone_number;
          if (data.citizen_identification_card !== undefined) user.citizen_identification_card = data.citizen_identification_card;
@@ -128,6 +129,7 @@ export class UserService {
          if (data.place_of_birth !== undefined) user.place_of_birth = data.place_of_birth;
          if (data.gender !== undefined) user.gender = data.gender;
          if (data.ethnicity !== undefined) user.ethnicity = data.ethnicity;
+         if (data.is_party_member !== undefined) user.is_party_member = Boolean(data.is_party_member);
          if (data.cccd_issue_date !== undefined) user.cccd_issue_date = data.cccd_issue_date;
          if (data.permanent_address !== undefined) user.permanent_address = data.permanent_address;
          if (data.temporary_address !== undefined) user.temporary_address = data.temporary_address;

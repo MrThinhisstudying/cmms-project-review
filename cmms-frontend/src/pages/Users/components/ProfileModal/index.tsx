@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { 
-    Drawer, Form, Input, Button, Upload, message, Avatar, Tag, Spin, Empty, 
+    Form, Input, Button, Upload, message, Avatar, Tag, Spin, Empty, 
     Badge, Tooltip, Table, Space, Popconfirm, DatePicker, Modal, Descriptions,
     Select, Row, Col, Alert, InputNumber
 } from 'antd';
@@ -9,7 +9,7 @@ import {
     SafetyCertificateOutlined, BookOutlined, CarOutlined, EditOutlined,
     PhoneOutlined, DeleteOutlined, CloseOutlined, FileTextOutlined,
     TrophyOutlined, CalendarOutlined, IdcardOutlined, MailOutlined,
-    TeamOutlined, GlobalOutlined, DesktopOutlined, EyeOutlined,
+    GlobalOutlined, DesktopOutlined, EyeOutlined,
     CheckCircleOutlined, HomeOutlined, EnvironmentOutlined, CrownOutlined,
     SolutionOutlined, AuditOutlined, InfoCircleOutlined, CopyOutlined,
     SaveOutlined, FilePdfOutlined
@@ -49,14 +49,6 @@ const getRoleLabel = (role: string | undefined) => {
     return map[role?.toUpperCase() || ''] || role;
 };
 
-const getRoleColor = (role: string | undefined) => {
-    const map: Record<string, string> = {
-        ADMIN: '#f50', DIRECTOR: '#722ed1', UNIT_HEAD: '#2f54eb',
-        TEAM_LEAD: '#1890ff', HR_MANAGER: '#13c2c2',
-    };
-    return map[role?.toUpperCase() || ''] || '#87d068';
-};
-
 type SectionKey = 'info' | 'certificates' | 'cccm' | 'contracts' | 'history' | 'leaves' | 'my_requests';
 
 const NAV_ITEMS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
@@ -71,12 +63,13 @@ const NAV_ITEMS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
 
 // ─────────────────────── Main Component ──────────────────────
 const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpdateSuccess, initialSection }) => {
-    const { user: currentUser } = useAuthContext();
+    const { user: currentUser, setUser: setAuthUser } = useAuthContext();
 
     const [infoForm] = Form.useForm();
     const [passForm] = Form.useForm();
     const [loading, setLoading] = useState(false);
     const [activeSection, setActiveSection] = useState<SectionKey>('info');
+    const [avatarUrl, setAvatarUrl] = useState<string | undefined>(undefined);
     const [signatureUrl, setSignatureUrl] = useState<string | undefined>(undefined);
     const [passwordModalOpen, setPasswordModalOpen] = useState(false);
 
@@ -166,14 +159,16 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
             place_of_birth: user.place_of_birth,
             gender: user.gender,
             ethnicity: user.ethnicity,
+            is_party_member: Boolean(user.is_party_member),
             cccd_issue_date: user.cccd_issue_date ? dayjs(user.cccd_issue_date) : null,
             permanent_address: user.permanent_address,
             temporary_address: user.temporary_address,
             hometown: user.hometown,
         });
+        setAvatarUrl(user.avatar);
         setSignatureUrl(user.signature_url);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, user?.user_id, initialSection]);
+    }, [open, user?.user_id, user?.avatar, user?.signature_url, initialSection]);
 
     // Lazy-load data per section mà không trigger re-render cycle
     useEffect(() => {
@@ -566,41 +561,16 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
     // ── SECTION 1: Thông tin cá nhân ──
     const renderInfoSection = () => (
         <div className="pf-section">
-            <div className="pf-section-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div className="pf-header-icon-box">
-                        <UserOutlined style={{ fontSize: 22, color: '#2563eb' }} />
-                    </div>
-                    <div>
-                        <div className="pf-section-title">Hồ Sơ Cá Nhân & Định Danh Nhân Sự</div>
-                        <div className="pf-section-subtitle">
-                            Quản lý thông tin lý lịch cá nhân, thông tin định danh CCCD và liên hệ nơi cư trú
-                        </div>
-                    </div>
-                </div>
-                <div>
-                    {isAdminOrHR ? (
-                        <Tag color="success" icon={<CheckCircleOutlined />} style={{ padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500 }}>
-                            Quản trị viên (Cập nhật trực tiếp)
-                        </Tag>
-                    ) : (
-                        <Tag color="processing" icon={<InfoCircleOutlined />} style={{ padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500 }}>
-                            Nhân viên (Cần phê duyệt HR)
-                        </Tag>
-                    )}
-                </div>
-            </div>
-
             {/* Workflow Alert */}
             {!isAdminOrHR && (
                 <Alert
                     type="info"
                     showIcon
                     icon={<InfoCircleOutlined style={{ color: '#2563eb' }} />}
-                    style={{ marginBottom: 20, borderRadius: 12, border: '1px solid #bfdbfe', background: '#eff6ff' }}
+                    style={{ marginBottom: 16, borderRadius: 12, border: '1px solid #bfdbfe', background: '#eff6ff' }}
                     message={<span style={{ fontWeight: 600, color: '#1e40af' }}>Quy trình cập nhật hồ sơ nhân sự</span>}
                     description={
-                        <span style={{ color: '#1e3a8a', fontSize: 13 }}>
+                        <span style={{ color: '#1e3a8a', fontSize: 12.5 }}>
                             Để bảo đảm tính toàn vẹn và chính xác của dữ liệu CMMS, mọi thay đổi từ tài khoản nhân viên sẽ tự động tạo một yêu cầu trình Ban Giám đốc và Phòng Nhân sự duyệt trước khi áp dụng chính thức.
                         </span>
                     }
@@ -633,6 +603,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                                 place_of_birth: formatted.place_of_birth,
                                 gender: formatted.gender,
                                 ethnicity: formatted.ethnicity,
+                                is_party_member: Boolean(formatted.is_party_member),
                                 citizen_identification_card: formatted.citizen_identification_card,
                                 cccd_issue_date: formatted.cccd_issue_date,
                                 position: formatted.position,
@@ -649,6 +620,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                                 place_of_birth: user.place_of_birth || '',
                                 gender: user.gender || '',
                                 ethnicity: user.ethnicity || '',
+                                is_party_member: Boolean(user.is_party_member),
                                 citizen_identification_card: user.citizen_identification_card || '',
                                 cccd_issue_date: user.cccd_issue_date ? dayjs(user.cccd_issue_date).format('YYYY-MM-DD') : '',
                                 position: user.position || '',
@@ -686,140 +658,215 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     finally { setLoading(false); }
                 }}
             >
-                {/* ── CARD 1: THÔNG TIN NHÂN SỰ & CHỨC DANH ── */}
-                <div className="pf-info-card">
-                    <div className="pf-card-header-bar">
-                        <div className="pf-card-icon-pill" style={{ background: '#eff6ff', color: '#2563eb' }}>
-                            <SolutionOutlined />
+                <div className="pf-bento-grid">
+                    {/* ── BENTO 1: THÔNG TIN NHÂN SỰ & CHỨC DANH ── */}
+                    <div className="pf-info-card">
+                        <div className="pf-card-header-bar">
+                            <div className="pf-card-icon-pill" style={{ background: '#dbeafe', color: '#1d4ed8' }}>
+                                <SolutionOutlined />
+                            </div>
+                            <div>
+                                <div className="pf-card-section-title">Thông tin nhân sự & Chức danh</div>
+                                <div className="pf-card-section-desc">Họ tên, mã nhân viên, vị trí công tác và lý lịch cơ bản</div>
+                            </div>
                         </div>
-                        <div>
-                            <div className="pf-card-section-title">Thông tin nhân sự & Chức danh</div>
-                            <div className="pf-card-section-desc">Họ tên, mã số nhân viên và vị trí công tác tại đơn vị</div>
+                        <div className="pf-card-body">
+                            <Row gutter={[12, 4]}>
+                                <Col xs={24} sm={14}>
+                                    <Form.Item name="name" label={<span className="pf-field-label">Họ và tên *</span>} rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}>
+                                        <Input prefix={<UserOutlined style={{ color: '#64748b' }} />} placeholder="Ví dụ: Nguyễn Văn A" />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} sm={10}>
+                                    <Form.Item name="employee_code" label={<span className="pf-field-label">Mã số nhân viên</span>}>
+                                        <Input 
+                                            disabled={!isAdminOrHR} 
+                                            prefix={<IdcardOutlined style={{ color: '#64748b' }} />} 
+                                            placeholder="MSNV" 
+                                        />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} sm={14}>
+                                    <Form.Item name="position" label={<span className="pf-field-label">Chức vụ / Chức danh</span>}>
+                                        <Input prefix={<CrownOutlined style={{ color: '#64748b' }} />} placeholder="Ví dụ: Kỹ thuật viên..." />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} sm={10}>
+                                    <Form.Item name="date_of_birth" label={<span className="pf-field-label">Ngày sinh</span>}>
+                                        <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày sinh" />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={12} sm={8}>
+                                    <Form.Item name="gender" label={<span className="pf-field-label">Giới tính</span>}>
+                                        <Select placeholder="-- Chọn --" allowClear>
+                                            <Select.Option value="Nam">Nam</Select.Option>
+                                            <Select.Option value="Nữ">Nữ</Select.Option>
+                                        </Select>
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={12} sm={7}>
+                                    <Form.Item name="ethnicity" label={<span className="pf-field-label">Dân tộc</span>}>
+                                        <Input placeholder="Ví dụ: Kinh" />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} sm={9}>
+                                    <Form.Item name="is_party_member" label={<span className="pf-field-label">Đảng viên</span>}>
+                                        <Select>
+                                            <Select.Option value={false}>Quần chúng</Select.Option>
+                                            <Select.Option value={true}>⭐ Đảng viên</Select.Option>
+                                        </Select>
+                                    </Form.Item>
+                                </Col>
+                            </Row>
                         </div>
                     </div>
-                    <div className="pf-card-body">
-                        <Row gutter={[16, 8]}>
-                            <Col xs={24} sm={12} md={12}>
-                                <Form.Item name="name" label={<span className="pf-field-label">Họ và tên *</span>} rules={[{ required: true, message: 'Vui lòng nhập họ tên' }]}>
-                                    <Input prefix={<UserOutlined style={{ color: '#94a3b8' }} />} placeholder="Ví dụ: Nguyễn Văn A" size="large" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} sm={12} md={12}>
-                                <Form.Item name="employee_code" label={<span className="pf-field-label">Mã số nhân viên (MSNV)</span>}>
-                                    <Input 
-                                        disabled={!isAdminOrHR} 
-                                        prefix={<IdcardOutlined style={{ color: '#94a3b8' }} />} 
-                                        placeholder="Mã nhân viên" 
-                                        size="large" 
-                                    />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} sm={12} md={12}>
-                                <Form.Item name="position" label={<span className="pf-field-label">Chức vụ / Chức danh</span>}>
-                                    <Input prefix={<CrownOutlined style={{ color: '#94a3b8' }} />} placeholder="Ví dụ: Kỹ thuật viên bảo dưỡng..." size="large" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} sm={12} md={12}>
-                                <Form.Item name="date_of_birth" label={<span className="pf-field-label">Ngày sinh</span>}>
-                                    <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày sinh" size="large" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} sm={8} md={8}>
-                                <Form.Item name="gender" label={<span className="pf-field-label">Giới tính</span>}>
-                                    <Select placeholder="-- Chọn --" allowClear size="large">
-                                        <Select.Option value="Nam">Nam</Select.Option>
-                                        <Select.Option value="Nữ">Nữ</Select.Option>
-                                    </Select>
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} sm={8} md={8}>
-                                <Form.Item name="ethnicity" label={<span className="pf-field-label">Dân tộc</span>}>
-                                    <Input placeholder="Ví dụ: Kinh" size="large" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} sm={8} md={8}>
-                                <Form.Item name="place_of_birth" label={<span className="pf-field-label">Nơi sinh</span>}>
-                                    <Input prefix={<EnvironmentOutlined style={{ color: '#94a3b8' }} />} placeholder="Ví dụ: TP. Hồ Chí Minh" size="large" />
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                    </div>
-                </div>
 
-                {/* ── CARD 2: ĐỊNH DANH & CĂN CƯỚC CÔNG DÂN ── */}
-                <div className="pf-info-card">
-                    <div className="pf-card-header-bar">
-                        <div className="pf-card-icon-pill" style={{ background: '#ecfdf5', color: '#059669' }}>
-                            <AuditOutlined />
+                    {/* ── BENTO 2: LIÊN HỆ & NƠI CƯ TRÚ ── */}
+                    <div className="pf-info-card">
+                        <div className="pf-card-header-bar">
+                            <div className="pf-card-icon-pill" style={{ background: '#fef3c7', color: '#b45309' }}>
+                                <PhoneOutlined />
+                            </div>
+                            <div>
+                                <div className="pf-card-section-title">Liên hệ & Nơi cư trú</div>
+                                <div className="pf-card-section-desc">Số điện thoại liên lạc, nơi sinh và địa chỉ thường trú / tạm trú</div>
+                            </div>
                         </div>
-                        <div>
-                            <div className="pf-card-section-title">Định danh & Thẻ căn cước công dân</div>
-                            <div className="pf-card-section-desc">Số định danh cá nhân 12 số, ngày cấp thẻ và quê quán</div>
+                        <div className="pf-card-body">
+                            <Row gutter={[12, 4]}>
+                                <Col xs={24} sm={12}>
+                                    <Form.Item 
+                                        name="phone_number" 
+                                        label={<span className="pf-field-label">Số điện thoại di động</span>} 
+                                        rules={[{ pattern: /^[0-9]{10,11}$/, message: 'SĐT không hợp lệ (10-11 số)' }]}
+                                    >
+                                        <Input prefix={<PhoneOutlined style={{ color: '#64748b' }} />} placeholder="090xxxxxxx" />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} sm={12}>
+                                    <Form.Item name="place_of_birth" label={<span className="pf-field-label">Nơi sinh</span>}>
+                                        <Input prefix={<EnvironmentOutlined style={{ color: '#64748b' }} />} placeholder="Ví dụ: TP. Hồ Chí Minh" />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24}>
+                                    <Form.Item name="permanent_address" label={<span className="pf-field-label">Địa chỉ thường trú</span>}>
+                                        <Input prefix={<HomeOutlined style={{ color: '#64748b' }} />} placeholder="Địa chỉ thường trú đầy đủ theo hộ khẩu" />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24}>
+                                    <Form.Item name="temporary_address" label={<span className="pf-field-label">Địa chỉ nơi ở hiện tại (tạm trú)</span>}>
+                                        <Input prefix={<EnvironmentOutlined style={{ color: '#64748b' }} />} placeholder="Địa chỉ nơi ở hiện tại (nếu khác nơi thường trú)" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
                         </div>
                     </div>
-                    <div className="pf-card-body">
-                        <Row gutter={[16, 8]}>
-                            <Col xs={24} sm={12} md={8}>
-                                <Form.Item 
-                                    name="citizen_identification_card" 
-                                    label={<span className="pf-field-label">Số CCCD (12 chữ số)</span>} 
-                                    rules={[{ pattern: /^[0-9]{12}$/, message: 'CCCD phải có đúng 12 chữ số' }]}
-                                >
-                                    <Input maxLength={12} prefix={<IdcardOutlined style={{ color: '#94a3b8' }} />} placeholder="001xxxxxxxx" size="large" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} sm={12} md={8}>
-                                <Form.Item name="cccd_issue_date" label={<span className="pf-field-label">Ngày cấp CCCD</span>}>
-                                    <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày cấp" size="large" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} sm={24} md={8}>
-                                <Form.Item name="hometown" label={<span className="pf-field-label">Quê quán</span>}>
-                                    <Input prefix={<HomeOutlined style={{ color: '#94a3b8' }} />} placeholder="Ví dụ: TP. Hồ Chí Minh" size="large" />
-                                </Form.Item>
-                            </Col>
-                        </Row>
-                    </div>
-                </div>
 
-                {/* ── CARD 3: LIÊN HỆ & NƠI CƯ TRÚ ── */}
-                <div className="pf-info-card">
-                    <div className="pf-card-header-bar">
-                        <div className="pf-card-icon-pill" style={{ background: '#fffbeb', color: '#d97706' }}>
-                            <PhoneOutlined />
+                    {/* ── BENTO 3: ĐỊNH DANH & CĂN CƯỚC CÔNG DÂN ── */}
+                    <div className="pf-info-card">
+                        <div className="pf-card-header-bar">
+                            <div className="pf-card-icon-pill" style={{ background: '#d1fae5', color: '#047857' }}>
+                                <AuditOutlined />
+                            </div>
+                            <div>
+                                <div className="pf-card-section-title">Định danh & Thẻ căn cước công dân</div>
+                                <div className="pf-card-section-desc">Số định danh cá nhân 12 số, ngày cấp thẻ và quê quán</div>
+                            </div>
                         </div>
-                        <div>
-                            <div className="pf-card-section-title">Liên hệ & Nơi cư trú</div>
-                            <div className="pf-card-section-desc">Số điện thoại liên lạc trực tiếp và địa chỉ thường trú / tạm trú</div>
+                        <div className="pf-card-body">
+                            <Row gutter={[12, 4]}>
+                                <Col xs={24} sm={13}>
+                                    <Form.Item 
+                                        name="citizen_identification_card" 
+                                        label={<span className="pf-field-label">Số CCCD (12 chữ số)</span>} 
+                                        rules={[{ pattern: /^[0-9]{12}$/, message: 'CCCD phải có đúng 12 chữ số' }]}
+                                    >
+                                        <Input maxLength={12} prefix={<IdcardOutlined style={{ color: '#64748b' }} />} placeholder="001xxxxxxxxx" />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24} sm={11}>
+                                    <Form.Item name="cccd_issue_date" label={<span className="pf-field-label">Ngày cấp CCCD</span>}>
+                                        <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày cấp" />
+                                    </Form.Item>
+                                </Col>
+                                <Col xs={24}>
+                                    <Form.Item name="hometown" label={<span className="pf-field-label">Nguyên quán / Quê quán</span>}>
+                                        <Input prefix={<HomeOutlined style={{ color: '#64748b' }} />} placeholder="Ví dụ: Quận 1, TP. Hồ Chí Minh" />
+                                    </Form.Item>
+                                </Col>
+                            </Row>
                         </div>
                     </div>
-                    <div className="pf-card-body">
-                        <Row gutter={[16, 8]}>
-                            <Col xs={24} sm={24} md={8}>
-                                <Form.Item 
-                                    name="phone_number" 
-                                    label={<span className="pf-field-label">Số điện thoại di động</span>} 
-                                    rules={[{ pattern: /^[0-9]{10,11}$/, message: 'SĐT không hợp lệ (10-11 số)' }]}
+
+                    {/* ── BENTO 4: CHỮ KÝ ĐIỆN TỬ MẪU ── */}
+                    <div className="pf-info-card">
+                        <div className="pf-card-header-bar" style={{ justifyContent: 'space-between' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <div className="pf-card-icon-pill" style={{ background: '#ede9fe', color: '#6d28d9' }}>
+                                    <EditOutlined />
+                                </div>
+                                <div>
+                                    <div className="pf-card-section-title">Chữ ký điện tử mẫu</div>
+                                    <div className="pf-card-section-desc">Ký duyệt biên bản, phiếu công tác và hồ sơ nội bộ</div>
+                                </div>
+                            </div>
+                            {(isOwnProfile || isAdminOrHR) && (
+                                <Upload
+                                    showUploadList={false}
+                                    accept="image/*"
+                                    customRequest={async (options) => {
+                                        try {
+                                            const token = getToken();
+                                            const res = await uploadSignature(user.user_id, options.file as File, token);
+                                            setSignatureUrl(res.signature_url);
+                                            message.success('Tải lên chữ ký thành công');
+                                            options.onSuccess?.(res);
+                                            onUpdateSuccess({ ...user, signature_url: res.signature_url });
+                                        } catch (err: unknown) {
+                                            const errMsg = err instanceof Error ? err.message : 'Tải lên thất bại';
+                                            message.error(errMsg);
+                                        }
+                                    }}
                                 >
-                                    <Input prefix={<PhoneOutlined style={{ color: '#94a3b8' }} />} placeholder="090xxxxxxx" size="large" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} sm={24} md={16}>
-                                <Form.Item name="permanent_address" label={<span className="pf-field-label">Địa chỉ thường trú</span>}>
-                                    <Input prefix={<HomeOutlined style={{ color: '#94a3b8' }} />} placeholder="Địa chỉ thường trú đầy đủ theo hộ khẩu" size="large" />
-                                </Form.Item>
-                            </Col>
-                            <Col xs={24} sm={24} md={24}>
-                                <Form.Item name="temporary_address" label={<span className="pf-field-label">Địa chỉ nơi ở hiện tại (tạm trú)</span>}>
-                                    <Input prefix={<EnvironmentOutlined style={{ color: '#94a3b8' }} />} placeholder="Địa chỉ nơi ở hiện tại (nếu khác nơi thường trú)" size="large" />
-                                </Form.Item>
-                            </Col>
-                        </Row>
+                                    <Button icon={<UploadOutlined />} size="small" type="primary" ghost>
+                                        Tải chữ ký
+                                    </Button>
+                                </Upload>
+                            )}
+                        </div>
+                        <div className="pf-card-body" style={{ paddingBottom: 16, display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1 }}>
+                            {signatureUrl ? (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 10, padding: '14px 16px' }}>
+                                    <div style={{ background: '#ffffff', padding: '8px 14px', borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                                        <img src={getBackendImageUrl(signatureUrl)} alt="Chữ ký điện tử" style={{ maxHeight: 54, maxWidth: 180, objectFit: 'contain', display: 'block' }} />
+                                    </div>
+                                    <div style={{ fontSize: 12, color: '#64748b' }}>
+                                        <div style={{ fontWeight: 600, color: '#059669', marginBottom: 2 }}>✓ Đã đăng ký chữ ký số</div>
+                                        <div>Định dạng khuyến nghị: PNG nền trong suốt</div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div style={{ background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 10, padding: '24px 16px', textAlign: 'center', color: '#64748b', fontSize: 12.5 }}>
+                                    Chưa đăng ký chữ ký điện tử mẫu. Nhấn <b>"Tải chữ ký"</b> ở góc trên để tải ảnh lên.
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 
                 {(isOwnProfile || isAdminOrHR) && (
                     <div className="pf-action-bar">
+                        <div>
+                            {isAdminOrHR ? (
+                                <Tag color="success" icon={<CheckCircleOutlined />} style={{ padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500, margin: 0 }}>
+                                    Chế độ Quản trị viên (Lưu trực tiếp)
+                                </Tag>
+                            ) : (
+                                <Tag color="processing" icon={<InfoCircleOutlined />} style={{ padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 500, margin: 0 }}>
+                                    Chế độ Nhân viên (Gửi phê duyệt HR)
+                                </Tag>
+                            )}
+                        </div>
                         <Button 
                             type="primary" 
                             htmlType="submit" 
@@ -1346,19 +1393,8 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     </div>
                 )}
 
-                <div className="pf-subsection" style={{ marginTop: 24 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                        <div className="pf-subsection-title" style={{ margin: 0 }}>Lịch sử nghỉ phép & Giấy đề nghị ({leaveHistories.length})</div>
-                        <Button 
-                            type="primary" 
-                            ghost
-                            size="small" 
-                            icon={<PlusOutlined />}
-                            onClick={handleOpenRecordLeave}
-                        >
-                            Ghi nhận
-                        </Button>
-                    </div>
+                <div className="pf-subsection" style={{ marginTop: 18 }}>
+                    <div className="pf-subsection-title">Lịch sử nghỉ phép & Giấy đề nghị ({leaveHistories.length})</div>
                     {leaveHistories.length === 0 ? (
                         <Empty description="Chưa có lịch sử nghỉ phép" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                     ) : (
@@ -1497,149 +1533,225 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
     // ══════════════════════════ RENDER ══════════════════════════
     return (
         <>
-            <Drawer
+            <Modal
+                centered
                 closable={false}
                 title={null}
-                placement="right"
+                footer={null}
                 open={open}
-                onClose={onCancel}
-                width={typeof window !== 'undefined' && window.innerWidth <= 768 ? '100vw' : 'min(1180px, 96vw)'}
-                styles={{ body: { padding: 0 } }}
+                onCancel={onCancel}
+                width="min(1160px, 96vw)"
+                wrapClassName="pf-modal-wrap"
+                className="pf-centered-modal"
+                styles={{
+                    container: {
+                        padding: 0,
+                        borderRadius: 16,
+                        overflow: 'hidden',
+                        background: '#e8eef5',
+                        boxShadow: '0 24px 48px -12px rgba(15, 23, 42, 0.35)',
+                    },
+                    body: { padding: 0 },
+                }}
                 destroyOnClose
             >
                 <div className="pf-layout">
-                    {/* ── Sidebar ── */}
-                    <aside className="pf-sidebar">
-                        {/* User card */}
-                        <div className="pf-user-card">
-                            {(isOwnProfile || isAdminOrHR) ? (
-                                <Upload
-                                    showUploadList={false}
-                                    accept="image/*"
-                                    customRequest={async (options) => {
-                                        try {
-                                            const token = getToken();
-                                            const optimizedFile = await optimizeImageBeforeUpload(options.file as File, 800, 0.8);
-                                            const res = await uploadAvatar(user.user_id, optimizedFile, token);
-                                            message.success('Cập nhật ảnh đại diện thành công');
-                                            options.onSuccess?.(res);
-                                            onUpdateSuccess({ ...user, avatar: res.avatar });
-                                        } catch (err: any) {
-                                            message.error(err.message || 'Tải lên thất bại');
-                                            options.onError?.(err);
-                                        }
-                                    }}
-                                >
-                                    <div className="pf-avatar-wrapper">
-                                        <Avatar size={84} src={user.avatar ? getBackendImageUrl(user.avatar) : undefined} icon={<UserOutlined />} className="pf-avatar" />
-                                        <div className="pf-avatar-edit-badge">
-                                            <EditOutlined style={{ color: '#fff', fontSize: 13 }} />
+                    {/* ── Top Profile Banner (Full-bleed Horizontal Header) ── */}
+                    <header className="pf-top-header">
+                        <div className="pf-top-header-main">
+                            {/* Avatar */}
+                            <div className="pf-top-avatar-col">
+                                {(isOwnProfile || isAdminOrHR) ? (
+                                    <Upload
+                                        showUploadList={false}
+                                        accept="image/*"
+                                        customRequest={async (options) => {
+                                            try {
+                                                const token = getToken();
+                                                const optimizedFile = await optimizeImageBeforeUpload(options.file as File, 400, 0.8);
+                                                const res = await uploadAvatar(user.user_id, optimizedFile, token);
+                                                setAvatarUrl(res.avatar);
+                                                if (isOwnProfile && setAuthUser) {
+                                                    setAuthUser((prev) => prev ? { ...prev, avatar: res.avatar } : prev);
+                                                }
+                                                message.success('Cập nhật ảnh đại diện thành công');
+                                                options.onSuccess?.(res);
+                                                onUpdateSuccess({ ...user, avatar: res.avatar });
+                                            } catch (err: unknown) {
+                                                const errMsg = err instanceof Error ? err.message : 'Tải lên thất bại';
+                                                message.error(errMsg);
+                                            }
+                                        }}
+                                    >
+                                        <div className="pf-avatar-wrapper">
+                                            <Avatar size={64} src={avatarUrl ? getBackendImageUrl(avatarUrl) : undefined} icon={<UserOutlined />} className="pf-avatar" />
+                                            <div className="pf-avatar-edit-badge">
+                                                <EditOutlined style={{ color: '#fff', fontSize: 11 }} />
+                                            </div>
                                         </div>
+                                    </Upload>
+                                ) : (
+                                    <div className="pf-avatar-wrapper">
+                                        <Avatar size={64} src={avatarUrl ? getBackendImageUrl(avatarUrl) : undefined} icon={<UserOutlined />} className="pf-avatar" />
                                     </div>
-                                </Upload>
-                            ) : (
-                                <div className="pf-avatar-wrapper">
-                                    <Avatar size={84} src={user.avatar ? getBackendImageUrl(user.avatar) : undefined} icon={<UserOutlined />} className="pf-avatar" />
+                                )}
+                            </div>
+
+                            {/* User Identity + Quick Chips */}
+                            <div className="pf-top-identity">
+                                <div className="pf-top-title-row">
+                                    <span className="pf-user-name">{user.name}</span>
+                                    <span className="pf-role-badge">
+                                        <span className="pf-role-dot"></span>
+                                        {user.position || getRoleLabel(user.role)}
+                                    </span>
+                                    {user.is_party_member && (
+                                        <span className="pf-party-badge">⭐ Đảng viên</span>
+                                    )}
+                                    {user.user_departments && user.user_departments.length > 0 && (
+                                        <div className="pf-top-depts">
+                                            {[...user.user_departments]
+                                                .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
+                                                .map((ud, idx) => {
+                                                    const roleLabel = ud.role_in_dept === 'LEAD' ? 'Trưởng' : ud.role_in_dept === 'DEPUTY_LEAD' ? 'Phó' : '';
+                                                    const deptName = ud.department?.name || `Dept#${ud.dept_id}`;
+                                                    return (
+                                                        <span key={idx} className={`pf-dept-pill ${ud.is_primary ? 'pf-dept-pill--primary' : ''}`}>
+                                                            {ud.is_primary && <span style={{ color: '#fbbf24' }}>★</span>}
+                                                            <span>{deptName}</span>
+                                                            {roleLabel && <span style={{ opacity: 0.8 }}>({roleLabel})</span>}
+                                                        </span>
+                                                    );
+                                                })}
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                            <div className="pf-user-name">{user.name}</div>
-                            <div className="pf-role-badge">
-                                <span className="pf-role-dot"></span>
-                                {user.position || getRoleLabel(user.role)}
+
+                                <div className="pf-top-meta-row">
+                                    <Tooltip title="Nhấp để sao chép MSNV">
+                                        <div
+                                            className="pf-meta-chip"
+                                            onClick={() => {
+                                                if (user.employee_code) {
+                                                    navigator.clipboard.writeText(user.employee_code);
+                                                    message.success(`Đã sao chép MSNV: ${user.employee_code}`);
+                                                }
+                                            }}
+                                        >
+                                            <IdcardOutlined className="pf-meta-chip-icon" />
+                                            <span className="pf-meta-chip-label">MSNV:</span>
+                                            <span className="pf-meta-chip-val">{user.employee_code || '-'}</span>
+                                            {user.employee_code && <CopyOutlined className="pf-meta-chip-copy" />}
+                                        </div>
+                                    </Tooltip>
+
+                                    <Tooltip title="Nhấp để sao chép Email">
+                                        <div
+                                            className="pf-meta-chip"
+                                            onClick={() => {
+                                                if (user.email) {
+                                                    navigator.clipboard.writeText(user.email);
+                                                    message.success(`Đã sao chép Email: ${user.email}`);
+                                                }
+                                            }}
+                                        >
+                                            <MailOutlined className="pf-meta-chip-icon" />
+                                            <span className="pf-meta-chip-label">Email:</span>
+                                            <span className="pf-meta-chip-val">{user.email || '-'}</span>
+                                            {user.email && <CopyOutlined className="pf-meta-chip-copy" />}
+                                        </div>
+                                    </Tooltip>
+
+                                    <Tooltip title="Nhấp để sao chép Số điện thoại">
+                                        <div
+                                            className="pf-meta-chip"
+                                            onClick={() => {
+                                                if (user.phone_number) {
+                                                    navigator.clipboard.writeText(user.phone_number);
+                                                    message.success(`Đã sao chép SĐT: ${user.phone_number}`);
+                                                }
+                                            }}
+                                        >
+                                            <PhoneOutlined className="pf-meta-chip-icon" />
+                                            <span className="pf-meta-chip-label">SĐT:</span>
+                                            <span className="pf-meta-chip-val">{user.phone_number || '-'}</span>
+                                            {user.phone_number && <CopyOutlined className="pf-meta-chip-copy" />}
+                                        </div>
+                                    </Tooltip>
+                                </div>
+                            </div>
+
+                            {/* Right Header Actions: Signature + Password + Close */}
+                            <div className="pf-top-actions">
+                                <div className="pf-sig-pill">
+                                    <span
+                                        className="pf-sig-pill-status"
+                                        onClick={() => setActiveSection('info')}
+                                        title="Xem chữ ký điện tử tại tab Thông tin cá nhân"
+                                    >
+                                        <EditOutlined style={{ color: '#60a5fa' }} />
+                                        <span>Chữ ký số:</span>
+                                        {signatureUrl ? (
+                                            <strong style={{ color: '#34d399' }}>✓ Đã có</strong>
+                                        ) : (
+                                            <strong style={{ color: '#94a3b8' }}>Chưa có</strong>
+                                        )}
+                                    </span>
+                                    {(isOwnProfile || isAdminOrHR) && (
+                                        <Upload
+                                            showUploadList={false}
+                                            accept="image/*"
+                                            customRequest={async (options) => {
+                                                try {
+                                                    const token = getToken();
+                                                    const res = await uploadSignature(user.user_id, options.file as File, token);
+                                                    setSignatureUrl(res.signature_url);
+                                                    message.success('Tải lên chữ ký thành công');
+                                                    options.onSuccess?.(res);
+                                                    onUpdateSuccess({ ...user, signature_url: res.signature_url });
+                                                } catch (err: unknown) {
+                                                    const errMsg = err instanceof Error ? err.message : 'Tải lên thất bại';
+                                                    message.error(errMsg);
+                                                }
+                                            }}
+                                        >
+                                            <button type="button" className="pf-sig-pill-btn">
+                                                <UploadOutlined /> Cập nhật
+                                            </button>
+                                        </Upload>
+                                    )}
+                                </div>
+
+                                {(isOwnProfile || currentUser?.role === 'ADMIN') && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setPasswordModalOpen(true)}
+                                        className="pf-top-pass-btn"
+                                    >
+                                        <LockOutlined />
+                                        <span>Đổi mật khẩu</span>
+                                    </button>
+                                )}
+
+                                <Tooltip title="Đóng cửa sổ (ESC)">
+                                    <button type="button" onClick={onCancel} className="pf-top-close-btn" aria-label="Đóng">
+                                        <CloseOutlined />
+                                    </button>
+                                </Tooltip>
                             </div>
                         </div>
 
-                        {/* Quick info with copyable pills */}
-                        <div className="pf-quick-info">
-                            <Tooltip title="Nhấp để sao chép MSNV" placement="right">
-                                <div 
-                                    className="pf-quick-chip"
-                                    onClick={() => {
-                                        if (user.employee_code) {
-                                            navigator.clipboard.writeText(user.employee_code);
-                                            message.success(`Đã sao chép MSNV: ${user.employee_code}`);
-                                        }
-                                    }}
-                                >
-                                    <span className="pf-quick-chip-icon"><IdcardOutlined /></span>
-                                    <span className="pf-quick-chip-label">MSNV:</span>
-                                    <span className="pf-quick-chip-val">{user.employee_code || '-'}</span>
-                                    {user.employee_code && <CopyOutlined className="pf-quick-chip-copy" />}
-                                </div>
-                            </Tooltip>
-
-                            <Tooltip title="Nhấp để sao chép Email" placement="right">
-                                <div 
-                                    className="pf-quick-chip"
-                                    onClick={() => {
-                                        if (user.email) {
-                                            navigator.clipboard.writeText(user.email);
-                                            message.success(`Đã sao chép Email: ${user.email}`);
-                                        }
-                                    }}
-                                >
-                                    <span className="pf-quick-chip-icon"><MailOutlined /></span>
-                                    <span className="pf-quick-chip-label">Email:</span>
-                                    <span className="pf-quick-chip-val">{user.email || '-'}</span>
-                                    {user.email && <CopyOutlined className="pf-quick-chip-copy" />}
-                                </div>
-                            </Tooltip>
-
-                            <Tooltip title="Nhấp để sao chép Số điện thoại" placement="right">
-                                <div 
-                                    className="pf-quick-chip"
-                                    onClick={() => {
-                                        if (user.phone_number) {
-                                            navigator.clipboard.writeText(user.phone_number);
-                                            message.success(`Đã sao chép SĐT: ${user.phone_number}`);
-                                        }
-                                    }}
-                                >
-                                    <span className="pf-quick-chip-icon"><PhoneOutlined /></span>
-                                    <span className="pf-quick-chip-label">SĐT:</span>
-                                    <span className="pf-quick-chip-val">{user.phone_number || '-'}</span>
-                                    {user.phone_number && <CopyOutlined className="pf-quick-chip-copy" />}
-                                </div>
-                            </Tooltip>
-                        </div>
-
-                        {/* Đơn vị tổ chức */}
-                        {user.user_departments && user.user_departments.length > 0 && (
-                            <div className="pf-dept-section">
-                                <div className="pf-dept-title">
-                                    <TeamOutlined style={{ fontSize: 13, color: '#60a5fa' }} />
-                                    <span>Đơn vị công tác</span>
-                                </div>
-                                <div className="pf-dept-tags">
-                                    {user.user_departments
-                                        .sort((a, b) => (b.is_primary ? 1 : 0) - (a.is_primary ? 1 : 0))
-                                        .map((ud, idx) => {
-                                            const roleLabel = ud.role_in_dept === 'LEAD' ? 'Trưởng' : ud.role_in_dept === 'DEPUTY_LEAD' ? 'Phó' : '';
-                                            const deptName = ud.department?.name || `Dept#${ud.dept_id}`;
-                                            return (
-                                                <div key={idx} className={`pf-dept-chip ${ud.is_primary ? 'pf-dept-chip--primary' : ''}`}>
-                                                    {ud.is_primary && <span style={{ color: '#fbbf24', marginRight: 4 }}>★</span>}
-                                                    <span className="pf-dept-name">{deptName}</span>
-                                                    {roleLabel && <span className="pf-dept-role">({roleLabel})</span>}
-                                                </div>
-                                            );
-                                        })}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Navigation */}
-                        <nav className="pf-nav">
-                            <div className="pf-nav-label">DANH MỤC HỒ SƠ</div>
+                        {/* ── Horizontal Navigation Tabs Bar ── */}
+                        <nav className="pf-top-tabs">
                             {visibleNav.map(item => (
                                 <button
                                     key={item.key}
                                     type="button"
-                                    className={`pf-nav-item ${activeSection === item.key ? 'pf-nav-item--active' : ''}`}
+                                    className={`pf-top-tab-item ${activeSection === item.key ? 'pf-top-tab-item--active' : ''}`}
                                     onClick={() => setActiveSection(item.key)}
                                 >
-                                    <span className="pf-nav-icon">{item.icon}</span>
-                                    <span className="pf-nav-text">{item.label}</span>
+                                    <span className="pf-top-tab-icon">{item.icon}</span>
+                                    <span>{item.label}</span>
                                     {item.key === 'certificates' && expiringCount > 0 && (
                                         <Badge count={expiringCount} size="small" style={{ backgroundColor: '#f59e0b', boxShadow: 'none' }} />
                                     )}
@@ -1649,93 +1761,10 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                                 </button>
                             ))}
                         </nav>
+                    </header>
 
-                        {/* Footer actions */}
-                        <div className="pf-sidebar-footer">
-                            {/* Chữ ký */}
-                            <div className="pf-sig-block">
-                                <div className="pf-sig-header">
-                                    <span className="pf-sig-label">Chữ ký điện tử</span>
-                                    {(isOwnProfile || isAdminOrHR) && (
-                                        <Upload showUploadList={false} customRequest={async (options) => {
-                                            try {
-                                                const token = getToken();
-                                                const res = await uploadSignature(user.user_id, options.file as File, token);
-                                                setSignatureUrl(res.signature_url);
-                                                message.success('Tải lên chữ ký thành công');
-                                                options.onSuccess?.(res);
-                                                onUpdateSuccess({ ...user, signature_url: res.signature_url });
-                                            } catch (err: any) { message.error(err.message || 'Tải lên thất bại'); options.onError?.(err); }
-                                        }}>
-                                            <Button size="small" type="link" icon={<UploadOutlined />} className="pf-sig-upload-link">
-                                                Cập nhật
-                                            </Button>
-                                        </Upload>
-                                    )}
-                                </div>
-                                {signatureUrl ? (
-                                    <div className="pf-sig-img"><img src={getBackendImageUrl(signatureUrl)} alt="sig" /></div>
-                                ) : (
-                                    <div className="pf-sig-empty">Chưa có chữ ký điện tử</div>
-                                )}
-                            </div>
-                            {(isOwnProfile || currentUser?.role === 'ADMIN') && (
-                                <Button 
-                                    danger 
-                                    block
-                                    icon={<LockOutlined />} 
-                                    onClick={() => setPasswordModalOpen(true)} 
-                                    className="pf-pass-btn"
-                                >
-                                    Đổi mật khẩu
-                                </Button>
-                            )}
-                        </div>
-                    </aside>
-
-                    {/* ── Content ── */}
+                    {/* ── Main Content Workspace ── */}
                     <main className="pf-content">
-                        <Tooltip title="Đóng cửa sổ">
-                            <button type="button" onClick={onCancel} className="pf-close-btn" aria-label="Đóng">
-                                <CloseOutlined />
-                            </button>
-                        </Tooltip>
-
-                        {/* Mobile User Header */}
-                        {user && (
-                            <div className="pf-mobile-header">
-                                <Avatar size={48} src={user.avatar ? getBackendImageUrl(user.avatar) : undefined} icon={<UserOutlined />} />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ fontWeight: 700, fontSize: 16, color: '#001529', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {user.name}
-                                    </div>
-                                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
-                                        <Tag color={getRoleColor(user.role)} style={{ margin: 0, fontSize: 10 }}>
-                                            {user.position || getRoleLabel(user.role)}
-                                        </Tag>
-                                        <span style={{ fontSize: 11, color: '#888' }}>MSNV: {user.employee_code || '-'}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Mobile nav */}
-                        <div className="pf-mobile-nav">
-                            {visibleNav.map(item => (
-                                <button
-                                    key={item.key}
-                                    type="button"
-                                    className={`pf-mobile-nav-item ${activeSection === item.key ? 'pf-mobile-nav-item--active' : ''}`}
-                                    onClick={() => setActiveSection(item.key)}
-                                >
-                                    {item.icon}
-                                    <span>{item.label}</span>
-                                    {item.key === 'certificates' && expiringCount > 0 && <Badge count={expiringCount} size="small" style={{ backgroundColor: '#faad14' }} />}
-                                    {item.key === 'cccm' && cccmExpiringCount > 0 && <Badge count={cccmExpiringCount} size="small" style={{ backgroundColor: '#ff4d4f' }} />}
-                                </button>
-                            ))}
-                        </div>
-
                         {renderActiveSection()}
                     </main>
                 </div>
@@ -1763,224 +1792,483 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
 
                 {/* ── Styles ── */}
                 <style>{`
-                    .pf-layout { display: flex; height: 100%; min-height: 0; background: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
-
-                    /* ──── Sidebar ──── */
-                    .pf-sidebar {
-                        width: 280px; min-width: 280px;
-                        background: linear-gradient(180deg, #091322 0%, #0f1e36 50%, #0d1b30 100%);
-                        display: flex; flex-direction: column; color: #fff; overflow-y: auto;
-                        border-right: 1px solid rgba(255, 255, 255, 0.08);
+                    /* Full-bleed zero-padding modal override for Ant Design (.ant-modal-container & .ant-modal-content) */
+                    .pf-modal-wrap .ant-modal,
+                    .pf-centered-modal {
+                        padding-bottom: 0 !important;
                     }
-                    .pf-sidebar::-webkit-scrollbar { width: 4px; }
-                    .pf-sidebar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
+                    .pf-modal-wrap .ant-modal-container,
+                    .pf-centered-modal .ant-modal-container,
+                    .pf-modal-wrap .ant-modal-content,
+                    .pf-centered-modal .ant-modal-content {
+                        padding: 0 !important;
+                        border-radius: 16px !important;
+                        overflow: hidden !important;
+                        background: #e8eef5 !important;
+                        box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.35) !important;
+                    }
+                    .pf-modal-wrap .ant-modal-body,
+                    .pf-centered-modal .ant-modal-body {
+                        padding: 0 !important;
+                    }
 
-                    .pf-user-card {
-                        padding: 28px 20px 20px; text-align: center;
-                        border-bottom: 1px solid rgba(255,255,255,0.08);
-                        position: relative;
-                        background: radial-gradient(circle at 50% 30%, rgba(37, 99, 235, 0.15) 0%, transparent 70%);
+                    .pf-layout {
+                        display: flex;
+                        flex-direction: column;
+                        height: min(86vh, 800px);
+                        min-height: 560px;
+                        background: #e8eef5;
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                    }
+
+                    /* ──── Top Profile Header Banner (With Integrated Glassmorphism Tabs) ──── */
+                    .pf-top-header {
+                        background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #172554 100%);
+                        color: #fff;
+                        flex-shrink: 0;
+                        border-bottom: 1px solid rgba(15, 23, 42, 0.12);
+                    }
+                    .pf-top-header-main {
+                        display: flex;
+                        align-items: center;
+                        gap: 18px;
+                        padding: 16px 24px 14px;
+                    }
+                    .pf-top-avatar-col {
+                        flex-shrink: 0;
                     }
                     .pf-avatar-wrapper {
-                        position: relative; display: inline-block; cursor: pointer;
+                        position: relative;
+                        display: inline-block;
+                        cursor: pointer;
                     }
                     .pf-avatar {
-                        border: 3px solid rgba(255,255,255,0.85) !important;
-                        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.4), 0 8px 20px rgba(0, 0, 0, 0.35);
+                        border: 2.5px solid rgba(255, 255, 255, 0.9) !important;
+                        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35), 0 6px 16px rgba(0, 0, 0, 0.3);
                         transition: transform 0.2s ease, box-shadow 0.2s ease;
                     }
                     .pf-avatar-wrapper:hover .pf-avatar {
-                        transform: scale(1.03);
-                        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.7), 0 10px 24px rgba(0, 0, 0, 0.45);
+                        transform: scale(1.04);
+                        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.65), 0 8px 20px rgba(0, 0, 0, 0.4);
                     }
                     .pf-avatar-edit-badge {
-                        position: absolute; bottom: 2px; right: 2px; width: 26px; height: 26px;
-                        background: #2563eb; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-                        border: 2px solid #091322; box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-                        transition: background 0.2s;
+                        position: absolute;
+                        bottom: 0;
+                        right: 0;
+                        width: 22px;
+                        height: 22px;
+                        background: #2563eb;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border: 2px solid #0f172a;
+                        box-shadow: 0 2px 6px rgba(0,0,0,0.3);
                     }
-                    .pf-avatar-wrapper:hover .pf-avatar-edit-badge { background: #1d4ed8; }
 
+                    .pf-top-identity {
+                        flex: 1;
+                        min-width: 0;
+                        display: flex;
+                        flex-direction: column;
+                        gap: 8px;
+                    }
+                    .pf-top-title-row {
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        flex-wrap: wrap;
+                    }
                     .pf-user-name {
-                        font-size: 18px; font-weight: 700; color: #f8fafc; margin-top: 14px;
-                        letter-spacing: -0.2px; line-height: 1.3;
+                        font-size: 18px;
+                        font-weight: 700;
+                        color: #f8fafc;
+                        letter-spacing: -0.2px;
+                        line-height: 1.25;
+                        margin-right: 2px;
                     }
                     .pf-role-badge {
-                        display: inline-flex; align-items: center; gap: 6px; margin-top: 8px;
-                        padding: 3px 12px; border-radius: 20px; font-size: 11px; font-weight: 600;
-                        background: rgba(37, 99, 235, 0.15); border: 1px solid rgba(59, 130, 246, 0.35);
-                        color: #93c5fd; letter-spacing: 0.2px;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 5px;
+                        padding: 2px 10px;
+                        border-radius: 20px;
+                        font-size: 11.5px;
+                        font-weight: 600;
+                        background: rgba(59, 130, 246, 0.18);
+                        border: 1px solid rgba(96, 165, 250, 0.4);
+                        color: #bfdbfe;
                     }
-                    .pf-role-dot { width: 6px; height: 6px; border-radius: 50%; background: #38bdf8; }
+                    .pf-role-dot {
+                        width: 6px;
+                        height: 6px;
+                        border-radius: 50%;
+                        background: #38bdf8;
+                    }
+                    .pf-party-badge {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 4px;
+                        padding: 2px 10px;
+                        border-radius: 20px;
+                        font-size: 11.5px;
+                        font-weight: 600;
+                        background: rgba(239, 68, 68, 0.2);
+                        border: 1px solid rgba(248, 113, 113, 0.45);
+                        color: #fecaca;
+                    }
+                    .pf-top-depts {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 6px;
+                        flex-wrap: wrap;
+                    }
+                    .pf-dept-pill {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 4px;
+                        padding: 2px 9px;
+                        border-radius: 6px;
+                        font-size: 11.5px;
+                        background: rgba(255, 255, 255, 0.08);
+                        border: 1px solid rgba(255, 255, 255, 0.12);
+                        color: #e2e8f0;
+                    }
+                    .pf-dept-pill--primary {
+                        background: rgba(251, 191, 36, 0.14);
+                        border-color: rgba(251, 191, 36, 0.35);
+                        color: #fde68a;
+                        font-weight: 600;
+                    }
 
-                    /* Quick Info chips */
-                    .pf-quick-info {
-                        padding: 14px 16px; border-bottom: 1px solid rgba(255,255,255,0.08);
-                        display: flex; flex-direction: column; gap: 6px;
+                    /* Horizontal Meta Chips */
+                    .pf-top-meta-row {
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        flex-wrap: wrap;
                     }
-                    .pf-quick-chip {
-                        display: flex; align-items: center; gap: 8px; padding: 7px 10px;
-                        background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.07);
-                        border-radius: 8px; font-size: 12px; color: #cbd5e1; cursor: pointer;
-                        transition: all 0.2s;
+                    .pf-meta-chip {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 6px;
+                        padding: 4px 10px;
+                        background: rgba(255, 255, 255, 0.06);
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                        border-radius: 7px;
+                        font-size: 12px;
+                        color: #cbd5e1;
+                        cursor: pointer;
+                        transition: all 0.18s ease;
                     }
-                    .pf-quick-chip:hover {
-                        background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.15);
-                        color: #fff;
+                    .pf-meta-chip:hover {
+                        background: rgba(255, 255, 255, 0.12);
+                        border-color: rgba(255, 255, 255, 0.22);
+                        color: #ffffff;
                     }
-                    .pf-quick-chip-icon { color: #60a5fa; font-size: 13px; flex-shrink: 0; width: 14px; }
-                    .pf-quick-chip-label { font-size: 11px; color: #94a3b8; font-weight: 500; min-width: 38px; }
-                    .pf-quick-chip-val { flex: 1; font-weight: 600; color: #f1f5f9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-                    .pf-quick-chip-copy { font-size: 12px; color: rgba(255,255,255,0.3); transition: color 0.2s; }
-                    .pf-quick-chip:hover .pf-quick-chip-copy { color: #60a5fa; }
+                    .pf-meta-chip-icon {
+                        color: #60a5fa;
+                        font-size: 12px;
+                    }
+                    .pf-meta-chip-label {
+                        color: #94a3b8;
+                        font-size: 11.5px;
+                    }
+                    .pf-meta-chip-val {
+                        color: #f8fafc;
+                        font-weight: 600;
+                    }
+                    .pf-meta-chip-copy {
+                        font-size: 11px;
+                        color: rgba(255, 255, 255, 0.35);
+                        margin-left: 2px;
+                    }
+                    .pf-meta-chip:hover .pf-meta-chip-copy {
+                        color: #60a5fa;
+                    }
 
-                    /* Department section */
-                    .pf-dept-section { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); }
-                    .pf-dept-title {
-                        display: flex; align-items: center; gap: 6px; font-size: 11px;
-                        color: #94a3b8; margin-bottom: 8px; text-transform: uppercase;
-                        letter-spacing: 0.6px; font-weight: 700;
+                    /* Right Header Actions */
+                    .pf-top-actions {
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        flex-shrink: 0;
+                        align-self: flex-start;
                     }
-                    .pf-dept-tags { display: flex; flex-direction: column; gap: 6px; }
-                    .pf-dept-chip {
-                        display: flex; align-items: center; gap: 6px; padding: 5px 10px;
-                        background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08);
-                        border-radius: 6px; font-size: 12px; color: #e2e8f0;
+                    .pf-sig-pill {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 8px;
+                        background: rgba(255, 255, 255, 0.06);
+                        border: 1px solid rgba(255, 255, 255, 0.12);
+                        border-radius: 8px;
+                        padding: 5px 10px;
+                        font-size: 12px;
                     }
-                    .pf-dept-chip--primary {
-                        background: rgba(37, 99, 235, 0.15); border-color: rgba(59, 130, 246, 0.3); color: #bfdbfe; font-weight: 600;
+                    .pf-sig-pill-status {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 5px;
+                        color: #cbd5e1;
+                        cursor: pointer;
                     }
-                    .pf-dept-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-                    .pf-dept-role { font-size: 11px; opacity: 0.8; }
+                    .pf-sig-pill-btn {
+                        border: none;
+                        background: rgba(59, 130, 246, 0.22);
+                        color: #93c5fd;
+                        border-radius: 5px;
+                        padding: 2px 8px;
+                        font-size: 11.5px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 4px;
+                        transition: all 0.18s;
+                    }
+                    .pf-sig-pill-btn:hover {
+                        background: #2563eb;
+                        color: #ffffff;
+                    }
+                    .pf-top-pass-btn {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 6px;
+                        height: 32px;
+                        padding: 0 12px;
+                        border-radius: 8px;
+                        border: 1px solid rgba(248, 113, 113, 0.35);
+                        background: rgba(239, 68, 68, 0.14);
+                        color: #fca5a5;
+                        font-size: 12px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        transition: all 0.18s;
+                    }
+                    .pf-top-pass-btn:hover {
+                        background: #ef4444;
+                        border-color: #ef4444;
+                        color: #ffffff;
+                    }
+                    .pf-top-close-btn {
+                        width: 32px;
+                        height: 32px;
+                        border-radius: 8px;
+                        border: 1px solid rgba(255, 255, 255, 0.15);
+                        background: rgba(255, 255, 255, 0.08);
+                        color: #cbd5e1;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        font-size: 14px;
+                        cursor: pointer;
+                        transition: all 0.18s;
+                    }
+                    .pf-top-close-btn:hover {
+                        background: #ef4444;
+                        border-color: #ef4444;
+                        color: #ffffff;
+                    }
 
-                    /* Nav */
-                    .pf-nav { padding: 14px 12px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
-                    .pf-nav-label {
-                        font-size: 10px; font-weight: 700; color: #64748b; letter-spacing: 0.8px;
-                        text-transform: uppercase; padding: 0 10px 6px;
+                    /* ──── Integrated Glassmorphism Navigation Tabs (Inside Dark Header) ──── */
+                    .pf-top-tabs {
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
+                        padding: 8px 24px 12px;
+                        background: rgba(9, 19, 34, 0.35);
+                        border-top: 1px solid rgba(255, 255, 255, 0.08);
+                        overflow-x: auto;
+                        -webkit-overflow-scrolling: touch;
                     }
-                    .pf-nav-item {
-                        display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px;
-                        border: none; background: transparent; color: #94a3b8; cursor: pointer;
-                        border-radius: 10px; font-size: 13px; text-align: left; transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-                        position: relative;
+                    .pf-top-tabs::-webkit-scrollbar {
+                        height: 0;
                     }
-                    .pf-nav-item:hover {
-                        background: rgba(255, 255, 255, 0.06); color: #f8fafc; transform: translateX(2px);
+                    .pf-top-tab-item {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 7px;
+                        padding: 7px 14px;
+                        border: 1px solid transparent;
+                        border-radius: 8px;
+                        background: transparent;
+                        color: #94a3b8;
+                        font-size: 12.5px;
+                        font-weight: 500;
+                        cursor: pointer;
+                        white-space: nowrap;
+                        transition: all 0.18s ease;
                     }
-                    .pf-nav-item--active {
+                    .pf-top-tab-item:hover {
+                        color: #f8fafc;
+                        background: rgba(255, 255, 255, 0.08);
+                    }
+                    .pf-top-tab-item--active {
+                        color: #ffffff !important;
+                        font-weight: 600;
                         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-                        color: #ffffff !important; font-weight: 600;
-                        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+                        border-color: rgba(96, 165, 250, 0.4);
+                        box-shadow: 0 3px 10px rgba(37, 99, 235, 0.35);
                     }
-                    .pf-nav-icon { font-size: 15px; display: flex; align-items: center; }
-                    .pf-nav-text { flex: 1; }
-
-                    /* Footer */
-                    .pf-sidebar-footer {
-                        padding: 14px 16px; border-top: 1px solid rgba(255,255,255,0.08); margin-top: auto;
-                        background: rgba(0, 0, 0, 0.15);
-                    }
-                    .pf-sig-block { margin-bottom: 12px; }
-                    .pf-sig-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-                    .pf-sig-label { font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
-                    .pf-sig-upload-link { color: #60a5fa !important; font-size: 11px !important; padding: 0 !important; height: auto !important; }
-                    .pf-sig-img {
-                        background: #ffffff; border-radius: 8px; padding: 6px; text-align: center;
-                        border: 1px solid rgba(255, 255, 255, 0.2); box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
-                    }
-                    .pf-sig-img img { max-height: 42px; max-width: 100%; object-fit: contain; }
-                    .pf-sig-empty {
-                        background: rgba(255,255,255,0.04); border: 1px dashed rgba(255,255,255,0.15);
-                        border-radius: 8px; padding: 10px; text-align: center; color: #64748b; font-size: 11px;
-                    }
-                    .pf-pass-btn {
-                        border-radius: 8px !important; height: 36px !important; font-weight: 600 !important;
-                        background: rgba(239, 68, 68, 0.1) !important; border-color: rgba(239, 68, 68, 0.3) !important; color: #f87171 !important;
-                        transition: all 0.2s !important;
-                    }
-                    .pf-pass-btn:hover {
-                        background: #ef4444 !important; color: #ffffff !important; border-color: #ef4444 !important;
+                    .pf-top-tab-icon {
+                        font-size: 13.5px;
+                        display: inline-flex;
+                        align-items: center;
                     }
 
-                    /* Content Area */
+                    /* ──── Content Area (Soft Slate-Blue Background + 2-Column Bento Grid) ──── */
                     .pf-content {
-                        flex: 1; overflow-y: auto; padding: 28px 36px 36px; background: #f8fafc;
+                        flex: 1;
+                        overflow-y: auto;
+                        padding: 20px 24px 24px;
+                        background: #e8eef5;
                         position: relative;
                     }
                     .pf-content::-webkit-scrollbar { width: 6px; }
-                    .pf-content::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
+                    .pf-content::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 6px; }
 
-                    .pf-close-btn {
-                        position: absolute; top: 20px; right: 24px; width: 36px; height: 36px;
-                        border-radius: 50%; border: 1px solid #e2e8f0; background: #ffffff;
-                        display: flex; align-items: center; justify-content: center;
-                        color: #64748b; font-size: 16px; cursor: pointer; z-index: 20;
-                        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05); transition: all 0.2s;
-                    }
-                    .pf-close-btn:hover {
-                        background: #f1f5f9; color: #0f172a; border-color: #cbd5e1; transform: scale(1.05);
+                    /* 2-Column Bento Grid */
+                    .pf-bento-grid {
+                        display: grid;
+                        grid-template-columns: repeat(2, minmax(0, 1fr));
+                        gap: 16px;
                     }
 
                     /* Section Header */
                     .pf-section { }
                     .pf-section-header {
-                        display: flex; align-items: flex-start; justify-content: space-between;
-                        margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0;
-                        padding-right: 50px;
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        margin-bottom: 16px;
+                        padding: 12px 18px;
+                        background: #f8fafc;
+                        border: 1px solid #cbd5e1;
+                        border-radius: 12px;
+                        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+                        font-size: 15px;
+                        font-weight: 700;
+                        color: #0f172a;
+                    }
+                    .pf-section-icon {
+                        color: #2563eb;
+                        font-size: 17px;
                     }
                     .pf-header-icon-box {
-                        width: 44px; height: 44px; border-radius: 12px; background: #eff6ff;
+                        width: 40px; height: 40px; border-radius: 10px; background: #eff6ff;
                         border: 1px solid #dbeafe; display: flex; align-items: center; justify-content: center;
                         flex-shrink: 0;
                     }
-                    .pf-section-title { font-size: 18px; font-weight: 700; color: #0f172a; line-height: 1.3; }
-                    .pf-section-subtitle { font-size: 13px; color: #64748b; margin-top: 2px; }
+                    .pf-section-title { font-size: 16px; font-weight: 700; color: #0f172a; line-height: 1.3; }
+                    .pf-section-subtitle { font-size: 12.5px; color: #64748b; margin-top: 2px; font-weight: 400; }
 
-                    /* Form Cards */
+                    /* Form Cards (Tinted Surface & Soft Inputs) */
                     .pf-info-card {
-                        background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px;
-                        box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 4px 12px rgba(0,0,0,0.02);
-                        margin-bottom: 20px; overflow: hidden; transition: all 0.2s;
+                        background: #ffffff;
+                        border: 1px solid #cbd5e1;
+                        border-radius: 14px;
+                        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+                        overflow: hidden;
+                        transition: all 0.2s;
+                        display: flex;
+                        flex-direction: column;
                     }
                     .pf-info-card:hover {
-                        border-color: #cbd5e1; box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+                        border-color: #94a3b8;
+                        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.07);
                     }
                     .pf-card-header-bar {
-                        display: flex; align-items: center; gap: 12px; padding: 14px 20px;
-                        background: #f8fafc; border-bottom: 1px solid #edf2f7;
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        padding: 11px 16px;
+                        background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+                        border-bottom: 1px solid #cbd5e1;
                     }
                     .pf-card-icon-pill {
-                        width: 32px; height: 32px; border-radius: 8px; display: flex;
-                        align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0;
+                        width: 30px; height: 30px; border-radius: 8px; display: flex;
+                        align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0;
                     }
-                    .pf-card-section-title { font-size: 14px; font-weight: 700; color: #1e293b; }
-                    .pf-card-section-desc { font-size: 12px; color: #64748b; }
-                    .pf-card-body { padding: 18px 20px 6px; }
-                    .pf-field-label { font-size: 13px; font-weight: 600; color: #334155; }
+                    .pf-card-section-title { font-size: 13.5px; font-weight: 700; color: #0f172a; }
+                    .pf-card-section-desc { font-size: 11.5px; color: #475569; }
+                    .pf-card-body { padding: 14px 16px 2px; }
+                    .pf-field-label { font-size: 12.5px; font-weight: 600; color: #334155; }
+
+                    /* Tinted inputs inside cards to eliminate white-on-white glare */
+                    .pf-info-card .ant-input-affix-wrapper,
+                    .pf-info-card .ant-input,
+                    .pf-info-card .ant-picker,
+                    .pf-info-card .ant-select-selector {
+                        background-color: #f8fafc !important;
+                        border-color: #cbd5e1 !important;
+                        border-radius: 8px !important;
+                    }
+                    .pf-info-card .ant-input-affix-wrapper input.ant-input {
+                        background-color: transparent !important;
+                    }
+                    .pf-info-card .ant-input-affix-wrapper:hover,
+                    .pf-info-card .ant-input:hover,
+                    .pf-info-card .ant-picker:hover,
+                    .pf-info-card .ant-select:hover .ant-select-selector {
+                        border-color: #60a5fa !important;
+                        background-color: #ffffff !important;
+                    }
+                    .pf-info-card .ant-input-affix-wrapper-focused,
+                    .pf-info-card .ant-input:focus,
+                    .pf-info-card .ant-picker-focused,
+                    .pf-info-card .ant-select-focused .ant-select-selector {
+                        background-color: #ffffff !important;
+                        border-color: #2563eb !important;
+                    }
+                    .pf-info-card .ant-form-item {
+                        margin-bottom: 12px;
+                    }
 
                     .pf-action-bar {
-                        display: flex; justify-content: flex-end; margin-top: 24px; padding-top: 16px;
-                        border-top: 1px solid #e2e8f0;
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        margin-top: 16px;
+                        padding: 12px 18px;
+                        background: #ffffff;
+                        border: 1px solid #cbd5e1;
+                        border-radius: 12px;
+                        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
                     }
                     .pf-submit-btn-premium {
-                        height: 44px !important; padding: 0 28px !important; border-radius: 10px !important;
-                        font-size: 14px !important; font-weight: 600 !important;
+                        height: 40px !important; padding: 0 24px !important; border-radius: 9px !important;
+                        font-size: 13.5px !important; font-weight: 600 !important;
                         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-                        border: none !important; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35) !important;
+                        border: none !important; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
                         transition: all 0.2s !important;
                     }
                     .pf-submit-btn-premium:hover {
-                        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45) !important;
+                        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4) !important;
                         transform: translateY(-1px);
                     }
 
-                    .pf-subsection { margin-bottom: 24px; }
-                    .pf-subsection-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+                    /* Subsection cards for tables & grids */
+                    .pf-subsection {
+                        margin-bottom: 16px;
+                        background: #ffffff;
+                        border: 1px solid #cbd5e1;
+                        border-radius: 12px;
+                        padding: 16px 20px;
+                        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04);
+                    }
+                    .pf-subsection-title {
+                        font-size: 14px;
+                        font-weight: 600;
+                        color: #1e293b;
+                        margin-bottom: 12px;
+                        display: flex;
+                        align-items: center;
+                        gap: 6px;
+                    }
 
-                    .pf-card-list { display: flex; flex-direction: column; gap: 10px; }
-                    .pf-card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 18px; background: #fff; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
-                    .pf-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); border-color: #cbd5e1; }
+                    .pf-card-list { display: flex; flex-direction: column; gap: 12px; }
+                    .pf-card { border: 1px solid #cbd5e1; border-radius: 12px; padding: 16px 20px; background: #fff; transition: all 0.2s; box-shadow: 0 2px 6px rgba(15, 23, 42, 0.04); }
+                    .pf-card:hover { box-shadow: 0 4px 12px rgba(15, 23, 42, 0.07); border-color: #94a3b8; }
                     .pf-card--warning { border-color: #fde68a; border-left: 4px solid #f59e0b; background: #fffbeb; }
                     .pf-card--expired { border-color: #fecaca; border-left: 4px solid #ef4444; background: #fef2f2; }
                     .pf-card--reward { border-left: 4px solid #10b981; background: #f0fdf4; }
@@ -1994,42 +2282,39 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     .pf-card-badge--expired { background: #ef4444; }
 
                     .pf-leave-stats { display: flex; gap: 16px; margin-top: 10px; }
-                    .pf-leave-stat { display: flex; flex-direction: column; align-items: center; flex: 1; padding: 12px; background: #f1f5f9; border-radius: 10px; border: 1px solid #e2e8f0; }
+                    .pf-leave-stat { display: flex; flex-direction: column; align-items: center; flex: 1; padding: 12px; background: #f8fafc; border-radius: 10px; border: 1px solid #cbd5e1; }
                     .pf-leave-stat-label { font-size: 11px; color: #64748b; font-weight: 500; }
                     .pf-leave-stat-value { font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 2px; }
 
                     .pf-loading { text-align: center; padding: 60px 0; }
 
-                    /* ──── Mobile Nav & Header (hidden on desktop) ──── */
-                    .pf-mobile-header { display: none; }
-                    .pf-mobile-nav { display: none; }
-
                     /* ──── Responsive ──── */
+                    @media (max-width: 900px) {
+                        .pf-bento-grid {
+                            grid-template-columns: 1fr;
+                        }
+                    }
                     @media (max-width: 768px) {
-                        .pf-layout { flex-direction: column; }
-                        .pf-sidebar { display: none; }
-                        .pf-content { padding: 16px 14px; }
+                        .pf-layout { height: 90vh; }
+                        .pf-top-header-main {
+                            flex-wrap: wrap;
+                            padding: 14px 16px;
+                            gap: 12px;
+                        }
+                        .pf-top-actions {
+                            width: 100%;
+                            justify-content: flex-end;
+                            border-top: 1px solid rgba(255, 255, 255, 0.08);
+                            padding-top: 8px;
+                        }
+                        .pf-top-tabs { padding: 8px 12px 10px; }
+                        .pf-top-tab-item { padding: 7px 12px; font-size: 12px; }
+                        .pf-content { padding: 14px 12px 24px; }
                         .pf-leave-stats { flex-direction: row; gap: 8px; }
-                        .pf-mobile-header {
-                            display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
-                            padding-right: 36px; padding-bottom: 10px; border-bottom: 1px solid #f0f0f0;
-                        }
-                        .pf-mobile-nav {
-                            display: flex; overflow-x: auto; gap: 6px; padding: 4px 0 12px;
-                            border-bottom: 1px solid #e8e8e8; margin-bottom: 14px;
-                            -webkit-overflow-scrolling: touch;
-                        }
-                        .pf-mobile-nav-item {
-                            display: flex; align-items: center; gap: 6px; padding: 7px 12px;
-                            border: 1px solid #d9d9d9; background: #fff; border-radius: 20px;
-                            font-size: 12px; white-space: nowrap; cursor: pointer; color: #666;
-                            flex-shrink: 0;
-                            transition: all 0.2s;
-                        }
-                        .pf-mobile-nav-item--active { background: #2563eb; color: #fff; border-color: #2563eb; font-weight: 600; }
+                        .pf-action-bar { flex-direction: column; gap: 10px; align-items: stretch; }
                     }
                 `}</style>
-            </Drawer>
+            </Modal>
 
             {/* Password Modal */}
             <Modal

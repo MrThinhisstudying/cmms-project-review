@@ -1,18 +1,30 @@
-export const optimizeImageBeforeUpload = (file: File, maxWidth: number = 800, quality: number = 0.8): Promise<File> => {
-    return new Promise((resolve, reject) => {
+export const optimizeImageBeforeUpload = (
+    file: File,
+    maxDimension: number = 400,
+    quality: number = 0.8
+): Promise<File> => {
+    return new Promise((resolve) => {
         if (!file.type.match(/image.*/)) {
-            return resolve(file); // Not an image, skip
+            return resolve(file);
         }
 
+        const objectUrl = URL.createObjectURL(file);
         const img = new Image();
-        img.src = URL.createObjectURL(file);
+        img.src = objectUrl;
         img.onload = () => {
+            URL.revokeObjectURL(objectUrl);
             let width = img.width;
             let height = img.height;
 
-            if (width > maxWidth) {
-                height = Math.round(height * (maxWidth / width));
-                width = maxWidth;
+            // Giới hạn cả chiều rộng và chiều cao theo maxDimension
+            if (width > maxDimension || height > maxDimension) {
+                if (width >= height) {
+                    height = Math.round(height * (maxDimension / width));
+                    width = maxDimension;
+                } else {
+                    width = Math.round(width * (maxDimension / height));
+                    height = maxDimension;
+                }
             }
 
             const canvas = document.createElement('canvas');
@@ -24,20 +36,31 @@ export const optimizeImageBeforeUpload = (file: File, maxWidth: number = 800, qu
 
             ctx.drawImage(img, 0, 0, width, height);
 
-            canvas.toBlob((blob) => {
-                if (blob) {
-                    const optimizedFile = new File([blob], file.name.replace(/\.[^/.]+$/, ".jpg"), {
-                        type: 'image/jpeg',
-                        lastModified: Date.now(),
-                    });
-                    resolve(optimizedFile);
-                } else {
-                    resolve(file); // Fallback
-                }
-            }, 'image/jpeg', quality);
+            // Ưu tiên nén sang WebP ngay trên trình duyệt để giảm tối đa dung lượng
+            canvas.toBlob(
+                (blob) => {
+                    if (blob && blob.size < file.size) {
+                        const ext = blob.type === 'image/webp' ? '.webp' : '.jpg';
+                        const optimizedFile = new File(
+                            [blob],
+                            file.name.replace(/\.[^/.]+$/, ext),
+                            {
+                                type: blob.type || 'image/webp',
+                                lastModified: Date.now(),
+                            }
+                        );
+                        resolve(optimizedFile);
+                    } else {
+                        resolve(file);
+                    }
+                },
+                'image/webp',
+                quality
+            );
         };
         img.onerror = () => {
-            resolve(file); // Fallback
+            URL.revokeObjectURL(objectUrl);
+            resolve(file);
         };
     });
 };

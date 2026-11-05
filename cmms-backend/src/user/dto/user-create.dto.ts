@@ -1,5 +1,5 @@
 import {ApiProperty} from '@nestjs/swagger';
-import {IsNumber, IsOptional, IsString, IsEnum} from 'class-validator';
+import {IsNumber, IsOptional, IsString, IsEnum, IsBoolean} from 'class-validator';
 import { UserRole } from '../user-role.enum';
 
 export class CreateUserDto {
@@ -101,4 +101,19 @@ export class CreateUserDto {
     @IsOptional()
     @IsString()
     hometown?: string;
+
+    @ApiProperty({required: false, description: 'Giới tính'})
+    @IsOptional()
+    @IsString()
+    gender?: string;
+
+    @ApiProperty({required: false, description: 'Dân tộc'})
+    @IsOptional()
+    @IsString()
+    ethnicity?: string;
+
+    @ApiProperty({required: false, description: 'Là Đảng viên?'})
+    @IsOptional()
+    @IsBoolean()
+    is_party_member?: boolean;
 }

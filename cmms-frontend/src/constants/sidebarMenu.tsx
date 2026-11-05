@@ -66,7 +66,7 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
                 roles: ["ADMIN", "HR_MANAGER", "DIRECTOR", "UNIT_HEAD"],
             },
             {
-                name: "Quản lý tài khoản (Admin IT)",
+                name: "Tài khoản & Phân quyền",
                 icon: <SettingOutlined />,
                 textColor: "#fff",
                 color: "#FFC900",

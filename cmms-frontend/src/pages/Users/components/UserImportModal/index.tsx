@@ -52,11 +52,22 @@ export default function UserImportModal({
   // Settings
   const [defaultRole, setDefaultRole] = useState<string>('OPERATOR');
   const [defaultPassword, setDefaultPassword] = useState<string>('Vcs@123456');
+  const [previewFilter, setPreviewFilter] = useState<'ALL' | 'CREATE' | 'UPDATE' | 'INVALID'>('ALL');
 
   const handleReset = () => {
     setParsedRows([]);
     setImporting(false);
     setImportProgress({ current: 0, total: 0 });
+    setPreviewFilter('ALL');
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      await exportUserTemplate(departments);
+      message.success('Đã tải xuống file mẫu nhập nhân sự (.xlsx)');
+    } catch {
+      message.error('Lỗi khi tải file mẫu Excel');
+    }
   };
 
   const handleModalClose = () => {
@@ -78,9 +89,11 @@ export default function UserImportModal({
         return;
       }
       setParsedRows(rows);
+      setPreviewFilter('ALL');
       message.success(`Đã đọc ${rows.length} dòng dữ liệu từ file!`);
-    } catch (err: any) {
-      message.error(err.message || 'Lỗi đọc file Excel');
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Lỗi đọc file Excel';
+      message.error(errorMessage);
       setParsedRows([]);
     }
   };
@@ -93,6 +106,19 @@ export default function UserImportModal({
     const invalid = parsedRows.filter((r) => !r.isExisting && (!r.name || !r.email)).length;
     return { total, toCreate, toUpdate, invalid };
   }, [parsedRows]);
+
+  const filteredPreviewRows = React.useMemo(() => {
+    if (previewFilter === 'CREATE') {
+      return parsedRows.filter((r) => !r.isExisting && r.name && r.email);
+    }
+    if (previewFilter === 'UPDATE') {
+      return parsedRows.filter((r) => r.isExisting);
+    }
+    if (previewFilter === 'INVALID') {
+      return parsedRows.filter((r) => !r.isExisting && (!r.name || !r.email));
+    }
+    return parsedRows;
+  }, [parsedRows, previewFilter]);
 
   // Thực thi Import tuần tự
   const handleStartImport = async () => {
@@ -138,6 +164,7 @@ export default function UserImportModal({
           hometown: row.hometown || undefined,
           gender: row.gender || undefined,
           ethnicity: row.ethnicity || undefined,
+          is_party_member: row.is_party_member,
           dept_id: matchedDeptId,
         };
 
@@ -265,7 +292,7 @@ export default function UserImportModal({
 
               <Button
                 icon={<DownloadOutlined />}
-                onClick={exportUserTemplate}
+                onClick={handleDownloadTemplate}
                 style={{
                   background: '#eff6ff',
                   borderColor: '#bfdbfe',
@@ -274,7 +301,7 @@ export default function UserImportModal({
                   borderRadius: 8,
                 }}
               >
-                Tải file mẫu Excel
+                Tải file mẫu Excel (.xlsx)
               </Button>
             </div>
 
@@ -363,7 +390,7 @@ export default function UserImportModal({
                 <Col xs={24} md={4} style={{ textAlign: 'right' }}>
                   <Button
                     icon={<DownloadOutlined />}
-                    onClick={exportUserTemplate}
+                    onClick={handleDownloadTemplate}
                     disabled={importing}
                     style={{ width: '100%', marginTop: 22 }}
                   >
@@ -373,7 +400,7 @@ export default function UserImportModal({
               </Row>
             </div>
 
-            {/* Thống kê dòng */}
+            {/* Thống kê dòng (có thể bấm để lọc nhanh) */}
             <div
               style={{
                 display: 'flex',
@@ -384,18 +411,52 @@ export default function UserImportModal({
                 gap: 8,
               }}
             >
-              <Space size={8}>
-                <Tag color="default" style={{ fontSize: 13, padding: '3px 10px', borderRadius: 6 }}>
+              <Space size={8} wrap>
+                <Tag
+                  color={previewFilter === 'ALL' ? 'processing' : 'default'}
+                  style={{ fontSize: 13, padding: '3px 10px', borderRadius: 6, cursor: 'pointer' }}
+                  onClick={() => setPreviewFilter('ALL')}
+                >
                   Tổng: <b>{stats.total}</b> dòng
                 </Tag>
-                <Tag color="green" style={{ fontSize: 13, padding: '3px 10px', borderRadius: 6 }}>
+                <Tag
+                  color="green"
+                  style={{
+                    fontSize: 13,
+                    padding: '3px 10px',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    borderWidth: previewFilter === 'CREATE' ? 2 : 1,
+                  }}
+                  onClick={() => setPreviewFilter(previewFilter === 'CREATE' ? 'ALL' : 'CREATE')}
+                >
                   🟢 Tạo mới: <b>{stats.toCreate}</b>
                 </Tag>
-                <Tag color="blue" style={{ fontSize: 13, padding: '3px 10px', borderRadius: 6 }}>
+                <Tag
+                  color="blue"
+                  style={{
+                    fontSize: 13,
+                    padding: '3px 10px',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    borderWidth: previewFilter === 'UPDATE' ? 2 : 1,
+                  }}
+                  onClick={() => setPreviewFilter(previewFilter === 'UPDATE' ? 'ALL' : 'UPDATE')}
+                >
                   🔵 Cập nhật: <b>{stats.toUpdate}</b>
                 </Tag>
                 {stats.invalid > 0 && (
-                  <Tag color="error" style={{ fontSize: 13, padding: '3px 10px', borderRadius: 6 }}>
+                  <Tag
+                    color="error"
+                    style={{
+                      fontSize: 13,
+                      padding: '3px 10px',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      borderWidth: previewFilter === 'INVALID' ? 2 : 1,
+                    }}
+                    onClick={() => setPreviewFilter(previewFilter === 'INVALID' ? 'ALL' : 'INVALID')}
+                  >
                     🔴 Thiếu Email/Tên: <b>{stats.invalid}</b> (sẽ bỏ qua)
                   </Tag>
                 )}
@@ -416,8 +477,8 @@ export default function UserImportModal({
             </div>
 
             {/* Bảng xem trước */}
-            <Table
-              dataSource={parsedRows}
+            <Table<ParsedRow>
+              dataSource={filteredPreviewRows}
               rowKey="rowIndex"
               size="small"
               scroll={{ x: 1100, y: 380 }}
@@ -433,7 +494,7 @@ export default function UserImportModal({
                   title: 'Họ và tên',
                   dataIndex: 'name',
                   width: 160,
-                  render: (val: string, r: ParsedRow) =>
+                  render: (val: string) =>
                     val ? (
                       <Text strong style={{ color: '#0f172a' }}>
                         {val}
@@ -477,6 +538,18 @@ export default function UserImportModal({
                     ),
                 },
                 {
+                  title: 'Đảng viên',
+                  dataIndex: 'is_party_member',
+                  width: 105,
+                  align: 'center',
+                  render: (val?: boolean) =>
+                    val ? (
+                      <Tag color="red">⭐ Đảng viên</Tag>
+                    ) : (
+                      <span style={{ color: '#94a3b8' }}>—</span>
+                    ),
+                },
+                {
                   title: 'CCCD',
                   dataIndex: 'citizen_identification_card',
                   width: 120,
@@ -494,7 +567,7 @@ export default function UserImportModal({
                   width: 120,
                   align: 'center',
                   fixed: 'right',
-                  render: (_: any, r: ParsedRow) => {
+                  render: (_: unknown, r: ParsedRow) => {
                     if (r.isExisting) {
                       return <Tag color="blue">🔵 Cập nhật</Tag>;
                     }
