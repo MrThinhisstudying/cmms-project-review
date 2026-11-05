@@ -78,9 +78,10 @@ echo "🔄 Cập nhật container Backend..."
 docker compose up -d --no-deps backend
 sleep 4
 
-# 2. Chạy Database Migration TypeORM (nếu có bảng/cột mới)
-echo "⚙️ Chạy Migration TypeORM..."
+# 2. Chạy Database Migration & Schema Sync TypeORM (tạo bảng mới task_projects, work_tasks, task_comments...)
+echo "⚙️ Chạy Migration & Đồng bộ Schema TypeORM..."
 docker compose exec -T backend npx typeorm migration:run -d dist/data-source.js || true
+docker compose exec -T backend npx typeorm schema:sync -d dist/data-source.js || true
 
 # 3. Đồng bộ khóa ngoại Cascade Delete
 echo "⚙️ Kiểm tra ràng buộc khóa ngoại Cascade Delete..."

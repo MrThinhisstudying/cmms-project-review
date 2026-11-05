@@ -115,8 +115,9 @@ echo "🔄 Khởi động lại Backend..."
 docker compose up -d --no-deps backend
 sleep 5
 
-echo "⚙️ Thực thi Database Migration..."
+echo "⚙️ Thực thi Database Migration & Đồng bộ Schema TypeORM..."
 docker compose exec -T backend npx typeorm migration:run -d dist/data-source.js || true
+docker compose exec -T backend npx typeorm schema:sync -d dist/data-source.js || true
 
 echo "⚙️ Cập nhật ràng buộc khóa ngoại Cascade Delete..."
 docker compose exec -T db psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-cmms_db}" -c "
