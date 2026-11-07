@@ -3,6 +3,7 @@ import { Table, Button, Tag, Avatar } from "antd";
 import { EditOutlined, DeleteOutlined, LockOutlined, UserOutlined } from "@ant-design/icons";
 import { IUser } from "../../../../types/user.types";
 import ConfirmModal from "../../../../components/Modal";
+import { getBackendImageUrl } from "../../../../utils/imageUrl";
 
 interface UserTableProps {
   users: IUser[];
@@ -50,7 +51,7 @@ const UserTable: React.FC<UserTableProps> = ({
       key: "name",
       render: (text: string, record: IUser) => (
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Avatar src={record.avatar} icon={<UserOutlined />} size={32} />
+          <Avatar src={record.avatar ? getBackendImageUrl(record.avatar) : undefined} icon={<UserOutlined />} size={32} />
           <span style={{ fontWeight: 600 }}>{text}</span>
         </div>
       ),

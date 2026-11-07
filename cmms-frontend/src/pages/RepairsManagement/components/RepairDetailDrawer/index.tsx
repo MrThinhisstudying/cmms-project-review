@@ -1621,7 +1621,7 @@ export default function RepairDetailDrawer({
         placement="right"
         onClose={onClose}
         open={open}
-        width={940}
+        width="min(940px, 100vw)"
         extra={
           <Space>
             {showRequestLimitedUse && (

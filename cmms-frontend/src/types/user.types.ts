@@ -75,6 +75,7 @@ export interface IUpdatePasswordForm extends IUpdatePassword {
 
 export interface UsersContextValue {
   users: IUser[];
+  activeUsers: IUser[];
   setUsers: React.Dispatch<React.SetStateAction<IUser[]>>;
   loading: boolean;
   fetchUsers: () => void;

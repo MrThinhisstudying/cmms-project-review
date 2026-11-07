@@ -38,6 +38,9 @@ const ShiftDebtRecordModal: React.FC<ShiftDebtRecordModalProps> = ({
 }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = React.useState(false);
+  const activeUsers = React.useMemo(() => {
+    return users.filter((u) => !u.status || u.status.trim().toLowerCase() === 'active');
+  }, [users]);
 
   useEffect(() => {
     if (open) {
@@ -124,7 +127,7 @@ const ShiftDebtRecordModal: React.FC<ShiftDebtRecordModalProps> = ({
             optionFilterProp="children"
             disabled={!!initialValues}
           >
-            {users.map((u) => (
+            {(initialValues ? users : activeUsers).map((u) => (
               <Select.Option key={u.user_id} value={u.user_id}>
                 {u.name} ({u.employee_code || u.user_id}) - {u.department?.name || 'Chưa gán'}
               </Select.Option>

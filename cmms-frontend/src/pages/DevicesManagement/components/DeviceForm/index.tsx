@@ -17,7 +17,6 @@ import {
 import {
   CarOutlined,
   EditOutlined,
-  PlusOutlined,
   ToolOutlined,
   FileTextOutlined,
   AppstoreOutlined,

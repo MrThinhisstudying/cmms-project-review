@@ -12,7 +12,6 @@ import {
   Typography,
   Tooltip,
   Tag,
-  Divider,
 } from "antd";
 import { IDevice, DeviceGroup } from "../../types/devicesManagement.types";
 import DevicesTable from "./components/DevicesTable";
@@ -32,7 +31,6 @@ import {
   DeleteOutlined,
   FilterOutlined,
   ReloadOutlined,
-  CloseCircleOutlined,
 } from "@ant-design/icons";
 import {
   uploadDevices,
@@ -54,7 +52,7 @@ import { getAllDeviceGroups } from "../../apis/deviceGroups";
 import { getAllDeviceTypes, IDeviceType } from "../../apis/device-types";
 
 const { Option } = Select;
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 const DevicesManagement: React.FC = () => {
   const { devices, loading, fetchDevices, report, fetchReport } = useDevicesContext();

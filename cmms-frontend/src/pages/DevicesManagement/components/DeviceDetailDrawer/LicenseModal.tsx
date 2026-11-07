@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Modal, Form, Input, DatePicker, Select, Alert, Space, Button, Typography, Tag } from "antd";
+import { Modal, Form, Input, DatePicker, Select, Alert, Space, Button, Tag } from "antd";
 import {
   WarningOutlined,
   CheckCircleOutlined,
@@ -9,8 +9,6 @@ import {
   EditOutlined,
 } from "@ant-design/icons";
 import dayjs, { Dayjs } from "dayjs";
-
-const { Text } = Typography;
 
 export type LicenseModalMode = "create" | "edit" | "renew";
 

@@ -20,6 +20,7 @@ import { IUser } from '../../types/user.types';
 import dayjs from 'dayjs';
 import ProfileModal from '../Users/components/ProfileModal';
 import { getToken } from '../../utils/auth';
+import { getBackendImageUrl } from '../../utils/imageUrl';
 import { getLaborContracts, ILaborContract } from '../../apis/laborContracts';
 import { getPendingRequests } from '../../apis/profileRequests';
 import { useNavigate } from 'react-router-dom';
@@ -409,7 +410,7 @@ const HRDashboard: React.FC = () => {
                         <Avatar
                             size={36}
                             icon={<UserOutlined />}
-                            src={record.user.avatar}
+                            src={record.user.avatar ? getBackendImageUrl(record.user.avatar) : undefined}
                             style={{
                                 backgroundColor: hasWarning ? '#fef2f2' : '#eff6ff',
                                 color: hasWarning ? '#ef4444' : '#3b82f6',

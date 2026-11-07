@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Layout, Dropdown, MenuProps, Avatar, Badge, Space, Breadcrumb, Button, Input, Typography, AutoComplete, Tag } from "antd";
+import { Layout, Dropdown, MenuProps, Avatar, Badge, Space, Breadcrumb, Button, Input, Typography, AutoComplete, Tag, Grid, Popover } from "antd";
 import { 
     UserOutlined, 
     LogoutOutlined, 
@@ -28,8 +28,12 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
   const { user, logoutUser, setUser } = useAuthContext();
   const { notifications, unreadCount, readAll, readOne } = useNotificationContext();
   const { users } = useUsersContext();
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
+  const isTablet = Boolean(screens.md && !screens.lg);
   
   const [openProfile, setOpenProfile] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   
   // 360 Search States
   const [searchTerm, setSearchTerm] = useState('');
@@ -109,6 +113,14 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
       'phe_duyet_ho_so': 'PHÊ DUYỆT HỒ SƠ',
       'quan_ly_phep': 'QUẢN LÝ PHÉP NĂM',
       'lay_vat_tu': 'XUẤT VẬT TƯ',
+      // Tasks & Field Incident Module
+      'quan_ly_cong_viec': 'QUẢN LÝ CÔNG VIỆC',
+      'lich_cong_viec': 'LỊCH CÔNG VIỆC',
+      'dashboard_lanh_dao': 'DASHBOARD LÃNH ĐẠO',
+      'kpi_thi_dua': 'BÌNH XÉT KPI & THI ĐUA',
+      'bao_cao_tinh_trang_xe': 'BÁO CÁO TÌNH TRẠNG XE',
+      'quan_ly_nhan_vien': 'QUẢN LÝ NHÂN SỰ 360°',
+      'quy_che_quy_dinh': 'QUY CHẾ & QUY ĐỊNH NỘI BỘ',
   };
 
   // Generate breadcrumbs from path
@@ -139,7 +151,44 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
       })
   ];
 
+  // Role translation map
+  const ROLE_MAP: Record<string, string> = {
+      'UNIT_HEAD': 'Cán bộ đội',
+      'OPERATOR': 'Nhân viên vận hành',
+      'TEAM_LEAD': 'Tổ trưởng',
+      'TECHNICIAN': 'Nhân viên kỹ thuật',
+      'ADMIN': 'Quản trị viên',
+      'DIRECTOR': 'Ban giám đốc',
+      'MANAGER': 'Quản lý',
+      'HR_MANAGER': 'Quản lý Nhân sự'
+  };
+
+  const currentPageTitle = useMemo(() => {
+      const lastSnippet = pathSnippets[pathSnippets.length - 1] || 'trang_chu';
+      return PATH_MAP[lastSnippet] || lastSnippet.replace(/_/g, ' ').toUpperCase();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathSnippets]);
+
   const userMenu: MenuProps['items'] = [
+      ...(isMobile
+          ? [
+                {
+                    key: 'user-info',
+                    label: (
+                        <div style={{ padding: '4px 0', maxWidth: 200 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13.5, color: '#0f172a' }}>
+                                {user?.name || 'Administrator'}
+                            </div>
+                            <div style={{ fontSize: 11.5, color: '#64748b' }}>
+                                {user?.position || ROLE_MAP[user?.role || ''] || user?.role}
+                            </div>
+                        </div>
+                    ),
+                    disabled: true,
+                },
+                { type: 'divider' as const },
+            ]
+          : []),
       {
           key: 'profile',
           label: 'Cập nhật thông tin',
@@ -156,78 +205,124 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
       }
   ];
 
-  // Role translation map
-  const ROLE_MAP: Record<string, string> = {
-      'UNIT_HEAD': 'Cán bộ đội',
-      'OPERATOR': 'Nhân viên vận hành',
-      'TEAM_LEAD': 'Tổ trưởng',
-      'TECHNICIAN': 'Nhân viên kỹ thuật',
-      'ADMIN': 'Quản trị viên',
-      'DIRECTOR': 'Ban giám đốc',
-      'MANAGER': 'Quản lý',
-      'HR_MANAGER': 'Quản lý Nhân sự'
-  };
+  const canSearchEmployees = user && ['ADMIN', 'HR_MANAGER', 'DIRECTOR', 'UNIT_HEAD'].includes(user.role);
 
   return (
     <>
         <Header style={{ 
-            padding: '0 24px', 
+            padding: isMobile ? '0 10px' : '0 24px', 
             background: '#fff', 
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'space-between', 
             borderBottom: '1px solid #f0f0f0',
-            zIndex: 1,
-            height: 64, 
-            lineHeight: '64px',
+            zIndex: 100,
+            height: isMobile ? 56 : 64, 
+            lineHeight: isMobile ? '56px' : '64px',
             position: 'sticky',
             top: 0,
             boxShadow: '0 2px 8px #f0f1f2' 
         }}>
-            <Space size={16}>
+            <Space size={isMobile ? 6 : 16} style={{ minWidth: 0, flex: 1 }}>
                 {onToggle && (
                     <Button 
                         type="text" 
                         icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} 
                         onClick={onToggle}
-                        style={{ fontSize: '18px', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                        style={{ fontSize: '18px', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                     />
                 )}
                 
-                {/* Custom Breadcrumb View */}
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                    <Breadcrumb items={breadcrumbItems} separator={<span style={{ color: '#bfbfbf' }}>/</span>} style={{ fontSize: 13 }} />
-                </div>
+                {/* Custom Breadcrumb on Desktop/Tablet, Compact Title on Mobile */}
+                {isMobile ? (
+                    <div
+                        style={{
+                            fontWeight: 700,
+                            fontSize: 14,
+                            color: '#0f172a',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                        }}
+                    >
+                        {currentPageTitle}
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
+                        <Breadcrumb items={breadcrumbItems} separator={<span style={{ color: '#bfbfbf' }}>/</span>} style={{ fontSize: 13 }} />
+                    </div>
+                )}
             </Space>
 
-            <Space size={24}>
-                {/* 360 Search Input */}
-                {user && ['ADMIN', 'HR_MANAGER', 'DIRECTOR', 'UNIT_HEAD'].includes(user.role) && (
-                    <div style={{ lineHeight: 'normal', display: 'flex', alignItems: 'center' }}>
-                        <AutoComplete
-                            style={{ width: 300 }}
-                            dropdownMatchSelectWidth={350}
-                            options={searchOptions}
-                            onSelect={handleSelectUser}
-                            onSearch={setSearchTerm}
-                            value={searchTerm}
-                            allowClear
+            <Space size={isMobile ? 8 : 20} style={{ flexShrink: 0 }}>
+                {/* 360 Search Input: Full on Desktop/Tablet, Popover Icon on Mobile */}
+                {canSearchEmployees && (
+                    isMobile ? (
+                        <Popover
+                            open={mobileSearchOpen}
+                            onOpenChange={setMobileSearchOpen}
+                            trigger="click"
+                            placement="bottomRight"
+                            content={
+                                <div style={{ width: 'calc(100vw - 48px)', maxWidth: 320 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 6 }}>
+                                        Tra cứu nhanh Hồ sơ 360° Nhân sự
+                                    </div>
+                                    <AutoComplete
+                                        style={{ width: '100%' }}
+                                        popupMatchSelectWidth={false}
+                                        options={searchOptions}
+                                        onSelect={(val, opt) => {
+                                            setMobileSearchOpen(false);
+                                            handleSelectUser(val, opt);
+                                        }}
+                                        onSearch={setSearchTerm}
+                                        value={searchTerm}
+                                        allowClear
+                                    >
+                                        <Input
+                                            placeholder="Nhập tên hoặc mã nhân viên..."
+                                            suffix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                                            onKeyDown={handleKeyDown}
+                                        />
+                                    </AutoComplete>
+                                </div>
+                            }
                         >
-                            <Input 
-                                placeholder="Tìm kiếm NV (Tên / Mã)..." 
-                                suffix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
-                                style={{ borderRadius: 6 }}
-                                onKeyDown={handleKeyDown}
+                            <Button
+                                type="text"
+                                shape="circle"
+                                icon={<SearchOutlined style={{ fontSize: 18, color: '#595959' }} />}
                             />
-                        </AutoComplete>
-                    </div>
+                        </Popover>
+                    ) : (
+                        <div style={{ lineHeight: 'normal', display: 'flex', alignItems: 'center' }}>
+                            <AutoComplete
+                                style={{ width: isTablet ? 200 : 280 }}
+                                dropdownMatchSelectWidth={340}
+                                options={searchOptions}
+                                onSelect={handleSelectUser}
+                                onSearch={setSearchTerm}
+                                value={searchTerm}
+                                allowClear
+                            >
+                                <Input 
+                                    placeholder="Tìm kiếm NV (Tên / Mã)..." 
+                                    suffix={<SearchOutlined style={{ color: '#bfbfbf' }} />}
+                                    style={{ borderRadius: 6 }}
+                                    onKeyDown={handleKeyDown}
+                                />
+                            </AutoComplete>
+                        </div>
+                    )
                 )}
 
                 {/* Notification */}
                 <Dropdown 
                     dropdownRender={() => (
                         <div style={{ 
-                            width: 350, 
+                            width: isMobile ? 'calc(100vw - 24px)' : 350, 
+                            maxWidth: 360,
                             backgroundColor: '#fff', 
                             boxShadow: '0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 9px 28px 8px rgba(0, 0, 0, 0.05)', 
                             borderRadius: 8,
@@ -295,18 +390,21 @@ const TopBar: React.FC<TopBarProps> = ({ collapsed = false, onToggle }) => {
                     </Badge>
                 </Dropdown>
 
-                {/* Unified Profile: Avatar + Name */}
+                {/* Unified Profile: Avatar + Name (Name hidden on Mobile to prevent overflow) */}
                 <Dropdown menu={{ items: userMenu }} trigger={['click']} placement="bottomRight">
-                    <Space style={{ cursor: 'pointer' }}>
+                    <Space style={{ cursor: 'pointer' }} size={8}>
                         <Avatar 
+                            size={isMobile ? 34 : 38}
                             src={user?.avatar ? getBackendImageUrl(user?.avatar) : undefined} 
                             icon={<UserOutlined />} 
-                            style={{ backgroundColor: '#1890ff' }} 
+                            style={{ backgroundColor: '#1890ff', flexShrink: 0 }} 
                         />
-                        <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
-                             <Text strong style={{ fontSize: 14 }}>{user?.name || 'Administrator'}</Text>
-                             <Text type="secondary" style={{ fontSize: 11 }}>{user?.position || ROLE_MAP[user?.role] || user?.role}</Text>
-                        </div>
+                        {!isMobile && (
+                            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: '1.2' }}>
+                                 <Text strong style={{ fontSize: 14 }}>{user?.name || 'Administrator'}</Text>
+                                 <Text type="secondary" style={{ fontSize: 11 }}>{user?.position || ROLE_MAP[user?.role || ''] || user?.role}</Text>
+                            </div>
+                        )}
                     </Space>
                 </Dropdown>
             </Space>

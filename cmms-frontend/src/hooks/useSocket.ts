@@ -27,27 +27,23 @@ export function useSocket(
     const socketUrl = baseUrl.replace('/api', '');
 
     const socket = io(socketUrl, {
-      transports: ['websocket'],
-      autoConnect: false,
+      transports: ['websocket', 'polling'],
+      autoConnect: true,
       query: { userId: String(userId) },
     });
 
     socketRef.current = socket;
 
-    // Delay connect để tránh race condition
-    const timer = setTimeout(() => {
-      socket.connect();
-    }, 300);
-
-    // Đăng ký tất cả listeners
-    const currentListeners = listenersRef.current;
-    Object.entries(currentListeners).forEach(([event, handler]) => {
-      socket.on(event, handler);
+    // Đăng ký dynamic listeners để luôn gọi phiên bản handler mới nhất
+    const events = Object.keys(listenersRef.current);
+    events.forEach((event) => {
+      socket.on(event, (data: any) => {
+        listenersRef.current[event]?.(data);
+      });
     });
 
     return () => {
-      clearTimeout(timer);
-      Object.keys(currentListeners).forEach((event) => {
+      events.forEach((event) => {
         socket.off(event);
       });
       socket.disconnect();

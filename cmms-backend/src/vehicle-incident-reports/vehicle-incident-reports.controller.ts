@@ -1,21 +1,33 @@
 import {
-    Controller, Get, Post, Patch, Body, Param, Query, UseGuards, UseInterceptors,
-    UploadedFiles, ParseIntPipe, HttpCode, HttpStatus, ForbiddenException
+    Controller,
+    Get,
+    Post,
+    Patch,
+    Body,
+    Param,
+    Query,
+    UseGuards,
+    UseInterceptors,
+    UploadedFiles,
+    ParseIntPipe,
+    HttpCode,
+    HttpStatus,
+    ForbiddenException,
 } from '@nestjs/common';
-import { FilesInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
+import {FilesInterceptor} from '@nestjs/platform-express';
+import {diskStorage} from 'multer';
+import {extname} from 'path';
 import * as fs from 'fs';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { VehicleIncidentReportsService } from './vehicle-incident-reports.service';
-import { CreateIncidentReportDto } from './dto/create-incident-report.dto';
-import { ResolveQuickDto } from './dto/resolve-quick.dto';
-import { QueryIncidentReportsDto } from './dto/query-incident-reports.dto';
-import { RequestRepairDossierDto } from './dto/request-repair-dossier.dto';
-import { JWTAuthGuard } from 'src/auth/guards/jwt-auth.guard';
-import { AuthUser } from 'src/user/user.decorator';
-import { User } from 'src/user/user.entity';
-import { UserRole } from 'src/user/user-role.enum';
+import {ApiTags, ApiOperation} from '@nestjs/swagger';
+import {VehicleIncidentReportsService} from './vehicle-incident-reports.service';
+import {CreateIncidentReportDto} from './dto/create-incident-report.dto';
+import {ResolveQuickDto} from './dto/resolve-quick.dto';
+import {QueryIncidentReportsDto} from './dto/query-incident-reports.dto';
+import {RequestRepairDossierDto} from './dto/request-repair-dossier.dto';
+import {JWTAuthGuard} from 'src/auth/guards/jwt-auth.guard';
+import {AuthUser} from 'src/user/user.decorator';
+import {User} from 'src/user/user.entity';
+import {UserRole} from 'src/user/user-role.enum';
 
 @ApiTags('Vehicle Incident Reports')
 @Controller('vehicle-incident-reports')
@@ -25,14 +37,14 @@ export class VehicleIncidentReportsController {
     // 1. PUBLIC: Báo cáo tình trạng xe từ quét QR (Không bắt buộc login)
     @Post('public')
     @HttpCode(HttpStatus.CREATED)
-    @ApiOperation({ summary: 'Gửi báo cáo tình trạng xe từ quét mã QR' })
+    @ApiOperation({summary: 'Gửi báo cáo tình trạng xe từ quét mã QR'})
     createPublicReport(@Body() dto: CreateIncidentReportDto) {
         return this.service.createPublicReport(dto);
     }
 
     // 2. PUBLIC: Tìm kiếm nhân viên nhanh phục vụ AutoComplete
     @Get('reporters/search')
-    @ApiOperation({ summary: 'Tìm kiếm nhân viên để tự động điền thông tin người báo' })
+    @ApiOperation({summary: 'Tìm kiếm nhân viên để tự động điền thông tin người báo'})
     searchReporters(@Query('q') query: string) {
         return this.service.searchReporters(query);
     }
@@ -45,7 +57,7 @@ export class VehicleIncidentReportsController {
                 destination: (req, file, cb) => {
                     const uploadPath = './uploads/incident_reports';
                     if (!fs.existsSync(uploadPath)) {
-                        fs.mkdirSync(uploadPath, { recursive: true });
+                        fs.mkdirSync(uploadPath, {recursive: true});
                     }
                     cb(null, uploadPath);
                 },
@@ -63,20 +75,20 @@ export class VehicleIncidentReportsController {
                 }
                 cb(null, true);
             },
-            limits: { fileSize: 5 * 1024 * 1024 }, // Max 5MB mỗi ảnh
-        })
+            limits: {fileSize: 5 * 1024 * 1024}, // Max 5MB mỗi ảnh
+        }),
     )
     uploadImages(@UploadedFiles() files: Express.Multer.File[]) {
         if (!files || files.length === 0) {
             return [];
         }
-        return files.map(file => `/uploads/incident_reports/${file.filename}`);
+        return files.map((file) => `/uploads/incident_reports/${file.filename}`);
     }
 
     // 4. PROTECTED: Lấy danh sách báo cáo đang chờ xử lý (Cho popup khi KTV đăng nhập)
     @Get('pending')
     @UseGuards(JWTAuthGuard)
-    @ApiOperation({ summary: 'Lấy các báo cáo chờ KTV xử lý để hiển thị thông báo' })
+    @ApiOperation({summary: 'Lấy các báo cáo chờ KTV xử lý để hiển thị thông báo'})
     findPendingReports() {
         return this.service.findPendingReports();
     }
@@ -84,11 +96,8 @@ export class VehicleIncidentReportsController {
     // 5. PROTECTED: Danh sách tổng hợp báo cáo tình trạng xe (Trang quản lý, có filter)
     @Get()
     @UseGuards(JWTAuthGuard)
-    @ApiOperation({ summary: 'Lấy danh sách báo cáo tình trạng xe có bộ lọc' })
-    findAll(
-        @Query() queryDto: QueryIncidentReportsDto,
-        @AuthUser() currentUser: User,
-    ) {
+    @ApiOperation({summary: 'Lấy danh sách báo cáo tình trạng xe có bộ lọc'})
+    findAll(@Query() queryDto: QueryIncidentReportsDto, @AuthUser() currentUser: User) {
         return this.service.findAll(queryDto, currentUser);
     }
 
@@ -102,21 +111,52 @@ export class VehicleIncidentReportsController {
     // 7. PROTECTED: Kiểm tra chéo người báo cáo có thuộc nhóm quản lý xe không
     @Get(':id/check-vehicle-group')
     @UseGuards(JWTAuthGuard)
-    @ApiOperation({ summary: 'Kiểm tra chéo người báo cáo có thuộc nhóm quản lý xe không' })
+    @ApiOperation({summary: 'Kiểm tra chéo người báo cáo có thuộc nhóm quản lý xe không'})
     checkVehicleGroupMembership(@Param('id', ParseIntPipe) id: number) {
         return this.service.checkVehicleGroupMembership(id);
+    }
+
+    private isVhttbmdText(text?: string | null): boolean {
+        if (!text) return false;
+        const lower = text.trim().toLowerCase();
+        return lower.includes('vhttbmđ') || lower.includes('vhttbmd') || lower.includes('vận hành');
+    }
+
+    private canProcessAsTech(user: User): boolean {
+        if (!user) return false;
+        const role = user.role as UserRole;
+        if (role === UserRole.ADMIN) return true;
+        if (role === UserRole.DIRECTOR || role === UserRole.UNIT_HEAD) return false;
+
+        const userDepts: any[] = Array.isArray(user.user_departments) ? user.user_departments : [];
+        const isUnitLeadInDept = userDepts.some((ud) => ['LEAD', 'DEPUTY_LEAD'].includes(ud?.role_in_dept) && ud?.department?.level === 'DOI');
+        if (isUnitLeadInDept) return false;
+
+        const belongsToVhttbmd =
+            this.isVhttbmdText(user.department?.name) ||
+            this.isVhttbmdText(user.position) ||
+            userDepts.some((ud) => this.isVhttbmdText(ud?.department?.name));
+
+        if (role === UserRole.TECHNICIAN) return true;
+
+        if (role === UserRole.TEAM_LEAD) {
+            if (belongsToVhttbmd) return false;
+            const hasTechDept =
+                Boolean(user.department?.is_technical && !this.isVhttbmdText(user.department?.name)) ||
+                userDepts.some((ud) => ud?.department?.is_technical && !this.isVhttbmdText(ud?.department?.name));
+            return hasTechDept;
+        }
+
+        return false;
     }
 
     // 8. PROTECTED: Thao tác 1 - KTV tiếp nhận
     @Patch(':id/accept')
     @UseGuards(JWTAuthGuard)
-    @ApiOperation({ summary: 'KTV tiếp nhận xử lý sự cố' })
-    acceptReport(
-        @Param('id', ParseIntPipe) id: number,
-        @AuthUser() technician: User
-    ) {
-        if (![UserRole.ADMIN, UserRole.TECHNICIAN, UserRole.TEAM_LEAD].includes(technician.role as UserRole)) {
-            throw new ForbiddenException('Chỉ Kỹ thuật viên hoặc Quản trị viên mới được tiếp nhận xử lý sự cố');
+    @ApiOperation({summary: 'KTV tiếp nhận xử lý sự cố'})
+    acceptReport(@Param('id', ParseIntPipe) id: number, @AuthUser() technician: User) {
+        if (!this.canProcessAsTech(technician)) {
+            throw new ForbiddenException('Chỉ Kỹ thuật viên, Tổ trưởng kỹ thuật hoặc Quản trị viên mới được tiếp nhận xử lý sự cố');
         }
         return this.service.acceptReport(id, technician);
     }
@@ -124,14 +164,10 @@ export class VehicleIncidentReportsController {
     // 9. PROTECTED: Thao tác 2 - Xác nhận đã khắc phục nhanh (Có xác nhận của người vận hành)
     @Patch(':id/resolve-quick')
     @UseGuards(JWTAuthGuard)
-    @ApiOperation({ summary: 'KTV xác nhận đã khắc phục nhanh với nghiệm thu của người vận hành' })
-    resolveQuick(
-        @Param('id', ParseIntPipe) id: number,
-        @AuthUser() technician: User,
-        @Body() dto: ResolveQuickDto
-    ) {
-        if (![UserRole.ADMIN, UserRole.TECHNICIAN, UserRole.TEAM_LEAD].includes(technician.role as UserRole)) {
-            throw new ForbiddenException('Chỉ Kỹ thuật viên hoặc Quản trị viên mới được xác nhận đã khắc phục sự cố');
+    @ApiOperation({summary: 'KTV xác nhận đã khắc phục nhanh với nghiệm thu của người vận hành'})
+    resolveQuick(@Param('id', ParseIntPipe) id: number, @AuthUser() technician: User, @Body() dto: ResolveQuickDto) {
+        if (!this.canProcessAsTech(technician)) {
+            throw new ForbiddenException('Chỉ Kỹ thuật viên, Tổ trưởng kỹ thuật hoặc Quản trị viên mới được xác nhận đã khắc phục sự cố');
         }
         return this.service.resolveQuick(id, technician, dto);
     }
@@ -139,14 +175,10 @@ export class VehicleIncidentReportsController {
     // 10. PROTECTED: Thao tác 3 MỚI - Gửi yêu cầu người báo cáo/tổ xe làm hồ sơ sửa chữa
     @Post(':id/request-repair-dossier')
     @UseGuards(JWTAuthGuard)
-    @ApiOperation({ summary: 'Gửi yêu cầu người báo cáo hoặc người phụ trách xe đi lập hồ sơ sửa chữa B03' })
-    requestRepairDossier(
-        @Param('id', ParseIntPipe) id: number,
-        @AuthUser() currentUser: User,
-        @Body() dto: RequestRepairDossierDto
-    ) {
-        if (![UserRole.ADMIN, UserRole.TECHNICIAN, UserRole.TEAM_LEAD].includes(currentUser.role as UserRole)) {
-            throw new ForbiddenException('Chỉ Kỹ thuật viên hoặc Quản trị viên mới được gửi yêu cầu lập hồ sơ sửa chữa');
+    @ApiOperation({summary: 'Gửi yêu cầu người báo cáo hoặc người phụ trách xe đi lập hồ sơ sửa chữa B03'})
+    requestRepairDossier(@Param('id', ParseIntPipe) id: number, @AuthUser() currentUser: User, @Body() dto: RequestRepairDossierDto) {
+        if (!this.canProcessAsTech(currentUser)) {
+            throw new ForbiddenException('Chỉ Kỹ thuật viên, Tổ trưởng kỹ thuật hoặc Quản trị viên mới được gửi yêu cầu lập hồ sơ sửa chữa');
         }
         return this.service.requestRepairDossier(id, currentUser, dto);
     }
@@ -154,13 +186,9 @@ export class VehicleIncidentReportsController {
     // 11. PROTECTED: Gắn mã phiếu sửa chữa đã tạo
     @Post(':id/link-repair-dossier')
     @UseGuards(JWTAuthGuard)
-    @ApiOperation({ summary: 'Gắn liên kết mã phiếu sửa chữa B03 cho báo cáo sự cố' })
-    async linkRepairDossier(
-        @Param('id', ParseIntPipe) id: number,
-        @AuthUser() currentUser: User,
-        @Body('repair_id', ParseIntPipe) repairId: number
-    ) {
-        const isTechOrAdmin = [UserRole.ADMIN, UserRole.TECHNICIAN, UserRole.TEAM_LEAD].includes(currentUser.role as UserRole);
+    @ApiOperation({summary: 'Gắn liên kết mã phiếu sửa chữa B03 cho báo cáo sự cố'})
+    async linkRepairDossier(@Param('id', ParseIntPipe) id: number, @AuthUser() currentUser: User, @Body('repair_id', ParseIntPipe) repairId: number) {
+        const isTechOrAdmin = this.canProcessAsTech(currentUser);
         const report = await this.service.findOne(id);
         const isAssignedOrReporter = report.assigned_dossier_user_id === currentUser.user_id || report.reporter_user_id === currentUser.user_id;
         if (!isTechOrAdmin && !isAssignedOrReporter) {
@@ -172,13 +200,10 @@ export class VehicleIncidentReportsController {
     // 12. PROTECTED: Chuyển trực tiếp thành hồ sơ sửa chữa B03 (Dành cho Quản trị viên khi cần)
     @Post(':id/convert-to-repair')
     @UseGuards(JWTAuthGuard)
-    @ApiOperation({ summary: 'Chuyển đổi sự cố thành Hồ sơ sửa chữa chính thức (Repair B03)' })
-    convertToRepair(
-        @Param('id', ParseIntPipe) id: number,
-        @AuthUser() currentUser: User
-    ) {
-        if (![UserRole.ADMIN, UserRole.TECHNICIAN, UserRole.TEAM_LEAD].includes(currentUser.role as UserRole)) {
-            throw new ForbiddenException('Chỉ Kỹ thuật viên hoặc Quản trị viên mới có quyền thực hiện chuyển đổi');
+    @ApiOperation({summary: 'Chuyển đổi sự cố thành Hồ sơ sửa chữa chính thức (Repair B03)'})
+    convertToRepair(@Param('id', ParseIntPipe) id: number, @AuthUser() currentUser: User) {
+        if (!this.canProcessAsTech(currentUser)) {
+            throw new ForbiddenException('Chỉ Kỹ thuật viên, Tổ trưởng kỹ thuật hoặc Quản trị viên mới có quyền thực hiện chuyển đổi');
         }
         return this.service.convertToRepair(id, currentUser);
     }

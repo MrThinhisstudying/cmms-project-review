@@ -16,7 +16,7 @@ interface Props {
   onPerformMaintenance?: (record: any) => void;
 }
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 const MaintenanceDetailModal: React.FC<Props> = ({
   open,
@@ -33,7 +33,7 @@ const MaintenanceDetailModal: React.FC<Props> = ({
   const [isPerformOpen, setIsPerformOpen] = useState(false);
   const [performRecord, setPerformRecord] = useState<any>(null);
   const [performDate, setPerformDate] = useState<dayjs.Dayjs | null>(dayjs());
-  const [minDate, setMinDate] = useState<dayjs.Dayjs | null>(null); // Constraint
+  const [, setMinDate] = useState<dayjs.Dayjs | null>(null); // Constraint
   const [creating, setCreating] = useState(false);
 
   // --- STATE CHO SỬA NGÀY BẢO DƯỠNG ---

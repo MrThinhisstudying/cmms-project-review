@@ -123,8 +123,12 @@ const Employees: React.FC = () => {
   const [contractFilter, setContractFilter] = useState<string | null>(null);
   const [partyFilter, setPartyFilter] = useState<'PARTY_MEMBER' | 'NON_PARTY' | null>(null);
 
-  // View Mode: Cards or Table
-  const [viewMode, setViewMode] = useState<'TABLE' | 'CARDS'>('TABLE');
+  // View Mode: Cards or Table (Auto-switch to CARDS on mobile)
+  const [viewMode, setViewMode] = useState<'TABLE' | 'CARDS'>(isMobile ? 'CARDS' : 'TABLE');
+
+  useEffect(() => {
+    setViewMode(isMobile ? 'CARDS' : 'TABLE');
+  }, [isMobile]);
 
   // Active Tab synced with URL query ?tab=...
   const [activeTab, setActiveTab] = useState(() => {

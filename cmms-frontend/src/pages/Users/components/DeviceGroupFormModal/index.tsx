@@ -19,8 +19,12 @@ const { Text } = Typography;
 
 const DeviceGroupFormModal: React.FC<Props> = ({ open, onClose, groupId, defaultDeptId }) => {
   const [form] = Form.useForm();
-  const { users, fetchUsers } = useUsersContext();
+  const { users, activeUsers: ctxActiveUsers, fetchUsers } = useUsersContext();
   const { departments } = useDepartmentsContext();
+
+  const activeUsers = useMemo(() => {
+    return ctxActiveUsers || users.filter((u) => !u.status || u.status.trim().toLowerCase() === "active");
+  }, [ctxActiveUsers, users]);
 
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("info");
@@ -404,7 +408,7 @@ const DeviceGroupFormModal: React.FC<Props> = ({ open, onClose, groupId, default
                     optionFilterProp="children"
                     onChange={handleSelectLeader}
                   >
-                    {users.map(u => (
+                    {activeUsers.map(u => (
                       <Select.Option key={u.user_id} value={u.user_id}>
                         ⭐ {u.name} {u.employee_code ? `(${u.employee_code})` : `(${u.email})`}
                       </Select.Option>
@@ -432,7 +436,7 @@ const DeviceGroupFormModal: React.FC<Props> = ({ open, onClose, groupId, default
                     onSelect={(val: number) => handleAddMember(val)}
                     value={undefined}
                   >
-                    {users
+                    {activeUsers
                       .filter(u => !selectedMembers.some(m => m.userId === u.user_id))
                       .map(u => (
                         <Select.Option key={u.user_id} value={u.user_id}>

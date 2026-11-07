@@ -49,8 +49,11 @@ const DepartmentFormModal: React.FC<Props> = ({
   defaultParentId,
 }) => {
   const { departments, addDepartment, editDepartment } = useDepartmentsContext();
-  const { users, fetchUsers } = useUsersContext();
+  const { users, activeUsers: ctxActiveUsers, fetchUsers } = useUsersContext();
   const [form] = Form.useForm();
+  const activeUsers = useMemo(() => {
+    return (ctxActiveUsers || users.filter((u) => !u.status || u.status.trim().toLowerCase() === "active"));
+  }, [ctxActiveUsers, users]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("info");
   const [currentDept, setCurrentDept] = useState<IDepartment | null>(null);
@@ -59,7 +62,11 @@ const DepartmentFormModal: React.FC<Props> = ({
   const watchedLevel = Form.useWatch("level", form) || (defaultParentId ? "TO" : "DOI");
   const watchedParentId = Form.useWatch("parent_id", form) || defaultParentId;
   const watchedInherit = Form.useWatch("inherit_parent_permissions", form);
-  const watchedPermissions: string[] = Form.useWatch("permissions", form) || [];
+  const rawWatchedPermissions = Form.useWatch("permissions", form);
+  const watchedPermissions: string[] = useMemo(
+    () => rawWatchedPermissions || [],
+    [rawWatchedPermissions]
+  );
 
   const isInitializedRef = React.useRef(false);
 
@@ -516,7 +523,7 @@ const DepartmentFormModal: React.FC<Props> = ({
                             optionFilterProp="children"
                             size="middle"
                           >
-                            {users.map((u) => (
+                            {activeUsers.map((u) => (
                               <Select.Option key={u.user_id} value={u.user_id}>
                                 {u.name} {u.employee_code ? `[${u.employee_code}]` : ""} {u.position ? `— ${u.position}` : ""}
                               </Select.Option>
@@ -543,7 +550,7 @@ const DepartmentFormModal: React.FC<Props> = ({
                             optionFilterProp="children"
                             size="middle"
                           >
-                            {users.map((u) => (
+                            {activeUsers.map((u) => (
                               <Select.Option key={u.user_id} value={u.user_id}>
                                 {u.name} {u.employee_code ? `[${u.employee_code}]` : ""} {u.position ? `— ${u.position}` : ""}
                               </Select.Option>

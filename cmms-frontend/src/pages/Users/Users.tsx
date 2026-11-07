@@ -38,6 +38,7 @@ import { useAuthContext } from "../../context/AuthContext/AuthContext";
 import { useUsersContext } from "../../context/UsersContext/UsersContext";
 import { useDepartmentsContext } from "../../context/DepartmentsContext/DepartmentsContext";
 import { exportUsersToExcel } from "../../utils/excelHelper";
+import { getBackendImageUrl } from "../../utils/imageUrl";
 import { createUser, deleteUser, updateUser, syncUserDepartments } from "../../apis/users";
 import { getDeviceGroups, IDeviceGroup } from "../../apis/device-groups";
 
@@ -260,7 +261,7 @@ const Users: React.FC = () => {
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <Avatar
-              src={record.avatar}
+              src={record.avatar ? getBackendImageUrl(record.avatar) : undefined}
               icon={<UserOutlined />}
               size={42}
               style={{ 

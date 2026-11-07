@@ -1,18 +1,19 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like, In } from 'typeorm';
-import { VehicleIncidentReport, IncidentReportStatus } from './entities/vehicle-incident-report.entity';
-import { CreateIncidentReportDto } from './dto/create-incident-report.dto';
-import { ResolveQuickDto } from './dto/resolve-quick.dto';
-import { QueryIncidentReportsDto } from './dto/query-incident-reports.dto';
-import { RequestRepairDossierDto } from './dto/request-repair-dossier.dto';
-import { Device } from 'src/devices/entities/device.entity';
-import { User } from 'src/user/user.entity';
-import { UserRole } from 'src/user/user-role.enum';
-import { UserDeviceGroup } from 'src/device-groups/entities/user-device-group.entity';
-import { DeviceGroup } from 'src/device-groups/entities/device-group.entity';
-import { RepairsService } from 'src/repairs/repairs.service';
-import { NotificationService } from 'src/notification/notification.service';
+import {Injectable, NotFoundException, BadRequestException} from '@nestjs/common';
+import {InjectRepository} from '@nestjs/typeorm';
+import {Repository, In} from 'typeorm';
+import {VehicleIncidentReport, IncidentReportStatus} from './entities/vehicle-incident-report.entity';
+import {CreateIncidentReportDto} from './dto/create-incident-report.dto';
+import {ResolveQuickDto} from './dto/resolve-quick.dto';
+import {QueryIncidentReportsDto} from './dto/query-incident-reports.dto';
+import {RequestRepairDossierDto} from './dto/request-repair-dossier.dto';
+import {Device} from 'src/devices/entities/device.entity';
+import {User} from 'src/user/user.entity';
+import {UserRole} from 'src/user/user-role.enum';
+import {UserDeviceGroup} from 'src/device-groups/entities/user-device-group.entity';
+import {DeviceGroup} from 'src/device-groups/entities/device-group.entity';
+import {RepairsService} from 'src/repairs/repairs.service';
+import {RepairsGateway} from 'src/repairs/repairs.gateway';
+import {NotificationService} from 'src/notification/notification.service';
 
 @Injectable()
 export class VehicleIncidentReportsService {
@@ -28,19 +29,20 @@ export class VehicleIncidentReportsService {
         @InjectRepository(DeviceGroup)
         private readonly deviceGroupRepo: Repository<DeviceGroup>,
         private readonly repairsService: RepairsService,
+        private readonly repairsGateway: RepairsGateway,
         private readonly notificationService: NotificationService,
     ) {}
 
     // 1. Tạo báo cáo tình trạng xe công khai từ quét QR
     async createPublicReport(dto: CreateIncidentReportDto): Promise<VehicleIncidentReport> {
-        const device = await this.deviceRepo.findOne({ where: { device_id: dto.device_id } });
+        const device = await this.deviceRepo.findOne({where: {device_id: dto.device_id}});
         if (!device) {
             throw new NotFoundException(`Không tìm thấy phương tiện với ID ${dto.device_id}`);
         }
 
         let reporterUser: User | undefined;
         if (dto.reporter_user_id) {
-            reporterUser = await this.userRepo.findOne({ where: { user_id: dto.reporter_user_id } }) || undefined;
+            reporterUser = (await this.userRepo.findOne({where: {user_id: dto.reporter_user_id}})) || undefined;
         }
 
         const report = this.reportRepo.create({
@@ -59,11 +61,19 @@ export class VehicleIncidentReportsService {
             status: IncidentReportStatus.PENDING,
         });
 
-        return this.reportRepo.save(report);
+        const saved = await this.reportRepo.save(report);
+        this.repairsGateway.notifyIncidentReportUpdate({
+            reportId: saved.id,
+            action: 'created',
+            status: saved.status,
+        });
+        return saved;
     }
 
     // 2. Tìm kiếm nhân viên thông minh phục vụ AutoComplete tại màn hình QR
-    async searchReporters(query: string): Promise<Array<{ user_id: number; name: string; employee_code?: string; department?: string; phone?: string }>> {
+    async searchReporters(
+        query: string,
+    ): Promise<Array<{user_id: number; name: string; employee_code?: string; department?: string; phone?: string}>> {
         if (!query || query.trim().length === 0) {
             return [];
         }
@@ -72,11 +82,11 @@ export class VehicleIncidentReportsService {
         const users = await this.userRepo
             .createQueryBuilder('u')
             .leftJoinAndSelect('u.department', 'd')
-            .where('LOWER(u.name) LIKE :q OR LOWER(u.employee_code) LIKE :q', { q })
+            .where('LOWER(u.name) LIKE :q OR LOWER(u.employee_code) LIKE :q', {q})
             .take(10)
             .getMany();
 
-        return users.map(u => ({
+        return users.map((u) => ({
             user_id: u.user_id,
             name: u.name,
             employee_code: u.employee_code,
@@ -97,18 +107,18 @@ export class VehicleIncidentReportsService {
             .orderBy('r.created_at', 'DESC');
 
         if (dto.status) {
-            queryBuilder.andWhere('r.status = :status', { status: dto.status });
+            queryBuilder.andWhere('r.status = :status', {status: dto.status});
         }
 
         if (dto.device_id) {
-            queryBuilder.andWhere('r.device_id = :deviceId', { deviceId: dto.device_id });
+            queryBuilder.andWhere('r.device_id = :deviceId', {deviceId: dto.device_id});
         }
 
         if (dto.search && dto.search.trim()) {
             const s = `%${dto.search.trim().toLowerCase()}%`;
             queryBuilder.andWhere(
                 '(LOWER(r.reporter_name) LIKE :s OR LOWER(r.reporter_code) LIKE :s OR LOWER(r.description) LIKE :s OR LOWER(d.name) LIKE :s OR LOWER(d.reg_number) LIKE :s)',
-                { s }
+                {s},
             );
         }
 
@@ -120,22 +130,32 @@ export class VehicleIncidentReportsService {
         }
 
         // RBAC: Lọc theo phân quyền vai trò người dùng
-        if (currentUser && currentUser.role === UserRole.OPERATOR) {
+        // Ban giám đốc (DIRECTOR), Đội trưởng (UNIT_HEAD), Tổ trưởng/Tổ phó (TEAM_LEAD hoặc LEAD/DEPUTY_LEAD) được xem toàn bộ danh sách
+        const userDepts: any[] = Array.isArray(currentUser?.user_departments) ? currentUser.user_departments : [];
+        const posLower = (currentUser?.position || '').trim().toLowerCase();
+        const isLeaderOrDeputy =
+            userDepts.some((ud) => ['LEAD', 'DEPUTY_LEAD'].includes(ud?.role_in_dept)) ||
+            posLower.includes('tổ trưởng') ||
+            posLower.includes('tổ phó') ||
+            posLower.includes('đội trưởng') ||
+            posLower.includes('đội phó');
+
+        if (currentUser && currentUser.role === UserRole.OPERATOR && !isLeaderOrDeputy) {
             const userGroups = await this.userDeviceGroupRepo.find({
-                where: { user_id: currentUser.user_id },
+                where: {user_id: currentUser.user_id},
             });
-            const groupIds = userGroups.map(ug => ug.group_id).filter(Boolean);
+            const groupIds = userGroups.map((ug) => ug.group_id).filter(Boolean);
             const userName = currentUser.name?.trim().toLowerCase() || '';
 
             if (groupIds.length > 0) {
                 queryBuilder.andWhere(
                     '(d.group_id IN (:...groupIds) OR r.reporter_user_id = :userId OR r.assigned_dossier_user_id = :userId OR (r.assigned_dossier_user_name IS NOT NULL AND LOWER(r.assigned_dossier_user_name) = :userName))',
-                    { groupIds, userId: currentUser.user_id, userName }
+                    {groupIds, userId: currentUser.user_id, userName},
                 );
             } else {
                 queryBuilder.andWhere(
                     '(r.reporter_user_id = :userId OR r.assigned_dossier_user_id = :userId OR (r.assigned_dossier_user_name IS NOT NULL AND LOWER(r.assigned_dossier_user_name) = :userName))',
-                    { userId: currentUser.user_id, userName }
+                    {userId: currentUser.user_id, userName},
                 );
             }
         }
@@ -150,14 +170,14 @@ export class VehicleIncidentReportsService {
                 status: In([IncidentReportStatus.PENDING, IncidentReportStatus.IN_PROGRESS]),
             },
             relations: ['device', 'reporter_user', 'technician', 'assigned_dossier_user'],
-            order: { created_at: 'DESC' },
+            order: {created_at: 'DESC'},
         });
     }
 
     // 5. Xem chi tiết 1 báo cáo
     async findOne(id: number): Promise<VehicleIncidentReport> {
         const report = await this.reportRepo.findOne({
-            where: { id },
+            where: {id},
             relations: ['device', 'reporter_user', 'technician', 'operator_confirmed_by', 'assigned_dossier_user'],
         });
         if (!report) {
@@ -177,7 +197,13 @@ export class VehicleIncidentReportsService {
         report.technician = technician;
         report.technician_accepted_at = new Date();
 
-        return this.reportRepo.save(report);
+        const saved = await this.reportRepo.save(report);
+        this.repairsGateway.notifyIncidentReportUpdate({
+            reportId: saved.id,
+            action: 'accepted',
+            status: saved.status,
+        });
+        return saved;
     }
 
     // 7. Thao tác 2: Xác nhận đã khắc phục nhanh (Cả khi sửa trực tiếp tại chỗ hoặc KTV đã linh động sửa xong trước đó)
@@ -186,7 +212,7 @@ export class VehicleIncidentReportsService {
 
         let operatorUser: User | undefined;
         if (dto.operator_confirmed_by_id) {
-            operatorUser = await this.userRepo.findOne({ where: { user_id: dto.operator_confirmed_by_id } }) || undefined;
+            operatorUser = (await this.userRepo.findOne({where: {user_id: dto.operator_confirmed_by_id}})) || undefined;
         }
 
         report.status = IncidentReportStatus.RESOLVED_QUICK;
@@ -197,13 +223,19 @@ export class VehicleIncidentReportsService {
         report.operator_confirmed_at = new Date();
         report.operator_notes = dto.operator_notes;
 
-        return this.reportRepo.save(report);
+        const saved = await this.reportRepo.save(report);
+        this.repairsGateway.notifyIncidentReportUpdate({
+            reportId: saved.id,
+            action: 'resolved_quick',
+            status: saved.status,
+        });
+        return saved;
     }
 
     // 8. KIỂM TRA CHÉO: Người báo cáo có đang quản lý hoặc nằm trong nhóm xe có chiếc xe đó không
     async checkVehicleGroupMembership(id: number) {
         const report = await this.reportRepo.findOne({
-            where: { id },
+            where: {id},
             relations: ['device', 'reporter_user'],
         });
         if (!report) {
@@ -211,7 +243,7 @@ export class VehicleIncidentReportsService {
         }
 
         const device = await this.deviceRepo.findOne({
-            where: { device_id: report.device_id },
+            where: {device_id: report.device_id},
             relations: ['device_group', 'device_group.leader', 'users'],
         });
 
@@ -228,7 +260,7 @@ export class VehicleIncidentReportsService {
 
         if (device?.device_group) {
             const udgs = await this.userDeviceGroupRepo.find({
-                where: { group_id: device.device_group.id },
+                where: {group_id: device.device_group.id},
                 relations: ['user', 'user.department'],
             });
 
@@ -246,7 +278,7 @@ export class VehicleIncidentReportsService {
             }
 
             // Check group leader if not already in array
-            if (device.device_group.leader && !groupMembers.some(m => m.user_id === device.device_group.leader?.user_id)) {
+            if (device.device_group.leader && !groupMembers.some((m) => m.user_id === device.device_group.leader?.user_id)) {
                 groupMembers.push({
                     user_id: device.device_group.leader.user_id,
                     name: device.device_group.leader.name,
@@ -257,7 +289,7 @@ export class VehicleIncidentReportsService {
             }
         }
 
-        const assignedUsers = (device?.users || []).map(u => ({
+        const assignedUsers = (device?.users || []).map((u) => ({
             user_id: u.user_id,
             name: u.name,
             employee_code: u.employee_code,
@@ -265,8 +297,8 @@ export class VehicleIncidentReportsService {
 
         if (report.reporter_user?.user_id) {
             const reporterId = report.reporter_user.user_id;
-            const inGroupMembers = groupMembers.some(m => m.user_id === reporterId);
-            const inAssigned = assignedUsers.some(u => u.user_id === reporterId);
+            const inGroupMembers = groupMembers.some((m) => m.user_id === reporterId);
+            const inAssigned = assignedUsers.some((u) => u.user_id === reporterId);
             isInGroup = inGroupMembers || inAssigned;
         }
 
@@ -285,12 +317,14 @@ export class VehicleIncidentReportsService {
             device_name: device?.name,
             reg_number: device?.reg_number,
             device_group_name: device?.device_group?.name || null,
-            reporter_user: report.reporter_user ? {
-                user_id: report.reporter_user.user_id,
-                name: report.reporter_user.name,
-                employee_code: report.reporter_user.employee_code,
-                department: report.reporter_user.department?.name,
-            } : null,
+            reporter_user: report.reporter_user
+                ? {
+                      user_id: report.reporter_user.user_id,
+                      name: report.reporter_user.name,
+                      employee_code: report.reporter_user.employee_code,
+                      department: report.reporter_user.department?.name,
+                  }
+                : null,
             reporter_name: report.reporter_name,
             reporter_code: report.reporter_code,
             is_external_reporter: report.is_external_reporter || !report.reporter_user,
@@ -332,22 +366,31 @@ export class VehicleIncidentReportsService {
         report.is_reporter_in_vehicle_group = groupCheck.is_in_group;
 
         if (assignedUserId) {
-            const targetUser = await this.userRepo.findOne({ where: { user_id: assignedUserId } });
+            const targetUser = await this.userRepo.findOne({where: {user_id: assignedUserId}});
             if (targetUser) {
                 report.assigned_dossier_user = targetUser;
                 report.assigned_dossier_user_name = targetUser.name;
 
                 // Gửi thông báo đến tài khoản nhân viên được yêu cầu
                 try {
-                    const notifyMsg = `KTV ${currentUser.name} yêu cầu bạn lập Hồ sơ sửa chữa (B03) cho xe ${report.device?.name} (${report.device?.reg_number || ''}). Nội dung: ${dto.request_note}`;
+                    const notifyMsg = `KTV ${currentUser.name} yêu cầu bạn lập Hồ sơ sửa chữa (B03) cho xe ${report.device?.name} (${
+                        report.device?.reg_number || ''
+                    }). Nội dung: ${dto.request_note}`;
                     await this.notificationService.createForUser(targetUser, notifyMsg);
+                    this.repairsGateway.sendToUser(targetUser.user_id, notifyMsg);
                 } catch (notifErr) {
                     console.error('Lỗi gửi thông báo:', notifErr);
                 }
             }
         }
 
-        return this.reportRepo.save(report);
+        const saved = await this.reportRepo.save(report);
+        this.repairsGateway.notifyIncidentReportUpdate({
+            reportId: saved.id,
+            action: 'requested_repair',
+            status: saved.status,
+        });
+        return saved;
     }
 
     // 10. Liên kết mã hồ sơ sửa chữa B03 (Khi người vận hành hoặc KTV đã tạo hồ sơ)
@@ -356,11 +399,17 @@ export class VehicleIncidentReportsService {
         report.status = IncidentReportStatus.CONVERTED_REPAIR;
         report.converted_repair_id = repairId;
         report.technician = currentUser;
-        return this.reportRepo.save(report);
+        const saved = await this.reportRepo.save(report);
+        this.repairsGateway.notifyIncidentReportUpdate({
+            reportId: saved.id,
+            action: 'linked_repair',
+            status: saved.status,
+        });
+        return saved;
     }
 
     // 11. Chuyển thành hồ sơ sửa chữa chính thức (Dành cho Quản trị viên khi cần tạo trực tiếp)
-    async convertToRepair(id: number, currentUser: User): Promise<{ report: VehicleIncidentReport; repair: any }> {
+    async convertToRepair(id: number, currentUser: User): Promise<{report: VehicleIncidentReport; repair: any}> {
         const report = await this.findOne(id);
         if (report.status === IncidentReportStatus.CONVERTED_REPAIR && report.converted_repair_id) {
             throw new BadRequestException(`Báo cáo này đã được chuyển thành hồ sơ sửa chữa #${report.converted_repair_id}`);
@@ -371,9 +420,11 @@ export class VehicleIncidentReportsService {
                 device_id: report.device_id,
                 location_issue: report.location_issue || 'Bãi đỗ sân bay',
                 recommendation: `[Chuyển từ Báo cáo tình trạng xe #${report.id}] ${report.description}`,
-                note: `Người báo cáo tại xe: ${report.reporter_name} (${report.reporter_code || 'Không có mã'}) - Đơn vị: ${report.reporter_department || 'N/A'} - SĐT: ${report.reporter_phone || 'N/A'}`,
+                note: `Người báo cáo tại xe: ${report.reporter_name} (${report.reporter_code || 'Không có mã'}) - Đơn vị: ${
+                    report.reporter_department || 'N/A'
+                } - SĐT: ${report.reporter_phone || 'N/A'}`,
             },
-            currentUser.user_id
+            currentUser.user_id,
         );
 
         report.status = IncidentReportStatus.CONVERTED_REPAIR;
@@ -381,6 +432,11 @@ export class VehicleIncidentReportsService {
         report.technician = currentUser;
 
         const updatedReport = await this.reportRepo.save(report);
+        this.repairsGateway.notifyIncidentReportUpdate({
+            reportId: updatedReport.id,
+            action: 'converted_repair',
+            status: updatedReport.status,
+        });
 
         return {
             report: updatedReport,

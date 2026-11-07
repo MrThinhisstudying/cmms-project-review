@@ -7,6 +7,7 @@ import { getAllUsers } from '../../apis/users';
 import certificatesApi from '../../apis/certificates';
 import { getToken } from '../../utils/auth';
 import ProfileDrawer from '../Users/components/ProfileModal';
+import { getBackendImageUrl } from '../../utils/imageUrl';
 import dayjs from 'dayjs';
 
 interface UserCertSummary {
@@ -152,7 +153,7 @@ const HRCertificates: React.FC = () => {
             title: 'Nhân viên', key: 'name', width: 200,
             render: (_: any, record: UserCertSummary) => (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Avatar size={32} icon={<UserOutlined />} src={record.user.avatar} />
+                    <Avatar size={32} icon={<UserOutlined />} src={record.user.avatar ? getBackendImageUrl(record.user.avatar) : undefined} />
                     <div>
                         <div style={{ fontWeight: 600, fontSize: 13 }}>{record.user.name}</div>
                         <div style={{ fontSize: 11, color: '#999' }}>{record.user.position || 'Chưa cập nhật chức vụ'}</div>

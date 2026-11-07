@@ -38,7 +38,6 @@ import {
   ClockCircleOutlined,
   CloseCircleOutlined,
   SafetyCertificateOutlined,
-  CalendarOutlined,
 } from "@ant-design/icons";
 
 import { getToken } from "../../../../utils/auth";
@@ -1165,7 +1164,7 @@ export default function DeviceDetailDrawer({
           </div>
         </div>
       }
-      width={1200}
+      width="min(1200px, 100vw)"
       onClose={onClose}
       open={open}
       styles={{ body: { paddingBottom: 80 } }}

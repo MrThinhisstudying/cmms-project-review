@@ -1,10 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Modal, Table, Tag, Button, message, Empty } from "antd";
 import {
-  CheckCircleOutlined,
-  ClockCircleOutlined,
   FormOutlined,
-  WarningOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { getMaintenancesByDevice } from "../../../apis/maintenance";

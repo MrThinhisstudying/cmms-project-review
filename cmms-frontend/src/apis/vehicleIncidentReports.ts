@@ -233,3 +233,91 @@ export const convertIncidentReportToRepair = async (id: number): Promise<{ repor
     });
     return res.data;
 };
+
+/**
+ * Kiểm tra đơn vị / chức danh có thuộc Tổ VHTTBMĐ (Vận hành trang thiết bị mặt đất) hay không
+ */
+const isVhttbmdText = (text?: string | null): boolean => {
+    if (!text) return false;
+    const lower = text.trim().toLowerCase();
+    return lower.includes('vhttbmđ') || lower.includes('vhttbmd') || lower.includes('vận hành');
+};
+
+/**
+ * Kiểm tra người dùng thuộc nhóm Lãnh đạo / Chỉ huy chỉ có quyền XEM trang Báo cáo tình trạng xe
+ * (Không hiện Popup sân đỗ, không hiện các nút chức năng xử lý):
+ * - Ban Giám đốc (DIRECTOR)
+ * - Đội trưởng / Đội phó (UNIT_HEAD hoặc LEAD/DEPUTY_LEAD cấp Đội)
+ * - Tổ trưởng / Tổ phó VHTTBMĐ (hoặc TEAM_LEAD không thuộc Tổ kỹ thuật)
+ */
+export const isIncidentReportViewOnly = (user: any): boolean => {
+    if (!user) return true;
+    const role = (user.role || '').toUpperCase();
+
+    if (role === 'ADMIN') return false;
+
+    // 1. Ban Giám đốc & Đội trưởng / Cán bộ đội
+    if (role === 'DIRECTOR' || role === 'UNIT_HEAD') return true;
+
+    const userDepts: any[] = Array.isArray(user.user_departments) ? user.user_departments : [];
+    const isUnitLeadInDept = userDepts.some(
+        (ud) => ['LEAD', 'DEPUTY_LEAD'].includes(ud?.role_in_dept) && ud?.department?.level === 'DOI'
+    );
+    if (isUnitLeadInDept) return true;
+
+    // 2. Tổ trưởng / Tổ phó VHTTBMĐ (theo role_in_dept hoặc role TEAM_LEAD hoặc chức danh position)
+    const posLower = (user.position || '').trim().toLowerCase();
+    const isPosTeamLeaderOrDeputy =
+        posLower.includes('tổ trưởng') || posLower.includes('tổ phó') || posLower.includes('đội trưởng') || posLower.includes('đội phó');
+
+    const belongsToVhttbmd =
+        isVhttbmdText(user.department?.name) ||
+        isVhttbmdText(user.position) ||
+        userDepts.some((ud) => isVhttbmdText(ud?.department?.name));
+
+    const isTeamLeadOrDeputyInDept = userDepts.some(
+        (ud) => ['LEAD', 'DEPUTY_LEAD'].includes(ud?.role_in_dept) && ud?.department?.level === 'TO'
+    );
+
+    if ((role === 'TEAM_LEAD' || isTeamLeadOrDeputyInDept || isPosTeamLeaderOrDeputy) && belongsToVhttbmd) {
+        return true;
+    }
+
+    // 3. Nếu là TEAM_LEAD nhưng không thuộc bất kỳ Tổ kỹ thuật nào (is_technical = false)
+    if (role === 'TEAM_LEAD') {
+        const hasTechDept =
+            Boolean(user.department?.is_technical && !isVhttbmdText(user.department?.name)) ||
+            userDepts.some((ud) => ud?.department?.is_technical && !isVhttbmdText(ud?.department?.name));
+        if (!hasTechDept) return true;
+    }
+
+    return false;
+};
+
+/**
+ * Kiểm tra người dùng có quyền Kỹ thuật xử lý sự cố sân đỗ hay không
+ * (Hiện Popup sự cố chờ xử lý & 3 nút: Kỹ thuật tiếp nhận, Xác nhận đã khắc phục, Yêu cầu làm hồ sơ B03):
+ * - ADMIN
+ * - TECHNICIAN
+ * - TEAM_LEAD thuộc Tổ kỹ thuật (is_technical = true và KHÔNG phải Tổ VHTTBMĐ)
+ */
+export const canProcessIncidentAsTech = (user: any): boolean => {
+    if (!user) return false;
+    const role = (user.role || '').toUpperCase();
+
+    if (role === 'ADMIN') return true;
+    if (isIncidentReportViewOnly(user)) return false;
+
+    if (role === 'TECHNICIAN') return true;
+
+    if (role === 'TEAM_LEAD') {
+        const userDepts: any[] = Array.isArray(user.user_departments) ? user.user_departments : [];
+        const hasTechDept =
+            Boolean(user.department?.is_technical && !isVhttbmdText(user.department?.name)) ||
+            userDepts.some((ud) => ud?.department?.is_technical && !isVhttbmdText(ud?.department?.name));
+        return hasTechDept;
+    }
+
+    return false;
+};
+

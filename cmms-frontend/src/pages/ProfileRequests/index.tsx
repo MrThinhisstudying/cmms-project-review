@@ -4,6 +4,7 @@ import { CheckOutlined, CloseOutlined, UserOutlined, EyeOutlined } from '@ant-de
 import dayjs from 'dayjs';
 import { IProfileRequest, getAllRequests, reviewProfileRequest } from '../../apis/profileRequests';
 import ProfileModal from '../Users/components/ProfileModal';
+import { getBackendImageUrl } from '../../utils/imageUrl';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -210,7 +211,7 @@ const ProfileRequests: React.FC = () => {
             key: 'user',
             render: (_: any, record: IProfileRequest) => (
                 <Space>
-                    <Avatar src={record.user.avatar} icon={<UserOutlined />} />
+                    <Avatar src={record.user.avatar ? getBackendImageUrl(record.user.avatar) : undefined} icon={<UserOutlined />} />
                     <Space direction="vertical" size={0}>
                         <Text strong>{record.user.name}</Text>
                         <Text type="secondary" style={{ fontSize: 12 }}>
@@ -360,7 +361,7 @@ const ProfileRequests: React.FC = () => {
                     open={userModalOpen}
                     user={selectedUser}
                     onCancel={() => setUserModalOpen(false)}
-                    onUpdateSuccess={() => {}}
+                    onUpdateSuccess={() => undefined}
                 />
             )}
         </div>

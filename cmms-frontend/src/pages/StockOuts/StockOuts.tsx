@@ -49,7 +49,7 @@ export default function StockOutsPage() {
   // Hồ sơ phiếu sửa chữa (Drawer xem toàn bộ)
   const [repairDrawerOpen, setRepairDrawerOpen] = useState(false);
   const [selectedRepair, setSelectedRepair] = useState<IRepair | null>(null);
-  const [loadingRepair, setLoadingRepair] = useState(false);
+  const [, setLoadingRepair] = useState(false);
 
   const handleOpenRepairDetail = async (repairId: number) => {
     try {

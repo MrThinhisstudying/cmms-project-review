@@ -18,12 +18,15 @@ async function bootstrap() {
     app.use(bodyParser.json({limit: '20mb'}));
     app.use(bodyParser.urlencoded({limit: '20mb', extended: true}));
     app.use(compression());
-    
+
     // Serve static files from uploads directory
     const uploadPath = join(process.cwd(), 'uploads');
     console.log('Serving static files from:', uploadPath);
     app.useStaticAssets(uploadPath, {
         prefix: '/uploads/',
+    });
+    app.useStaticAssets(uploadPath, {
+        prefix: '/api/uploads/',
     });
 
     app.setGlobalPrefix('api');

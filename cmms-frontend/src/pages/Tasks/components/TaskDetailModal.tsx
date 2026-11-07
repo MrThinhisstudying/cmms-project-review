@@ -18,6 +18,7 @@ import {
     message,
     Row,
     Col,
+    Grid,
 } from "antd";
 import {
     CloseOutlined,
@@ -68,6 +69,7 @@ import {
     TASK_TYPE_CONFIG,
     getDeadlineMeta,
 } from "../taskConstants";
+import { emitTaskAlert } from "../../../components/TaskNotificationPopup";
 
 interface TaskDetailModalProps {
     open: boolean;
@@ -75,10 +77,10 @@ interface TaskDetailModalProps {
     currentUser: { user_id?: number; name?: string; role?: string } | null;
     canCreateTask?: boolean;
     onClose: () => void;
-    onUpdated: () => void;
-    onEditTask: (task: IWorkTask) => void;
-    onCreateSubtask: (parentTask: IWorkTask) => void;
-    onSelectTask: (taskId: number) => void;
+    onUpdated?: () => void;
+    onEditTask?: (task: IWorkTask) => void;
+    onCreateSubtask?: (parentTask: IWorkTask) => void;
+    onSelectTask?: (taskId: number) => void;
 }
 
 const WORKFLOW_STEPS = [
@@ -100,6 +102,8 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
     onCreateSubtask,
     onSelectTask,
 }) => {
+    const screens = Grid.useBreakpoint();
+    const isMobile = !screens.md;
     const [task, setTask] = useState<IWorkTask | null>(null);
     const [loading, setLoading] = useState(false);
     const [actionLoading, setActionLoading] = useState(false);
@@ -222,6 +226,13 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             const updated = await respondToTask(task.id, { action: "ACCEPT" });
             setTask(updated);
             setLocalProgress(updated.progress);
+            emitTaskAlert({
+                taskId: updated.id,
+                taskCode: updated.code,
+                actionType: "TASK_ACCEPTED",
+                title: "Tiếp nhận công việc",
+                message: `Bạn đã tiếp nhận công việc [${updated.code}] "${updated.title}"`,
+            });
             message.success("Đã tiếp nhận công việc! Trạng thái chuyển sang Đang thực hiện.");
             onUpdated();
         } catch (err) {
@@ -247,6 +258,13 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             setTask(updated);
             setActivePanel("NONE");
             setChangeReason("");
+            emitTaskAlert({
+                taskId: updated.id,
+                taskCode: updated.code,
+                actionType: "REQUEST_CHANGE",
+                title: "Đã gửi đề nghị gia hạn",
+                message: `Đã gửi đề nghị điều chỉnh thời hạn cho công việc [${updated.code}]`,
+            });
             message.success("Đã gửi đề nghị điều chỉnh tới người giao việc");
             onUpdated();
         } catch (err) {
@@ -412,6 +430,13 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             setActivePanel("NONE");
             setCompletionNote("");
             setEvidenceFiles([]);
+            emitTaskAlert({
+                taskId: updated.id,
+                taskCode: updated.code,
+                actionType: "SUBMIT_FOR_REVIEW",
+                title: "Báo cáo hoàn thành",
+                message: `Đã nộp báo cáo hoàn thành công việc [${updated.code}]. Đang chờ duyệt nghiệm thu.`,
+            });
             message.success("Đã gửi báo cáo hoàn thành để chờ nghiệm thu!");
             onUpdated();
         } catch (err) {
@@ -438,6 +463,16 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
             setLocalProgress(updated.progress);
             setActivePanel("NONE");
             setReviewNote("");
+            emitTaskAlert({
+                taskId: updated.id,
+                taskCode: updated.code,
+                actionType: action === "APPROVE" ? "TASK_APPROVED" : "TASK_REJECTED",
+                title: action === "APPROVE" ? "Nghiệm thu hoàn tất" : "Yêu cầu làm lại",
+                message:
+                    action === "APPROVE"
+                        ? `Đã nghiệm thu hoàn tất công việc [${updated.code}]`
+                        : `Đã yêu cầu làm lại cho công việc [${updated.code}]`,
+            });
             message.success(
                 action === "APPROVE"
                     ? "Đã nghiệm thu hoàn thành công việc!"
@@ -517,14 +552,15 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
         <Modal
             open={open}
             onCancel={onClose}
-            width={1180}
-            centered
+            width={isMobile ? "100%" : 1180}
+            centered={!isMobile}
+            style={isMobile ? { top: 0, maxWidth: "100vw", margin: 0, paddingBottom: 0 } : undefined}
             closable={false}
             footer={null}
             styles={{
                 container: {
                     padding: 0,
-                    borderRadius: 16,
+                    borderRadius: isMobile ? 0 : 16,
                     overflow: "hidden",
                     background: "#e8eef5",
                     boxShadow: "0 24px 48px -12px rgba(15, 23, 42, 0.32)",
@@ -547,12 +583,12 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     <Spin size="large" tip="Đang tải không gian công việc 360°..." />
                 </div>
             ) : (
-                <div style={{ display: "flex", flexDirection: "column", maxHeight: "90vh" }}>
+                <div style={{ display: "flex", flexDirection: "column", maxHeight: isMobile ? "100vh" : "90vh" }}>
                     {/* ─────────────── TOP DARK NAVY HEADER ─────────────── */}
                     <div
                         style={{
                             background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
-                            padding: "20px 24px 16px",
+                            padding: isMobile ? "14px 14px 12px" : "20px 24px 16px",
                             color: "#fff",
                         }}
                     >
@@ -1041,11 +1077,10 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                     </>
                                 )}
 
-                                {/* Subtask button available for Cán bộ (canCreateTask) on active tasks */}
-                                {canCreateTask &&
+                                {/* Subtask button: Cán bộ (canCreateTask) hoặc Người nhận việc chính (isAssignee) */}
+                                {(canCreateTask || isAssignee) &&
                                     task.status !== "COMPLETED" &&
-                                    task.status !== "CANCELLED" &&
-                                    (isAssigner || canExecute) && (
+                                    task.status !== "CANCELLED" && (
                                         <Button
                                             icon={<BranchesOutlined />}
                                             onClick={() => onCreateSubtask(task)}
@@ -2173,9 +2208,9 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                                                     {(task.subtasks || []).length})
                                                 </span>
                                             </div>
-                                            {canCreateTask &&
-                                                (isAssigner || canExecute) &&
-                                                task.status !== "COMPLETED" && (
+                                            {(canCreateTask || isAssignee) &&
+                                                task.status !== "COMPLETED" &&
+                                                task.status !== "CANCELLED" && (
                                                     <Button
                                                         size="small"
                                                         type="primary"
@@ -2190,8 +2225,8 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                                         {(task.subtasks || []).length === 0 ? (
                                             <div style={{ fontSize: 13, color: "#94a3b8" }}>
-                                                Chưa có công việc con. Tổ trưởng / Đội trưởng có thể
-                                                bấm &ldquo;Chia việc con&rdquo; để giao chi tiết cho
+                                                Chưa có công việc con. Bạn hoặc Cán bộ quản lý có thể
+                                                bấm &ldquo;Chia việc con&rdquo; để phân rã nhiệm vụ cho
                                                 từng thành viên.
                                             </div>
                                         ) : (

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
     Modal, Button, Tag, Space, Typography, Card, Image, Input, Form,
-    Select, notification, Badge, Alert, Spin
+    Select, notification, Badge, Alert, Spin, Grid
 } from 'antd';
 import {
     WarningOutlined, CheckCircleOutlined, ToolOutlined, FileAddOutlined,
@@ -16,9 +16,11 @@ import {
     IVehicleIncidentReport,
     IncidentReportStatus,
     ICheckVehicleGroupResult,
+    canProcessIncidentAsTech,
 } from '../../apis/vehicleIncidentReports';
 import { getAllUsers } from '../../apis/users';
 import { useAuthContext } from '../../context/AuthContext/AuthContext';
+import { useSocket } from '../../hooks/useSocket';
 import { getToken } from '../../utils/auth';
 import dayjs from 'dayjs';
 
@@ -27,8 +29,10 @@ const { Text, Title } = Typography;
 export const PendingIncidentReportsModal: React.FC = () => {
     const { user } = useAuthContext();
     const token = getToken();
+    const screens = Grid.useBreakpoint();
+    const isMobile = !screens.md;
 
-    const isTechOrAdmin = ['ADMIN', 'admin', 'TECHNICIAN', 'TEAM_LEAD'].includes(user?.role || '');
+    const isTechOrAdmin = canProcessIncidentAsTech(user);
 
     const [reports, setReports] = useState<IVehicleIncidentReport[]>([]);
     const [loading, setLoading] = useState(false);
@@ -70,16 +74,29 @@ export const PendingIncidentReportsModal: React.FC = () => {
 
     useEffect(() => {
         fetchReports();
-        // Polling check every 60 seconds
+        // Polling check every 60 seconds as fallback
         const interval = setInterval(fetchReports, 60000);
         return () => clearInterval(interval);
     }, [fetchReports]);
 
-    // Load operators list for resolve acknowledgment
+    // Realtime WebSocket subscription for technicians
+    useSocket(isTechOrAdmin ? user?.user_id : undefined, {
+        incident_report_updated: (payload?: { action?: string }) => {
+            if (payload?.action === 'created') {
+                setHasDismissed(false);
+            }
+            fetchReports();
+        },
+    });
+
+    // Load operators list for resolve acknowledgment (chỉ lấy tài khoản đang hoạt động)
     useEffect(() => {
         if (token && (resolveModalOpen || dossierModalOpen) && operatorsList.length === 0) {
             getAllUsers(token).then((res: any) => {
-                setOperatorsList(res || []);
+                const activeOps = (res || []).filter(
+                    (u: any) => !u.status || u.status.trim().toLowerCase() === 'active'
+                );
+                setOperatorsList(activeOps);
             }).catch(() => {});
         }
     }, [token, resolveModalOpen, dossierModalOpen, operatorsList.length]);
@@ -214,15 +231,26 @@ export const PendingIncidentReportsModal: React.FC = () => {
         <>
             {/* FLOATING ACTION BADGE (Allows opening modal anytime if there are pending reports) */}
             {reports.length > 0 && !modalOpen && (
-                <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 1000 }}>
+                <div
+                    style={{
+                        position: 'fixed',
+                        bottom: isMobile ? 76 : 24,
+                        right: isMobile ? 12 : 24,
+                        zIndex: 1000,
+                    }}
+                >
                     <Badge count={reports.length} overflowCount={99}>
                         <Button
                             type="primary"
                             danger
                             shape="round"
-                            size="large"
+                            size={isMobile ? 'middle' : 'large'}
                             icon={<WarningOutlined />}
-                            style={{ boxShadow: '0 4px 16px rgba(245, 34, 45, 0.4)', fontWeight: 600 }}
+                            style={{
+                                boxShadow: '0 4px 16px rgba(245, 34, 45, 0.4)',
+                                fontWeight: 600,
+                                fontSize: isMobile ? 12.5 : 14,
+                            }}
                             onClick={() => setModalOpen(true)}
                         >
                             {reports.length} Báo cáo xe chờ xử lý

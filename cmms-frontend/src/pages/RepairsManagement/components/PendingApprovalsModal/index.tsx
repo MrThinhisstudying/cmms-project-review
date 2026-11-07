@@ -1,15 +1,17 @@
-import React, { useMemo } from "react";
-import { Modal, Table, Tag, Button, Typography, Empty, Badge } from "antd";
+import React, { useMemo, useState } from "react";
+import { Modal, Table, Tag, Button, Typography, Empty, Badge, Grid, Pagination } from "antd";
 import {
   ClockCircleOutlined,
   EyeOutlined,
   NotificationOutlined,
   CarOutlined,
+  UserOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { IRepair } from "../../../../types/repairs.types";
 
 const { Text } = Typography;
+const { useBreakpoint } = Grid;
 
 interface Props {
   open: boolean;
@@ -27,6 +29,10 @@ const PendingApprovalsModal: React.FC<Props> = ({
   onReviewRepair,
 }) => {
   const role = user?.role || "";
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
+  const [mobilePage, setMobilePage] = useState(1);
+  const mobilePageSize = 5;
 
   // Lọc các phiếu đang chờ chính tài khoản này duyệt theo cấp
   const pendingRepairs = useMemo(() => {
@@ -151,19 +157,20 @@ const PendingApprovalsModal: React.FC<Props> = ({
       title: "Mã phiếu",
       dataIndex: "repair_id",
       key: "repair_id",
-      width: 90,
+      width: "9%",
       render: (id: number) => <span style={{ fontWeight: "bold", color: "#1890ff" }}>#{id}</span>,
     },
     {
       title: "Thiết bị",
       key: "device",
+      width: "23%",
       render: (_: any, r: IRepair) => (
-        <div>
-          <div style={{ fontWeight: 600 }}>
+        <div style={{ wordBreak: "break-word" }}>
+          <div style={{ fontWeight: 600, lineHeight: 1.35 }}>
             <CarOutlined style={{ marginRight: 6, color: "#1890ff" }} />
             {r.device?.name || "Thiết bị"}
           </div>
-          <div style={{ fontSize: 12, color: "#666" }}>
+          <div style={{ fontSize: 12, color: "#666", marginTop: 2 }}>
             {r.device?.reg_number ? `BS: ${r.device.reg_number}` : `SN: ${r.device?.serial_number || "-"}`}
           </div>
         </div>
@@ -172,7 +179,7 @@ const PendingApprovalsModal: React.FC<Props> = ({
     {
       title: "Cấp cần duyệt",
       key: "approval_step",
-      width: 200,
+      width: "20%",
       render: (_: any, r: IRepair) => {
         const info = getApprovalStepInfo(r);
         return (
@@ -192,18 +199,31 @@ const PendingApprovalsModal: React.FC<Props> = ({
       title: "Nội dung hư hỏng",
       dataIndex: "description_defect",
       key: "defect",
-      ellipsis: true,
+      width: "21%",
       render: (text: string) => (
-        <span style={{ fontSize: 13, color: "#434343" }}>{text || "Không có mô tả chi tiết"}</span>
+        <div
+          style={{
+            fontSize: 13,
+            color: "#434343",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+            wordBreak: "break-word",
+          }}
+          title={text}
+        >
+          {text || "Không có mô tả chi tiết"}
+        </div>
       ),
     },
     {
       title: "Người lập / Đơn vị",
       key: "creator",
-      width: 170,
+      width: "15%",
       render: (_: any, r: IRepair) => (
         <div>
-          <div style={{ fontWeight: 500 }}>{r.created_by?.name || "Hệ thống"}</div>
+          <div style={{ fontWeight: 500, fontSize: 12.5 }}>{r.created_by?.name || "Hệ thống"}</div>
           <div style={{ fontSize: 11, color: "#888" }}>
             {r.created_department?.name || r.created_by?.department?.name || ""}
           </div>
@@ -216,7 +236,7 @@ const PendingApprovalsModal: React.FC<Props> = ({
     {
       title: "Thao tác",
       key: "action",
-      width: 130,
+      width: "12%",
       align: "center" as const,
       render: (_: any, r: IRepair) => (
         <Button
@@ -235,68 +255,90 @@ const PendingApprovalsModal: React.FC<Props> = ({
     },
   ];
 
+  const paginatedMobileRepairs = useMemo(() => {
+    const start = (mobilePage - 1) * mobilePageSize;
+    return pendingRepairs.slice(start, start + mobilePageSize);
+  }, [pendingRepairs, mobilePage]);
+
   return (
     <Modal
       open={open}
       onCancel={onClose}
-      width={920}
+      width="min(920px, calc(100vw - 16px))"
+      centered
+      styles={{
+        body: {
+          padding: isMobile ? "10px 0 4px 0" : undefined,
+        },
+      }}
       title={
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, paddingRight: 20 }}>
           <div
             style={{
-              width: 38,
-              height: 38,
+              width: isMobile ? 34 : 38,
+              height: isMobile ? 34 : 38,
               borderRadius: "50%",
               background: "#e6f7ff",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
+              flexShrink: 0,
             }}
           >
-            <NotificationOutlined style={{ fontSize: 20, color: "#1890ff" }} />
+            <NotificationOutlined style={{ fontSize: isMobile ? 17 : 20, color: "#1890ff" }} />
           </div>
-          <div>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: isMobile ? 14.5 : 16, fontWeight: 700, lineHeight: 1.3 }}>
               Thông Báo Phiếu Sửa Chữa Chờ Phê Duyệt
             </div>
-            <div style={{ fontSize: 12, fontWeight: 400, color: "#8c8c8c" }}>
-              Cấp thẩm quyền: <Tag color="blue">{getRoleDisplayName(role)}</Tag>
+            <div style={{ fontSize: 12, fontWeight: 400, color: "#8c8c8c", marginTop: 2 }}>
+              Cấp thẩm quyền: <Tag color="blue" style={{ margin: 0 }}>{getRoleDisplayName(role)}</Tag>
             </div>
           </div>
         </div>
       }
-      footer={[
-        <Button key="close" onClick={onClose}>
-          Để sau
-        </Button>,
-        <Button
-          key="first"
-          type="primary"
-          disabled={pendingRepairs.length === 0}
-          onClick={() => {
-            if (pendingRepairs.length > 0) {
-              onClose();
-              onReviewRepair(pendingRepairs[0]);
-            }
+      footer={
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 8,
+            flexWrap: "wrap",
           }}
         >
-          Xử lý phiếu đầu tiên
-        </Button>,
-      ]}
+          <Button key="close" onClick={onClose} style={{ flex: isMobile ? 1 : undefined }}>
+            Để sau
+          </Button>
+          <Button
+            key="first"
+            type="primary"
+            disabled={pendingRepairs.length === 0}
+            style={{ flex: isMobile ? 2 : undefined }}
+            onClick={() => {
+              if (pendingRepairs.length > 0) {
+                onClose();
+                onReviewRepair(pendingRepairs[0]);
+              }
+            }}
+          >
+            Xử lý phiếu đầu tiên ({pendingRepairs.length})
+          </Button>
+        </div>
+      }
     >
-      <div style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 12 }}>
         <div
           style={{
             background: "#fffbe6",
             border: "1px solid #ffe58f",
             borderRadius: 8,
-            padding: "10px 16px",
+            padding: isMobile ? "8px 12px" : "10px 16px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
           }}
         >
-          <Text style={{ fontSize: 13, color: "#873800" }}>
+          <Text style={{ fontSize: isMobile ? 12.5 : 13, color: "#873800", lineHeight: 1.45 }}>
             Xin chào <b>{user?.name || "Bạn"}</b>, hệ thống ghi nhận có{" "}
             <Badge
               count={pendingRepairs.length}
@@ -313,12 +355,152 @@ const PendingApprovalsModal: React.FC<Props> = ({
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description="Hiện tại không có phiếu nào cần bạn phê duyệt."
         />
+      ) : isMobile ? (
+        <div>
+          <div
+            style={{
+              maxHeight: "56vh",
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+              paddingRight: 2,
+            }}
+          >
+            {paginatedMobileRepairs.map((r) => {
+              const info = getApprovalStepInfo(r);
+              return (
+                <div
+                  key={r.repair_id}
+                  style={{
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 10,
+                    padding: "10px 12px",
+                    background: "#ffffff",
+                    boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
+                  }}
+                >
+                  {/* Row 1: Mã phiếu + Cấp duyệt */}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 6,
+                      flexWrap: "wrap",
+                      marginBottom: 6,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Tag
+                        color="blue"
+                        style={{ margin: 0, fontWeight: 700, borderRadius: 6 }}
+                      >
+                        #{r.repair_id}
+                      </Tag>
+                      <Tag color={info.phaseColor} style={{ margin: 0, borderRadius: 6 }}>
+                        {info.phase}
+                      </Tag>
+                    </div>
+                    <span style={{ fontSize: 11.5, fontWeight: 600, color: "#d46b08" }}>
+                      <ClockCircleOutlined style={{ marginRight: 4 }} />
+                      {info.detail}
+                    </span>
+                  </div>
+
+                  {/* Row 2: Tên xe & Biển số */}
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#0f172a", lineHeight: 1.35 }}>
+                    <CarOutlined style={{ marginRight: 6, color: "#1677ff" }} />
+                    {r.device?.name || "Thiết bị"}
+                  </div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                    {r.device?.reg_number
+                      ? `Biển số: ${r.device.reg_number}`
+                      : `Số khung/SN: ${r.device?.serial_number || "-"}`}
+                  </div>
+
+                  {/* Row 3: Nội dung hư hỏng */}
+                  <div
+                    style={{
+                      marginTop: 6,
+                      padding: "6px 10px",
+                      background: "#f8fafc",
+                      borderRadius: 6,
+                      fontSize: 12.5,
+                      color: "#334155",
+                      borderLeft: "3px solid #91caff",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    <strong>Hư hỏng:</strong> {r.description_defect || "Không có mô tả chi tiết"}
+                  </div>
+
+                  {/* Row 4: Người lập & Nút Duyệt ngay */}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      gap: 8,
+                      marginTop: 8,
+                      paddingTop: 8,
+                      borderTop: "1px dashed #e2e8f0",
+                    }}
+                  >
+                    <div style={{ fontSize: 11.5, color: "#64748b", minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, color: "#334155" }}>
+                        <UserOutlined style={{ marginRight: 4 }} />
+                        {r.created_by?.name || "Hệ thống"}
+                      </div>
+                      <div>
+                        {r.created_department?.name || r.created_by?.department?.name || ""}
+                        {r.created_at ? ` • ${dayjs(r.created_at).format("DD/MM HH:mm")}` : ""}
+                      </div>
+                    </div>
+
+                    <Button
+                      type="primary"
+                      size="small"
+                      icon={<EyeOutlined />}
+                      style={{
+                        background: "#52c41a",
+                        borderColor: "#52c41a",
+                        borderRadius: 6,
+                        fontWeight: 600,
+                        flexShrink: 0,
+                      }}
+                      onClick={() => {
+                        onClose();
+                        onReviewRepair(r);
+                      }}
+                    >
+                      Duyệt ngay
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {pendingRepairs.length > mobilePageSize && (
+            <div style={{ textAlign: "center", marginTop: 10 }}>
+              <Pagination
+                size="small"
+                current={mobilePage}
+                pageSize={mobilePageSize}
+                total={pendingRepairs.length}
+                onChange={(p) => setMobilePage(p)}
+                showSizeChanger={false}
+              />
+            </div>
+          )}
+        </div>
       ) : (
         <Table
           dataSource={pendingRepairs}
           columns={columns}
           rowKey="repair_id"
           size="small"
+          tableLayout="fixed"
           pagination={{ pageSize: 5, size: "small" }}
           bordered
         />

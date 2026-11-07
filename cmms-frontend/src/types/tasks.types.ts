@@ -173,7 +173,8 @@ export interface ICreateTaskPayload {
     parent_id?: number | null;
     dept_id?: number | null;
     device_group_id?: number | null;
-    assignee_id: number;
+    assignee_id?: number;
+    assignee_ids?: number[];
     collaborators?: ITaskCollaborator[];
     start_date?: string | null;
     deadline: string;

@@ -1,26 +1,39 @@
-import {Body, Controller, Delete, Get, HttpCode, HttpException, HttpStatus, Param, Post, Put, Patch, Query, UseGuards, UseInterceptors, UploadedFile, ForbiddenException} from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname, join } from 'path';
+import {
+    Body,
+    Controller,
+    Delete,
+    Get,
+    HttpCode,
+    HttpException,
+    HttpStatus,
+    Param,
+    Post,
+    Put,
+    Patch,
+    Query,
+    UseGuards,
+    UseInterceptors,
+    UploadedFile,
+    ForbiddenException,
+} from '@nestjs/common';
+import {FileInterceptor} from '@nestjs/platform-express';
+import {diskStorage} from 'multer';
+import {basename, extname, join} from 'path';
 import * as fs from 'fs';
-import { compressImage } from '../common/utils/image-compression.util';
+import {compressImage} from '../common/utils/image-compression.util';
 import {AuthUser} from './user.decorator';
 import {User} from './user.entity';
 import {UserService} from './user.service';
 import {CreateUserDto} from './dto/user-create.dto';
 import {ApiTags} from '@nestjs/swagger';
 import {JWTAuthGuard} from 'src/auth/guards/jwt-auth.guard';
-import { RepairsGateway } from 'src/repairs/repairs.gateway';
-import { UserRole } from './user-role.enum';
-
+import {RepairsGateway} from 'src/repairs/repairs.gateway';
+import {UserRole} from './user-role.enum';
 
 @ApiTags('Users')
 @Controller('user')
 export class UserController {
-    constructor(
-        private readonly userService: UserService,
-        private readonly gateway: RepairsGateway,
-    ) {}
+    constructor(private readonly userService: UserService, private readonly gateway: RepairsGateway) {}
 
     @Post('create-admin')
     @HttpCode(HttpStatus.CREATED)
@@ -88,7 +101,9 @@ export class UserController {
     async findOne(@AuthUser() currentUser: User, @Param('id') id: string) {
         try {
             const targetUserId = Number(id);
-            const isAllowed = [UserRole.ADMIN, UserRole.HR_MANAGER, UserRole.DIRECTOR, UserRole.UNIT_HEAD].includes(currentUser.role) || currentUser.user_id === targetUserId;
+            const isAllowed =
+                [UserRole.ADMIN, UserRole.HR_MANAGER, UserRole.DIRECTOR, UserRole.UNIT_HEAD].includes(currentUser.role) ||
+                currentUser.user_id === targetUserId;
             if (!isAllowed) {
                 throw new ForbiddenException('Bạn không có quyền truy cập thông tin nhân viên này');
             }
@@ -165,7 +180,7 @@ export class UserController {
                 destination: (req, file, cb) => {
                     const uploadPath = join(process.cwd(), 'uploads', 'signatures');
                     if (!fs.existsSync(uploadPath)) {
-                        fs.mkdirSync(uploadPath, { recursive: true });
+                        fs.mkdirSync(uploadPath, {recursive: true});
                     }
                     cb(null, uploadPath);
                 },
@@ -174,16 +189,24 @@ export class UserController {
                         .fill(null)
                         .map(() => Math.round(Math.random() * 16).toString(16))
                         .join('');
-                    cb(null, `${randomName}${extname(file.originalname)}`);
+                    let ext = extname(file.originalname).toLowerCase();
+                    if (!ext) {
+                        if (file.mimetype === 'image/png') ext = '.png';
+                        else if (file.mimetype === 'image/webp') ext = '.webp';
+                        else ext = '.jpg';
+                    }
+                    cb(null, `${randomName}${ext}`);
                 },
             }),
             fileFilter: (req, file, cb) => {
-                if (!file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+                const isImageExt = file.originalname.match(/\.(jpg|jpeg|png|gif|webp|heic|heif)$/i);
+                const isImageMime = file.mimetype && file.mimetype.startsWith('image/');
+                if (!isImageExt && !isImageMime) {
                     return cb(new Error('Only image files are allowed!'), false);
                 }
                 cb(null, true);
             },
-            limits: { fileSize: 5 * 1024 * 1024 }, // Max 5MB
+            limits: {fileSize: 5 * 1024 * 1024}, // Max 5MB
         }),
     )
     async uploadSignature(@AuthUser() currentUser: User, @Param('id') id: number, @UploadedFile() file: Express.Multer.File) {
@@ -191,38 +214,42 @@ export class UserController {
             throw new ForbiddenException('Bạn không có quyền cập nhật chữ ký cho người dùng này');
         }
         try {
-             if (!file) throw new HttpException('File is required', HttpStatus.BAD_REQUEST);
+            if (!file) throw new HttpException('File is required', HttpStatus.BAD_REQUEST);
 
-             const existingUser = await this.userService.findOne({ where: { user_id: Number(id) } }).catch(() => null);
-             const oldSignatureUrl = existingUser?.signature_url;
+            const existingUser = await this.userService.findOne({where: {user_id: Number(id)}}).catch(() => null);
+            const oldSignatureUrl = existingUser?.signature_url;
 
-             // Compress signature (keep PNG for transparency, max 600x240)
-             const filePath = join(process.cwd(), 'uploads', 'signatures', file.filename);
-             const result = await compressImage(filePath, {
-                 keepPng: true,
-                 maxWidth: 600,
-                 maxHeight: 240,
-                 quality: 80,
-                 skipBelowBytes: 25 * 1024,
-             });
-             const finalFilename = require('path').basename(result.outputPath);
-             const signatureUrl = `/uploads/signatures/${finalFilename}`;
+            // Compress signature (keep PNG for transparency, max 600x240)
+            const filePath = join(process.cwd(), 'uploads', 'signatures', file.filename);
+            const result = await compressImage(filePath, {
+                keepPng: true,
+                maxWidth: 600,
+                maxHeight: 240,
+                quality: 80,
+                skipBelowBytes: 25 * 1024,
+            });
+            const finalFilename = basename(result.outputPath);
+            const signatureUrl = `/uploads/signatures/${finalFilename}`;
 
-             await this.userService.updateProfile(id, { signature_url: signatureUrl });
+            await this.userService.updateProfile(id, {signature_url: signatureUrl});
 
-             // Xóa file chữ ký cũ trên ổ cứng để tránh rác
-             if (oldSignatureUrl && oldSignatureUrl !== signatureUrl && oldSignatureUrl.startsWith('/uploads/signatures/')) {
-                 const oldFilePath = join(process.cwd(), oldSignatureUrl.replace(/^\//, ''));
-                 if (fs.existsSync(oldFilePath)) {
-                     try { fs.unlinkSync(oldFilePath); } catch { /* ignore */ }
-                 }
-             }
+            // Xóa file chữ ký cũ trên ổ cứng để tránh rác
+            if (oldSignatureUrl && oldSignatureUrl !== signatureUrl && oldSignatureUrl.startsWith('/uploads/signatures/')) {
+                const oldFilePath = join(process.cwd(), oldSignatureUrl.replace(/^\//, ''));
+                if (fs.existsSync(oldFilePath)) {
+                    try {
+                        fs.unlinkSync(oldFilePath);
+                    } catch {
+                        /* ignore */
+                    }
+                }
+            }
 
-             this.gateway.notifyUserUpdate(Number(id));
-             return {
-                 message: 'Cập nhật chữ ký thành công',
-                 data: { signature_url: signatureUrl }
-             };
+            this.gateway.notifyUserUpdate(Number(id));
+            return {
+                message: 'Cập nhật chữ ký thành công',
+                data: {signature_url: signatureUrl},
+            };
         } catch (error: any) {
             throw new HttpException(error.message || 'Updated signature failed', HttpStatus.BAD_REQUEST);
         }
@@ -236,22 +263,34 @@ export class UserController {
                 destination: (req, file, cb) => {
                     const uploadPath = join(process.cwd(), 'uploads', 'avatars');
                     if (!fs.existsSync(uploadPath)) {
-                        fs.mkdirSync(uploadPath, { recursive: true });
+                        fs.mkdirSync(uploadPath, {recursive: true});
                     }
                     cb(null, uploadPath);
                 },
                 filename: (req, file, cb) => {
-                    const randomName = Array(32).fill(null).map(() => Math.round(Math.random() * 16).toString(16)).join('');
-                    cb(null, `${randomName}${extname(file.originalname)}`);
+                    const randomName = Array(32)
+                        .fill(null)
+                        .map(() => Math.round(Math.random() * 16).toString(16))
+                        .join('');
+                    let ext = extname(file.originalname).toLowerCase();
+                    if (!ext) {
+                        if (file.mimetype === 'image/png') ext = '.png';
+                        else if (file.mimetype === 'image/webp') ext = '.webp';
+                        else if (file.mimetype === 'image/gif') ext = '.gif';
+                        else ext = '.jpg';
+                    }
+                    cb(null, `${randomName}${ext}`);
                 },
             }),
             fileFilter: (req, file, cb) => {
-                if (!file.originalname.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+                const isImageExt = file.originalname.match(/\.(jpg|jpeg|png|gif|webp|heic|heif)$/i);
+                const isImageMime = file.mimetype && file.mimetype.startsWith('image/');
+                if (!isImageExt && !isImageMime) {
                     return cb(new Error('Only image files are allowed!'), false);
                 }
                 cb(null, true);
             },
-            limits: { fileSize: 10 * 1024 * 1024 }, // Max 10MB input before compression
+            limits: {fileSize: 10 * 1024 * 1024}, // Max 10MB input before compression
         }),
     )
     async uploadAvatar(@AuthUser() currentUser: User, @Param('id') id: number, @UploadedFile() file: Express.Multer.File) {
@@ -259,37 +298,41 @@ export class UserController {
             throw new ForbiddenException('Bạn không có quyền cập nhật ảnh đại diện cho người dùng này');
         }
         try {
-             if (!file) throw new HttpException('File is required', HttpStatus.BAD_REQUEST);
+            if (!file) throw new HttpException('File is required', HttpStatus.BAD_REQUEST);
 
-             const existingUser = await this.userService.findOne({ where: { user_id: Number(id) } }).catch(() => null);
-             const oldAvatarUrl = existingUser?.avatar;
+            const existingUser = await this.userService.findOne({where: {user_id: Number(id)}}).catch(() => null);
+            const oldAvatarUrl = existingUser?.avatar;
 
-             const filePath = join(process.cwd(), 'uploads', 'avatars', file.filename);
-             const result = await compressImage(filePath, {
-                 keepPng: false,
-                 maxWidth: 320,
-                 maxHeight: 320,
-                 quality: 78,
-                 skipBelowBytes: 15 * 1024,
-             });
-             const finalFilename = require('path').basename(result.outputPath);
-             const avatarUrl = `/uploads/avatars/${finalFilename}`;
+            const filePath = join(process.cwd(), 'uploads', 'avatars', file.filename);
+            const result = await compressImage(filePath, {
+                keepPng: false,
+                maxWidth: 320,
+                maxHeight: 320,
+                quality: 78,
+                skipBelowBytes: 15 * 1024,
+            });
+            const finalFilename = basename(result.outputPath);
+            const avatarUrl = `/uploads/avatars/${finalFilename}`;
 
-             await this.userService.updateProfile(id, { avatar: avatarUrl });
+            await this.userService.updateProfile(id, {avatar: avatarUrl});
 
-             // Xóa file ảnh đại diện cũ trên ổ cứng để tránh tồn đọng file rác
-             if (oldAvatarUrl && oldAvatarUrl !== avatarUrl && oldAvatarUrl.startsWith('/uploads/avatars/')) {
-                 const oldFilePath = join(process.cwd(), oldAvatarUrl.replace(/^\//, ''));
-                 if (fs.existsSync(oldFilePath)) {
-                     try { fs.unlinkSync(oldFilePath); } catch { /* ignore */ }
-                 }
-             }
+            // Xóa file ảnh đại diện cũ trên ổ cứng để tránh tồn đọng file rác
+            if (oldAvatarUrl && oldAvatarUrl !== avatarUrl && oldAvatarUrl.startsWith('/uploads/avatars/')) {
+                const oldFilePath = join(process.cwd(), oldAvatarUrl.replace(/^\//, ''));
+                if (fs.existsSync(oldFilePath)) {
+                    try {
+                        fs.unlinkSync(oldFilePath);
+                    } catch {
+                        /* ignore */
+                    }
+                }
+            }
 
-             this.gateway.notifyUserUpdate(Number(id));
-             return {
-                 message: 'Cập nhật ảnh đại diện thành công',
-                 data: { avatar: avatarUrl }
-             };
+            this.gateway.notifyUserUpdate(Number(id));
+            return {
+                message: 'Cập nhật ảnh đại diện thành công',
+                data: {avatar: avatarUrl},
+            };
         } catch (error: any) {
             throw new HttpException(error.message || 'Updated avatar failed', HttpStatus.BAD_REQUEST);
         }

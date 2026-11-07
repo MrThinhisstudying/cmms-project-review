@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { Modal, Form, DatePicker, Select, Button, message, Space, Tag, Typography, Divider } from "antd";
+import { Modal, Form, DatePicker, Select, Button, message, Space, Tag, Divider } from "antd";
 import { EditOutlined, CalendarOutlined, CarOutlined, SaveOutlined } from "@ant-design/icons";
 import { updateMaintenance } from "../../../apis/maintenance";
 import { getToken } from "../../../utils/auth";
 import dayjs from "dayjs";
 
 const { Option } = Select;
-const { Text } = Typography;
 
 interface Props {
   open: boolean;

@@ -46,7 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, isMobile = fal
             return;
         }
         if (item.children) {
-            const child = item.children.find(c => c.path === currentPath);
+            const child = item.children.find(c => c.path === currentPath || (c.path !== '/' && currentPath.startsWith(c.path)));
             if (child) {
                 setSelectedKeys([child.path]);
                 if (!collapsed) {
@@ -60,7 +60,12 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, isMobile = fal
 
   const { pendingCount } = useRepairsContext() || {};
   const userRole = user?.role ?? "";
-  const userDepts = user?.user_departments;
+  const userDepts =
+    user?.user_departments && user.user_departments.length > 0
+      ? user.user_departments
+      : user?.department
+      ? ([{ department: user.department }] as any[])
+      : [];
 
   const userPerms = user?.permissions;
 

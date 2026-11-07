@@ -30,13 +30,14 @@ import {DeviceGroupsModule} from './device-groups/device-groups.module';
 import {ReportModule} from './report/report.module';
 import {CertificatesModule} from './certificates/certificates.module';
 import {ProfileRequestModule} from './profile-requests/profile-request.module';
-import { LaborContractsModule } from './labor-contracts/labor-contracts.module';
-import { RewardDisciplinesModule } from './reward-disciplines/reward-disciplines.module';
-import { AnnualLeavesModule } from './annual-leaves/annual-leaves.module';
-import { ActivityLogModule } from './common/modules/activity-log.module';
-import { ShiftDebtsModule } from './shift-debts/shift-debts.module';
-import { VehicleIncidentReportsModule } from './vehicle-incident-reports/vehicle-incident-reports.module';
-import { TasksModule } from './tasks/tasks.module';
+import {LaborContractsModule} from './labor-contracts/labor-contracts.module';
+import {RewardDisciplinesModule} from './reward-disciplines/reward-disciplines.module';
+import {AnnualLeavesModule} from './annual-leaves/annual-leaves.module';
+import {ActivityLogModule} from './common/modules/activity-log.module';
+import {ShiftDebtsModule} from './shift-debts/shift-debts.module';
+import {VehicleIncidentReportsModule} from './vehicle-incident-reports/vehicle-incident-reports.module';
+import {TasksModule} from './tasks/tasks.module';
+import {CompanyPoliciesModule} from './company-policies/company-policies.module';
 
 @Module({
     imports: [
@@ -96,6 +97,7 @@ import { TasksModule } from './tasks/tasks.module';
         ShiftDebtsModule,
         VehicleIncidentReportsModule,
         TasksModule,
+        CompanyPoliciesModule,
     ],
     controllers: [AppController],
     providers: [
@@ -111,4 +113,3 @@ import { TasksModule } from './tasks/tasks.module';
     ],
 })
 export class AppModule {}
-

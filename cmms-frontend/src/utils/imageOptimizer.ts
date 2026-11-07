@@ -36,14 +36,17 @@ export const optimizeImageBeforeUpload = (
 
             ctx.drawImage(img, 0, 0, width, height);
 
+            const hasExt = /\.[^/.]+$/.test(file.name);
+            const baseFileName = hasExt ? file.name.replace(/\.[^/.]+$/, '') : file.name;
+
             // Ưu tiên nén sang WebP ngay trên trình duyệt để giảm tối đa dung lượng
             canvas.toBlob(
                 (blob) => {
-                    if (blob && blob.size < file.size) {
+                    if (blob && (blob.size < file.size || !file.name.match(/\.(jpg|jpeg|png|webp)$/i))) {
                         const ext = blob.type === 'image/webp' ? '.webp' : '.jpg';
                         const optimizedFile = new File(
                             [blob],
-                            file.name.replace(/\.[^/.]+$/, ext),
+                            `${baseFileName}${ext}`,
                             {
                                 type: blob.type || 'image/webp',
                                 lastModified: Date.now(),

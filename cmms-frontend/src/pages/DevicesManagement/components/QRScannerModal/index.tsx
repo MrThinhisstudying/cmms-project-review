@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Modal, Button, Space, Typography, Alert, Spin } from 'antd';
+import { Modal, Button, Typography, Alert, Spin } from 'antd';
 import { CameraOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Html5Qrcode } from 'html5-qrcode';
 

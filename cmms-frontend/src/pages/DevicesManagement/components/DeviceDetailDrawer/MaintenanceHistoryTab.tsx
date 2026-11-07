@@ -4,7 +4,7 @@ import type { ColumnsType } from "antd/es/table";
 import { IMaintenance } from "../../../../types/maintenance.types";
 import { IDevice } from "../../../../types/devicesManagement.types";
 import dayjs from "dayjs";
-import { CheckCircleOutlined, ClockCircleOutlined, ToolOutlined, ExclamationCircleOutlined, TableOutlined, CalendarOutlined } from "@ant-design/icons";
+import { CheckCircleOutlined, ToolOutlined, ExclamationCircleOutlined, TableOutlined, CalendarOutlined } from "@ant-design/icons";
 import { createMaintenanceTicket } from "../../../../apis/maintenance";
 import { getToken } from "../../../../utils/auth";
 import { renderMaintenanceStatusTag } from "../../../../utils/maintenanceDue";
@@ -37,7 +37,7 @@ export default function MaintenanceHistoryTab({
   const [isPerformOpen, setIsPerformOpen] = useState(false);
   const [performRecord, setPerformRecord] = useState<any>(null);
   const [performDate, setPerformDate] = useState<dayjs.Dayjs | null>(dayjs());
-  const [minDate, setMinDate] = useState<dayjs.Dayjs | null>(null);
+  const [, setMinDate] = useState<dayjs.Dayjs | null>(null);
   const [creating, setCreating] = useState(false);
 
   // --- STATE FOR EDIT MAINTENANCE DATE ---

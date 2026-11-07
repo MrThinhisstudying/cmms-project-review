@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Table, Card, Button, Input, Space, Row, Col, Typography, InputNumber, message, Upload, Empty, Modal, Form, Select, DatePicker } from 'antd';
 import { SearchOutlined, UploadOutlined, DownloadOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';
@@ -23,6 +23,9 @@ const LeaveManagement: React.FC = () => {
     
     // Modal states
     const [users, setUsers] = useState<any[]>([]);
+    const activeUsers = useMemo(() => {
+        return (users || []).filter(u => !u.status || u.status.trim().toLowerCase() === 'active');
+    }, [users]);
     const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
     const [recordForm] = Form.useForm();
     const [recordLoading, setRecordLoading] = useState(false);
@@ -529,7 +532,7 @@ const LeaveManagement: React.FC = () => {
                                 (option?.children as unknown as string).toLowerCase().includes(input.toLowerCase())
                             }
                         >
-                            {users.map(u => (
+                            {activeUsers.map(u => (
                                 <Option key={u.user_id} value={u.user_id}>
                                     {u.name} ({u.employee_code || u.user_id})
                                 </Option>

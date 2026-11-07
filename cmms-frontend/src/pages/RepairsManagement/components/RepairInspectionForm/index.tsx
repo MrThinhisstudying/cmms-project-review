@@ -170,6 +170,7 @@ export default function RepairInspectionForm({
       const excludedDepts = ['Ban giám đốc'];
       
       const options = users.filter(u => {
+          if (u.status && u.status.trim().toLowerCase() !== 'active') return false; // Loại trừ tài khoản ngưng hoạt động
           if (u.user_id === currentUserId) return true; // always allow current selection
           if (selectedUserIds.includes(u.user_id)) return false; // exclude already selected
           

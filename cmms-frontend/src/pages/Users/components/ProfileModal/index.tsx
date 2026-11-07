@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { 
     Form, Input, Button, Upload, message, Avatar, Tag, Spin, Empty, 
     Badge, Tooltip, Table, Space, Popconfirm, DatePicker, Modal, Descriptions,
-    Select, Row, Col, Alert, InputNumber
+    Select, Row, Col, Alert, InputNumber, Grid
 } from 'antd';
 import {
     UploadOutlined, UserOutlined, LockOutlined, WarningOutlined, PlusOutlined,
@@ -66,6 +66,8 @@ const NAV_ITEMS: { key: SectionKey; label: string; icon: React.ReactNode }[] = [
 // ─────────────────────── Main Component ──────────────────────
 const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpdateSuccess, initialSection }) => {
     const { user: currentUser, setUser: setAuthUser } = useAuthContext();
+    const screens = Grid.useBreakpoint();
+    const isMobile = !screens.md;
 
     const [infoForm] = Form.useForm();
     const [passForm] = Form.useForm();
@@ -849,7 +851,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                         </div>
                         <div className="pf-card-body" style={{ paddingBottom: 16, display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1 }}>
                             {signatureUrl ? (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 10, padding: '14px 16px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 14, background: '#f8fafc', border: '1px dashed #cbd5e1', borderRadius: 10, padding: '14px 16px' }}>
                                     <div style={{ background: '#ffffff', padding: '8px 14px', borderRadius: 8, border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
                                         <img src={getBackendImageUrl(signatureUrl)} alt="Chữ ký điện tử" style={{ maxHeight: 54, maxWidth: 180, objectFit: 'contain', display: 'block' }} />
                                     </div>
@@ -950,16 +952,16 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     {degrees.length === 0 ? (
                         <Empty description="Chưa có bằng cấp" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                     ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16 }}>
+                        <div className="pf-cert-grid">
                             {degrees.map(cert => {
                                 const isTHPT = cert.degree_type === 'THPT';
                                 return (
                                 <div key={cert.id} style={{ border: '1px solid #e8e8e8', borderRadius: 8, padding: 12, background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                                        <Tag color={isTHPT ? 'gold' : 'blue'} style={{ border: 'none', background: isTHPT ? '#fffbe6' : '#e6f7ff', color: isTHPT ? '#d48806' : '#1890ff', fontWeight: 500 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                                        <Tag color={isTHPT ? 'gold' : 'blue'} style={{ border: 'none', background: isTHPT ? '#fffbe6' : '#e6f7ff', color: isTHPT ? '#d48806' : '#1890ff', fontWeight: 500, margin: 0 }}>
                                             {isTHPT ? 'Bằng TN THPT' : cert.degree_type || 'Bằng cấp'}
                                         </Tag>
-                                        {cert.grading && <Tag color="green" style={{ border: 'none', background: '#f6ffed' }}>{cert.grading}</Tag>}
+                                        {cert.grading && <Tag color="green" style={{ border: 'none', background: '#f6ffed', margin: 0 }}>{cert.grading}</Tag>}
                                     </div>
                                     <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 6, color: '#262626' }}>
                                         {isTHPT ? (cert.school_name || '-') : (cert.major || '-')}
@@ -992,21 +994,21 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                 </div>
 
                 {/* GPLX */}
-                <div className="pf-subsection" style={{ marginTop: 24 }}>
+                <div className="pf-subsection" style={{ marginTop: 16 }}>
                     <div className="pf-subsection-title"><CarOutlined style={{ color: '#faad14' }} /> Giấy phép lái xe ({licenses.length})</div>
                     {licenses.length === 0 ? (
                         <Empty description="Chưa có GPLX" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                     ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16 }}>
+                        <div className="pf-cert-grid">
                             {licenses.map(cert => {
                                 const status = getExpiryStatus(cert);
                                 const isWarning = status === 'warning' || status === 'expired';
                                 return (
                                     <div key={cert.id} style={{ border: isWarning ? '1px solid #ffccc7' : '1px solid #e8e8e8', borderRadius: 8, padding: 12, background: isWarning ? '#fff2f0' : '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                                            <Tag color="orange" style={{ fontSize: 14, fontWeight: 700, padding: '2px 10px', border: 'none' }}>Hạng {cert.license_class}</Tag>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                                            <Tag color="orange" style={{ fontSize: 14, fontWeight: 700, padding: '2px 10px', border: 'none', margin: 0 }}>Hạng {cert.license_class}</Tag>
                                             {isWarning && (
-                                                <Tag color={status === 'expired' ? 'error' : 'warning'} icon={<WarningOutlined />} style={{ border: 'none' }}>
+                                                <Tag color={status === 'expired' ? 'error' : 'warning'} icon={<WarningOutlined />} style={{ border: 'none', margin: 0 }}>
                                                     {status === 'expired' ? 'Hết hạn' : `Còn ${dayjs(cert.expiry_date).diff(dayjs(), 'day')} ngày`}
                                                 </Tag>
                                             )}
@@ -1027,17 +1029,17 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                 </div>
 
                 {/* Ngoại ngữ */}
-                <div className="pf-subsection" style={{ marginTop: 24 }}>
+                <div className="pf-subsection" style={{ marginTop: 16 }}>
                     <div className="pf-subsection-title"><GlobalOutlined style={{ color: '#eb2f96' }} /> Chứng chỉ Ngoại ngữ ({englishCerts.length})</div>
                     {englishCerts.length === 0 ? (
                         <Empty description="Chưa có thông tin" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                     ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16 }}>
+                        <div className="pf-cert-grid">
                             {englishCerts.map(cert => (
                                 <div key={cert.id} style={{ border: '1px solid #e8e8e8', borderRadius: 8, padding: 12, background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                                        <Tag color="magenta" style={{ border: 'none', background: '#fff0f6' }}>{cert.degree_type || 'Ngoại ngữ'}</Tag>
-                                        {cert.grading && <Tag color="green" style={{ border: 'none' }}>{cert.grading}</Tag>}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                                        <Tag color="magenta" style={{ border: 'none', background: '#fff0f6', margin: 0 }}>{cert.degree_type || 'Ngoại ngữ'}</Tag>
+                                        {cert.grading && <Tag color="green" style={{ border: 'none', margin: 0 }}>{cert.grading}</Tag>}
                                     </div>
                                     <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8, color: '#262626' }}>{cert.school_name || '-'}</div>
                                     <div style={{ fontSize: 13, color: '#595959', flex: 1 }}>
@@ -1053,17 +1055,17 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                 </div>
 
                 {/* Tin học */}
-                <div className="pf-subsection" style={{ marginTop: 24 }}>
+                <div className="pf-subsection" style={{ marginTop: 16 }}>
                     <div className="pf-subsection-title"><DesktopOutlined style={{ color: '#13c2c2' }} /> Chứng chỉ Tin học ({itCerts.length})</div>
                     {itCerts.length === 0 ? (
                         <Empty description="Chưa có thông tin" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                     ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16 }}>
+                        <div className="pf-cert-grid">
                             {itCerts.map(cert => (
                                 <div key={cert.id} style={{ border: '1px solid #e8e8e8', borderRadius: 8, padding: 12, background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,0.03)', display: 'flex', flexDirection: 'column' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                                        <Tag color="cyan" style={{ border: 'none', background: '#e6fffb' }}>{cert.degree_type || 'Tin học'}</Tag>
-                                        {cert.grading && <Tag color="green" style={{ border: 'none' }}>{cert.grading}</Tag>}
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                                        <Tag color="cyan" style={{ border: 'none', background: '#e6fffb', margin: 0 }}>{cert.degree_type || 'Tin học'}</Tag>
+                                        {cert.grading && <Tag color="green" style={{ border: 'none', margin: 0 }}>{cert.grading}</Tag>}
                                     </div>
                                     <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8, color: '#262626' }}>{cert.school_name || '-'}</div>
                                     <div style={{ fontSize: 13, color: '#595959', flex: 1 }}>
@@ -1083,22 +1085,22 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
 
     // ── SECTION 3: CCCM & Đào tạo (merged) ──
     const cccmColumns = [
-        { title: 'STT', render: (_: any, __: any, i: number) => i + 1, width: 50 },
-        { title: 'Tên chứng chỉ', dataIndex: ['program', 'name'], width: 180, ellipsis: true },
-        { title: 'Ngày ban hành QĐ', dataIndex: 'issue_date', width: 120, render: (d: string) => d ? dayjs(d).format('DD/MM/YYYY') : '-' },
+        { title: 'STT', render: (_: any, __: any, i: number) => i + 1, width: '7%', align: 'center' as const },
+        { title: 'Tên chứng chỉ', dataIndex: ['program', 'name'], width: isAdminOrHR ? '37%' : '45%', render: (n: string) => <span style={{ fontWeight: 600, wordBreak: 'break-word' }}>{n || '-'}</span> },
+        { title: 'Ngày ban hành QĐ', dataIndex: 'issue_date', width: '18%', render: (d: string) => d ? dayjs(d).format('DD/MM/YYYY') : '-' },
         {
-            title: 'Hết hạn định kỳ', dataIndex: 'next_training_date', width: 120,
+            title: 'Hết hạn định kỳ', dataIndex: 'next_training_date', width: '18%',
             render: (d: string) => {
                 if (!d) return '-';
                 const isExp = dayjs(d).isBefore(dayjs());
                 return <span style={{ color: isExp ? '#ff4d4f' : 'inherit', fontWeight: isExp ? 700 : 400 }}>{dayjs(d).format('DD/MM/YYYY')}</span>;
             }
         },
-        { title: 'Xếp loại', dataIndex: 'grading', width: 100, render: (t: string) => t || '-' },
+        { title: 'Xếp loại', dataIndex: 'grading', width: '10%', render: (t: string) => t || '-' },
         ...(isAdminOrHR ? [{
-            title: '', key: 'action', width: 80,
+            title: 'Thao tác', key: 'action', width: '10%', align: 'center' as const,
             render: (_: any, record: IEmployeeCertificate) => (
-                <Space size="small">
+                <Space size={4}>
                     <Button type="text" size="small" icon={<EditOutlined style={{ color: '#1890ff' }} />} onClick={() => handleEditCert(record)} />
                     <Popconfirm title="Xóa chứng chỉ này?" onConfirm={() => handleDeleteCert(record.id)} okText="Xóa" cancelText="Hủy" okButtonProps={{ danger: true }}>
                         <Button type="text" size="small" danger icon={<DeleteOutlined />} />
@@ -1107,6 +1109,57 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
             )
         }] : []),
     ];
+
+    const renderCccmMobileCards = (list: IEmployeeCertificate[], editable: boolean) => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {list.map((r) => {
+                const end = r.end_date || r.expiry_date || r.next_training_date;
+                const st = getCccmExpiryStatus ? getCccmExpiryStatus(r) : 'ok';
+                return (
+                    <div
+                        key={r.id}
+                        style={{
+                            border: '1px solid #cbd5e1',
+                            borderRadius: 10,
+                            padding: '10px 12px',
+                            background: '#fff',
+                        }}
+                    >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                            <div style={{ fontWeight: 700, fontSize: 13.5, color: '#0f172a', flex: 1 }}>
+                                {r.program?.name || '-'}
+                            </div>
+                            <Tag color={st === 'expired' ? 'red' : st === 'warning' ? 'orange' : 'green'} style={{ margin: 0 }}>
+                                {st === 'expired' ? 'Hết hạn' : st === 'warning' ? 'Sắp hết' : 'Còn HL'}
+                            </Tag>
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 6, fontSize: 12, color: '#475569' }}>
+                            <span>📅 Ban hành: <strong>{r.issue_date ? dayjs(r.issue_date).format('DD/MM/YYYY') : '-'}</strong></span>
+                            <span>
+                                ⏳ Hết hạn:{' '}
+                                <strong style={{ color: st === 'expired' ? '#ff4d4f' : st === 'warning' ? '#faad14' : '#334155' }}>
+                                    {end ? dayjs(end).format('DD/MM/YYYY') : 'Không có'}
+                                </strong>
+                            </span>
+                            {r.grading && <span>🏅 Xếp loại: <strong>{r.grading}</strong></span>}
+                        </div>
+                        {editable && (
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 8, paddingTop: 6, borderTop: '1px dashed #e2e8f0' }}>
+                                <Button size="small" type="text" icon={<EditOutlined style={{ color: '#1890ff' }} />} onClick={() => handleEditCert(r)}>
+                                    Sửa
+                                </Button>
+                                <Popconfirm title="Xóa chứng chỉ này?" onConfirm={() => handleDeleteCert(r.id)} okText="Xóa" cancelText="Hủy" okButtonProps={{ danger: true }}>
+                                    <Button size="small" type="text" danger icon={<DeleteOutlined />}>
+                                        Xóa
+                                    </Button>
+                                </Popconfirm>
+                            </div>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    );
 
     const renderCccmSection = () => {
         if (cccmLoading && historyLoading) return <div className="pf-loading"><Spin tip="Đang tải..." /></div>;
@@ -1136,10 +1189,10 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
         const { active: activeEdit, history: historyEdit } = splitCerts(editCertificates);
 
         const readonlyColumns = [
-            { title: 'Tên chứng chỉ', render: (_: any, r: IEmployeeCertificate) => (<div><div style={{ fontWeight: 600, fontSize: 13 }}>{r.program?.name || '-'}</div></div>) },
-            { title: 'Ngày ban hành QĐ', width: 120, render: (_: any, r: IEmployeeCertificate) => r.issue_date ? dayjs(r.issue_date).format('DD/MM/YYYY') : '-' },
+            { title: 'Tên chứng chỉ', width: '46%', render: (_: any, r: IEmployeeCertificate) => (<div><div style={{ fontWeight: 600, fontSize: 13, wordBreak: 'break-word' }}>{r.program?.name || '-'}</div></div>) },
+            { title: 'Ngày ban hành QĐ', width: '20%', render: (_: any, r: IEmployeeCertificate) => r.issue_date ? dayjs(r.issue_date).format('DD/MM/YYYY') : '-' },
             {
-                title: 'Hết hạn định kỳ', width: 120, render: (_: any, r: IEmployeeCertificate) => {
+                title: 'Hết hạn định kỳ', width: '20%', render: (_: any, r: IEmployeeCertificate) => {
                     const end = r.end_date || r.expiry_date || r.next_training_date;
                     if (!end) return <span style={{ color: '#999' }}>Không có</span>;
                     const st = getCccmExpiryStatus ? getCccmExpiryStatus(r) : 'ok';
@@ -1148,9 +1201,9 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                 }
             },
             {
-                title: 'T.Thái', width: 90, align: 'center' as const, render: (_: any, r: IEmployeeCertificate) => {
+                title: 'T.Thái', width: '14%', align: 'center' as const, render: (_: any, r: IEmployeeCertificate) => {
                     const st = getCccmExpiryStatus ? getCccmExpiryStatus(r) : 'ok';
-                    return <Tag color={st === 'expired' ? 'red' : st === 'warning' ? 'orange' : 'green'}>{st === 'expired' ? 'Hết hạn' : st === 'warning' ? 'Sắp hết' : 'Còn HL'}</Tag>;
+                    return <Tag color={st === 'expired' ? 'red' : st === 'warning' ? 'orange' : 'green'} style={{ margin: 0 }}>{st === 'expired' ? 'Hết hạn' : st === 'warning' ? 'Sắp hết' : 'Còn HL'}</Tag>;
                 }
             },
         ];
@@ -1171,14 +1224,20 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                             <div className="pf-subsection-title">Chứng chỉ chuyên môn ({activeReadonly.length})</div>
                             {activeReadonly.length === 0 ? (
                                 <Empty description="Chưa có CCCM hiện tại" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                            ) : isMobile ? (
+                                renderCccmMobileCards(activeReadonly, false)
                             ) : (
-                                <Table dataSource={activeReadonly} rowKey="id" pagination={false} size="small" bordered scroll={{ x: 'max-content' }} columns={readonlyColumns} />
+                                <Table dataSource={activeReadonly} rowKey="id" pagination={false} size="small" bordered tableLayout="fixed" columns={readonlyColumns} />
                             )}
                         </div>
                         {historyReadonly.length > 0 && (
                             <div className="pf-subsection">
                                 <div className="pf-subsection-title" style={{ color: '#8c8c8c' }}>Lịch sử đào tạo ({historyReadonly.length})</div>
-                                <Table dataSource={historyReadonly} rowKey="id" pagination={{ pageSize: 5 }} size="small" bordered scroll={{ x: 'max-content' }} columns={readonlyColumns} />
+                                {isMobile ? (
+                                    renderCccmMobileCards(historyReadonly, false)
+                                ) : (
+                                    <Table dataSource={historyReadonly} rowKey="id" pagination={{ pageSize: 5 }} size="small" bordered tableLayout="fixed" columns={readonlyColumns} />
+                                )}
                             </div>
                         )}
                     </>
@@ -1191,14 +1250,20 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                             <div className="pf-subsection-title">Quản lý CCCM ({activeEdit.length})</div>
                             {activeEdit.length === 0 ? (
                                 <Empty description="Chưa có CCCM hiện tại" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                            ) : isMobile ? (
+                                renderCccmMobileCards(activeEdit, true)
                             ) : (
-                                <Table dataSource={activeEdit} columns={cccmColumns} rowKey="id" loading={historyLoading} scroll={{ x: 'max-content' }} pagination={false} bordered size="small" />
+                                <Table dataSource={activeEdit} columns={cccmColumns} rowKey="id" loading={historyLoading} tableLayout="fixed" pagination={false} bordered size="small" />
                             )}
                         </div>
                         {historyEdit.length > 0 && (
                             <div className="pf-subsection">
                                 <div className="pf-subsection-title" style={{ color: '#8c8c8c' }}>Lịch sử đào tạo ({historyEdit.length})</div>
-                                <Table dataSource={historyEdit} columns={cccmColumns} rowKey="id" loading={historyLoading} scroll={{ x: 'max-content' }} pagination={{ pageSize: 5 }} bordered size="small" />
+                                {isMobile ? (
+                                    renderCccmMobileCards(historyEdit, true)
+                                ) : (
+                                    <Table dataSource={historyEdit} columns={cccmColumns} rowKey="id" loading={historyLoading} tableLayout="fixed" pagination={{ pageSize: 5 }} bordered size="small" />
+                                )}
                             </div>
                         )}
                     </>
@@ -1410,6 +1475,84 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     <div className="pf-subsection-title">Lịch sử nghỉ phép & Giấy đề nghị ({leaveHistories.length})</div>
                     {leaveHistories.length === 0 ? (
                         <Empty description="Chưa có lịch sử nghỉ phép" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                    ) : isMobile ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            {leaveHistories.map((r: any) => {
+                                const cfg = LEAVE_TYPE_CONFIG[r.leave_type as LeaveType] || LEAVE_TYPE_CONFIG.ANNUAL;
+                                const attachments: string[] = Array.isArray(r.attachments) ? r.attachments : [];
+                                return (
+                                    <div
+                                        key={r.id}
+                                        style={{
+                                            border: '1px solid #cbd5e1',
+                                            borderRadius: 10,
+                                            padding: '10px 12px',
+                                            background: '#fff',
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                                            <Tag color={cfg.color} style={{ margin: 0, fontWeight: 600 }}>
+                                                {cfg.label}
+                                            </Tag>
+                                            <Tag color="red" style={{ margin: 0, fontWeight: 700 }}>
+                                                {r.days_taken} ngày
+                                            </Tag>
+                                        </div>
+                                        <div style={{ fontWeight: 600, fontSize: 13.5, color: '#0f172a', marginTop: 6 }}>
+                                            📅 {dayjs(r.from_date).format('DD/MM/YYYY')} → {dayjs(r.to_date).format('DD/MM/YYYY')}
+                                        </div>
+                                        {r.reason && (
+                                            <div style={{ fontSize: 12.5, color: '#475569', marginTop: 4 }}>
+                                                Lý do: {r.reason}
+                                                {r.location ? ` (📍 ${r.location})` : ''}
+                                            </div>
+                                        )}
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                flexWrap: 'wrap',
+                                                gap: 8,
+                                                marginTop: 8,
+                                                paddingTop: 6,
+                                                borderTop: '1px dashed #e2e8f0',
+                                                fontSize: 11.5,
+                                                color: '#64748b',
+                                            }}
+                                        >
+                                            <span>Ghi nhận: {dayjs(r.created_at).format('DD/MM/YYYY')}</span>
+                                            {attachments.length > 0 && (
+                                                <Space size={6} wrap>
+                                                    {attachments.map((url, i) => {
+                                                        const isPdf = url.toLowerCase().endsWith('.pdf');
+                                                        return (
+                                                            <a
+                                                                key={i}
+                                                                href={`${process.env.REACT_APP_BASE_URL?.replace('/api', '')}${url}`}
+                                                                target="_blank"
+                                                                rel="noreferrer"
+                                                                style={{
+                                                                    fontSize: 12,
+                                                                    display: 'inline-flex',
+                                                                    alignItems: 'center',
+                                                                    gap: 4,
+                                                                    color: isPdf ? '#ff4d4f' : '#1890ff',
+                                                                    fontWeight: 600,
+                                                                }}
+                                                            >
+                                                                {isPdf ? <FilePdfOutlined /> : <FileTextOutlined />}
+                                                                {attachments.length > 1 ? `Giấy (${i + 1})` : 'Giấy đề nghị'}
+                                                            </a>
+                                                        );
+                                                    })}
+                                                </Space>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     ) : (
                         <Table 
                             dataSource={leaveHistories} 
@@ -1417,36 +1560,37 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                             pagination={{ pageSize: 5 }} 
                             size="small" 
                             bordered 
-                            scroll={{ x: 750 }}
+                            tableLayout="fixed"
                             columns={[
                                 {
                                     title: 'Thời gian nghỉ',
-                                    width: 170,
+                                    width: '22%',
                                     render: (_: any, r: any) => (
                                         <span>{dayjs(r.from_date).format('DD/MM/YYYY')} - {dayjs(r.to_date).format('DD/MM/YYYY')}</span>
                                     )
                                 },
                                 {
                                     title: 'Loại nghỉ',
-                                    width: 135,
+                                    width: '18%',
                                     dataIndex: 'leave_type',
                                     render: (type: LeaveType) => {
                                         const cfg = LEAVE_TYPE_CONFIG[type] || LEAVE_TYPE_CONFIG.ANNUAL;
-                                        return <Tag color={cfg.color}>{cfg.label}</Tag>;
+                                        return <Tag color={cfg.color} style={{ margin: 0 }}>{cfg.label}</Tag>;
                                     }
                                 },
                                 {
                                     title: 'Số ngày',
-                                    width: 80,
+                                    width: '10%',
                                     dataIndex: 'days_taken',
                                     align: 'center' as const,
                                     render: (val: number) => <span style={{ color: '#ff4d4f', fontWeight: 600 }}>{val}</span>
                                 },
                                 {
                                     title: 'Lý do nghỉ',
+                                    width: '24%',
                                     dataIndex: 'reason',
                                     render: (reason: string, r: any) => (
-                                        <div>
+                                        <div style={{ wordBreak: 'break-word' }}>
                                             <div>{reason || '-'}</div>
                                             {r.location && <div style={{ fontSize: 11, color: '#8c8c8c' }}>📍 {r.location}</div>}
                                         </div>
@@ -1454,7 +1598,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                                 },
                                 {
                                     title: 'Giấy đề nghị',
-                                    width: 150,
+                                    width: '14%',
                                     dataIndex: 'attachments',
                                     render: (attachments: string[]) => {
                                         if (!attachments || attachments.length === 0) return <span style={{ color: '#999' }}>Không có</span>;
@@ -1471,7 +1615,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                                                             style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4, color: isPdf ? '#ff4d4f' : '#1890ff', fontWeight: 500 }}
                                                         >
                                                             {isPdf ? <FilePdfOutlined style={{ color: '#ff4d4f' }} /> : <FileTextOutlined style={{ color: '#1890ff' }} />} 
-                                                            {attachments.length > 1 ? `Giấy đề nghị (${i + 1})` : 'Giấy đề nghị'}
+                                                            {attachments.length > 1 ? `Giấy (${i + 1})` : 'Giấy đề nghị'}
                                                         </a>
                                                     );
                                                 })}
@@ -1481,7 +1625,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                                 },
                                 {
                                     title: 'Ngày ghi nhận',
-                                    width: 110,
+                                    width: '12%',
                                     dataIndex: 'created_at',
                                     render: (d: string) => <span style={{ color: '#8c8c8c' }}>{dayjs(d).format('DD/MM/YYYY')}</span>
                                 }
@@ -1607,49 +1751,113 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     </div>
                 </div>
 
-                <Row gutter={[14, 14]} style={{ marginBottom: 16 }}>
+                <Row gutter={[10, 10]} style={{ marginBottom: 16 }}>
                     <Col xs={12} sm={6}>
-                        <div style={{ background: '#ffffff', borderRadius: 12, padding: 14, border: '1px solid #dbe3ee', textAlign: 'center' }}>
-                            <div style={{ fontSize: 12, color: '#64748b' }}>Tổng việc được giao</div>
-                            <div style={{ fontSize: 24, fontWeight: 800, color: '#2563eb', marginTop: 4 }}>{taskSummary.totalAssigned}</div>
+                        <div style={{ background: '#ffffff', borderRadius: 12, padding: isMobile ? '10px 8px' : 14, border: '1px solid #dbe3ee', textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                            <div style={{ fontSize: 11.5, color: '#64748b' }}>Tổng việc được giao</div>
+                            <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800, color: '#2563eb', marginTop: 4 }}>{taskSummary.totalAssigned}</div>
                         </div>
                     </Col>
                     <Col xs={12} sm={6}>
-                        <div style={{ background: '#ffffff', borderRadius: 12, padding: 14, border: '1px solid #dbe3ee', textAlign: 'center' }}>
-                            <div style={{ fontSize: 12, color: '#64748b' }}>Đã hoàn thành (Đúng hạn)</div>
-                            <div style={{ fontSize: 24, fontWeight: 800, color: '#16a34a', marginTop: 4 }}>
-                                {taskSummary.completedTotal} <span style={{ fontSize: 13, fontWeight: 600 }}>({taskSummary.onTimeRate}%)</span>
+                        <div style={{ background: '#ffffff', borderRadius: 12, padding: isMobile ? '10px 8px' : 14, border: '1px solid #dbe3ee', textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                            <div style={{ fontSize: 11.5, color: '#64748b' }}>Hoàn thành (Đúng hạn)</div>
+                            <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800, color: '#16a34a', marginTop: 4 }}>
+                                {taskSummary.completedTotal} <span style={{ fontSize: 12, fontWeight: 600 }}>({taskSummary.onTimeRate}%)</span>
                             </div>
                         </div>
                     </Col>
                     <Col xs={12} sm={6}>
-                        <div style={{ background: '#ffffff', borderRadius: 12, padding: 14, border: '1px solid #dbe3ee', textAlign: 'center' }}>
-                            <div style={{ fontSize: 12, color: '#64748b' }}>Đang làm / Quá hạn</div>
-                            <div style={{ fontSize: 24, fontWeight: 800, color: taskSummary.overdueUnfinished > 0 ? '#dc2626' : '#0284c7', marginTop: 4 }}>
+                        <div style={{ background: '#ffffff', borderRadius: 12, padding: isMobile ? '10px 8px' : 14, border: '1px solid #dbe3ee', textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                            <div style={{ fontSize: 11.5, color: '#64748b' }}>Đang làm / Quá hạn</div>
+                            <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800, color: taskSummary.overdueUnfinished > 0 ? '#dc2626' : '#0284c7', marginTop: 4 }}>
                                 {taskSummary.inProgress} / <span style={{ color: '#dc2626' }}>{taskSummary.overdueUnfinished}</span>
                             </div>
                         </div>
                     </Col>
                     <Col xs={12} sm={6}>
-                        <div style={{ background: '#ffffff', borderRadius: 12, padding: 14, border: '1px solid #dbe3ee', textAlign: 'center' }}>
-                            <div style={{ fontSize: 12, color: '#64748b' }}>Tổng điểm KPI tích lũy</div>
-                            <div style={{ fontSize: 24, fontWeight: 800, color: '#d97706', marginTop: 4 }}>
+                        <div style={{ background: '#ffffff', borderRadius: 12, padding: isMobile ? '10px 8px' : 14, border: '1px solid #dbe3ee', textAlign: 'center', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                            <div style={{ fontSize: 11.5, color: '#64748b' }}>Điểm KPI tích lũy</div>
+                            <div style={{ fontSize: isMobile ? 20 : 24, fontWeight: 800, color: '#d97706', marginTop: 4 }}>
                                 {taskSummary.netKpiScore} <span style={{ fontSize: 12, fontWeight: 600 }}>điểm</span>
                             </div>
                         </div>
                     </Col>
                 </Row>
 
-                <div style={{ background: '#ffffff', borderRadius: 14, padding: 18, border: '1px solid #dbe3ee' }}>
+                <div style={{ background: '#ffffff', borderRadius: 14, padding: isMobile ? 12 : 18, border: '1px solid #dbe3ee' }}>
                     <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', marginBottom: 12 }}>
                         Danh sách công việc gần đây ({taskSummary.recentTasks.length})
                     </div>
                     {taskSummary.recentTasks.length === 0 ? (
                         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Chưa được giao công việc nào" />
+                    ) : isMobile ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            {taskSummary.recentTasks.map((task: any) => {
+                                const statusMap: Record<string, { label: string; color: string }> = {
+                                    NEW: { label: 'Mới giao', color: 'blue' },
+                                    CHANGE_REQUESTED: { label: 'Xin điều chỉnh', color: 'orange' },
+                                    IN_PROGRESS: { label: 'Đang thực hiện', color: 'processing' },
+                                    PENDING_REVIEW: { label: 'Chờ nghiệm thu', color: 'purple' },
+                                    COMPLETED: { label: 'Đã hoàn thành', color: 'success' },
+                                    REJECTED: { label: 'Yêu cầu làm lại', color: 'error' },
+                                };
+                                const cfg = statusMap[task.status] || { label: task.status, color: 'default' };
+                                return (
+                                    <div
+                                        key={task.id}
+                                        style={{
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: 10,
+                                            padding: '10px 12px',
+                                            background: '#f8fafc',
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+                                            <Space size={6}>
+                                                <Tag color="blue" style={{ margin: 0, fontWeight: 700, borderRadius: 6 }}>
+                                                    {task.code}
+                                                </Tag>
+                                                {task.kpi_score !== null && task.kpi_score !== undefined && (
+                                                    <Tag color="gold" style={{ margin: 0, fontWeight: 700, borderRadius: 6 }}>
+                                                        +{task.kpi_score} đ
+                                                    </Tag>
+                                                )}
+                                            </Space>
+                                            <Tag color={cfg.color} style={{ margin: 0, borderRadius: 8 }}>
+                                                {cfg.label}
+                                            </Tag>
+                                        </div>
+
+                                        <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', lineHeight: 1.4, wordBreak: 'break-word' }}>
+                                            {task.title}
+                                        </div>
+
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                justifyContent: 'space-between',
+                                                alignItems: 'center',
+                                                flexWrap: 'wrap',
+                                                gap: 8,
+                                                marginTop: 8,
+                                                paddingTop: 6,
+                                                borderTop: '1px dashed #cbd5e1',
+                                                fontSize: 12,
+                                                color: '#475569',
+                                            }}
+                                        >
+                                            <span>👤 Người giao: <strong>{task.assigner?.name || '—'}</strong></span>
+                                            <span>📅 Hạn: <strong>{task.deadline ? dayjs(task.deadline).format('DD/MM/YYYY') : '—'}</strong></span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     ) : (
                         <Table
                             rowKey="id"
                             size="small"
+                            tableLayout="fixed"
                             pagination={{ pageSize: 5 }}
                             dataSource={taskSummary.recentTasks}
                             columns={[
@@ -1657,33 +1865,34 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                                     title: 'Mã CV',
                                     dataIndex: 'code',
                                     key: 'code',
-                                    width: 115,
-                                    render: (c: string) => <Tag color="blue" style={{ fontWeight: 700 }}>{c}</Tag>,
+                                    width: '15%',
+                                    render: (c: string) => <Tag color="blue" style={{ fontWeight: 700, margin: 0 }}>{c}</Tag>,
                                 },
                                 {
                                     title: 'Nội dung công việc',
                                     dataIndex: 'title',
                                     key: 'title',
-                                    render: (t: string) => <span style={{ fontWeight: 600, color: '#0f172a' }}>{t}</span>,
+                                    width: '31%',
+                                    render: (t: string) => <span style={{ fontWeight: 600, color: '#0f172a', wordBreak: 'break-word' }}>{t}</span>,
                                 },
                                 {
                                     title: 'Người giao',
                                     key: 'assigner',
-                                    width: 150,
-                                    render: (_: unknown, r) => r.assigner?.name || '—',
+                                    width: '17%',
+                                    render: (_: unknown, r) => <span style={{ wordBreak: 'break-word' }}>{r.assigner?.name || '—'}</span>,
                                 },
                                 {
                                     title: 'Hạn hoàn thành',
                                     dataIndex: 'deadline',
                                     key: 'deadline',
-                                    width: 135,
+                                    width: '14%',
                                     render: (d: string) => dayjs(d).format('DD/MM/YYYY'),
                                 },
                                 {
                                     title: 'Trạng thái',
                                     dataIndex: 'status',
                                     key: 'status',
-                                    width: 135,
+                                    width: '13%',
                                     render: (st: string) => {
                                         const map: Record<string, { label: string; color: string }> = {
                                             NEW: { label: 'Mới giao', color: 'blue' },
@@ -1691,21 +1900,21 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                                             IN_PROGRESS: { label: 'Đang thực hiện', color: 'processing' },
                                             PENDING_REVIEW: { label: 'Chờ nghiệm thu', color: 'purple' },
                                             COMPLETED: { label: 'Đã hoàn thành', color: 'success' },
-                                            REJECTED: { label: 'Yêu cầu làm lại', color: 'error' },
+                                        REJECTED: { label: 'Yêu cầu làm lại', color: 'error' },
                                         };
                                         const cfg = map[st] || { label: st, color: 'default' };
-                                        return <Tag color={cfg.color}>{cfg.label}</Tag>;
+                                        return <Tag color={cfg.color} style={{ margin: 0 }}>{cfg.label}</Tag>;
                                     },
                                 },
                                 {
                                     title: 'Điểm KPI',
                                     dataIndex: 'kpi_score',
                                     key: 'kpi_score',
-                                    width: 100,
+                                    width: '10%',
                                     align: 'center',
                                     render: (sc?: number | null) =>
                                         sc !== null && sc !== undefined ? (
-                                            <Tag color="gold" style={{ fontWeight: 700 }}>+{sc} đ</Tag>
+                                            <Tag color="gold" style={{ fontWeight: 700, margin: 0 }}>+{sc} đ</Tag>
                                         ) : (
                                             <span style={{ color: '#94a3b8' }}>—</span>
                                         ),
@@ -2330,8 +2539,9 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     .pf-content::-webkit-scrollbar { width: 6px; }
                     .pf-content::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 6px; }
 
-                    /* 2-Column Bento Grid */
-                    .pf-bento-grid {
+                    /* 2-Column Bento Grid & Certificate Grid */
+                    .pf-bento-grid,
+                    .pf-cert-grid {
                         display: grid;
                         grid-template-columns: repeat(2, minmax(0, 1fr));
                         gap: 16px;
@@ -2493,27 +2703,66 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
 
                     /* ──── Responsive ──── */
                     @media (max-width: 900px) {
-                        .pf-bento-grid {
+                        .pf-bento-grid,
+                        .pf-cert-grid {
                             grid-template-columns: 1fr;
                         }
                     }
                     @media (max-width: 768px) {
-                        .pf-layout { height: 90vh; }
+                        .pf-layout { height: 92vh; }
                         .pf-top-header-main {
                             flex-wrap: wrap;
-                            padding: 14px 16px;
-                            gap: 12px;
+                            padding: 12px 14px 10px;
+                            gap: 10px;
+                        }
+                        .pf-user-name {
+                            font-size: 16px;
+                        }
+                        .pf-meta-chip {
+                            padding: 3px 8px;
+                            font-size: 11.5px;
                         }
                         .pf-top-actions {
                             width: 100%;
-                            justify-content: flex-end;
+                            justify-content: space-between;
                             border-top: 1px solid rgba(255, 255, 255, 0.08);
                             padding-top: 8px;
+                            gap: 6px;
+                            flex-wrap: nowrap;
                         }
-                        .pf-top-tabs { padding: 8px 12px 10px; }
-                        .pf-top-tab-item { padding: 7px 12px; font-size: 12px; }
-                        .pf-content { padding: 14px 12px 24px; }
+                        .pf-sig-pill {
+                            padding: 4px 8px;
+                            font-size: 11.5px;
+                            white-space: nowrap;
+                            flex: 1;
+                            justify-content: space-between;
+                        }
+                        .pf-top-pass-btn {
+                            padding: 0 10px;
+                            font-size: 11.5px;
+                            white-space: nowrap;
+                        }
+                        .pf-top-tabs { padding: 6px 12px 8px; }
+                        .pf-top-tab-item { padding: 6px 11px; font-size: 12px; }
+                        .pf-content { padding: 12px 10px 24px; }
+                        .pf-section-header {
+                            flex-wrap: wrap;
+                            padding: 10px 14px;
+                            font-size: 14px;
+                        }
+                        .pf-subsection {
+                            padding: 12px 14px;
+                        }
+                        .pf-card {
+                            padding: 12px 14px;
+                        }
+                        .pf-card-top {
+                            flex-wrap: wrap;
+                            gap: 6px;
+                        }
                         .pf-leave-stats { flex-direction: row; gap: 8px; }
+                        .pf-leave-stat { padding: 8px 6px; }
+                        .pf-leave-stat-value { font-size: 18px; }
                         .pf-action-bar { flex-direction: column; gap: 10px; align-items: stretch; }
                     }
                 `}</style>
@@ -2574,7 +2823,7 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ open, onCancel, user, onUpd
                     <Form.Item name="job_title" label="Chức danh">
                         <Input placeholder="VD: Nhân viên kỹ thuật" />
                     </Form.Item>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12 }}>
                         <Form.Item name="start_date" label="Ngày bắt đầu" rules={[{ required: true, message: 'Chọn ngày' }]}>
                             <DatePicker style={{ width: '100%' }} format="DD/MM/YYYY" />
                         </Form.Item>

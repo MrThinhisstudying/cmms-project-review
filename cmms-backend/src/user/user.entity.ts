@@ -18,9 +18,9 @@ import {
     OneToMany,
 } from 'typeorm';
 
-import { UserRole } from './user-role.enum';
-import { UserDeviceGroup } from '../device-groups/entities/user-device-group.entity';
-import { UserDepartment } from '../departments/entities/user-department.entity';
+import {UserRole} from './user-role.enum';
+import {UserDeviceGroup} from '../device-groups/entities/user-device-group.entity';
+import {UserDepartment} from '../departments/entities/user-department.entity';
 
 @Entity()
 export class User {
@@ -36,12 +36,12 @@ export class User {
     @Column({nullable: true})
     email?: string;
 
-    @ApiProperty({ enum: UserRole })
+    @ApiProperty({enum: UserRole})
     @Column({
         type: 'enum',
         enum: UserRole,
         default: UserRole.OPERATOR,
-        nullable: true
+        nullable: true,
     })
     role?: UserRole;
 
@@ -67,7 +67,7 @@ export class User {
     citizen_identification_card?: string;
 
     @ApiProperty()
-    @Column({nullable: true})
+    @Column({type: 'text', nullable: true})
     avatar?: string;
 
     @ApiProperty()
@@ -78,40 +78,40 @@ export class User {
     @Column({nullable: true})
     employee_code?: string;
 
-    @ApiProperty({ description: 'Ngày sinh' })
-    @Column({ type: 'date', nullable: true })
+    @ApiProperty({description: 'Ngày sinh'})
+    @Column({type: 'date', nullable: true})
     date_of_birth?: Date;
 
-    @ApiProperty({ description: 'Nơi sinh' })
-    @Column({ nullable: true })
+    @ApiProperty({description: 'Nơi sinh'})
+    @Column({nullable: true})
     place_of_birth?: string;
 
-    @ApiProperty({ description: 'Giới tính' })
-    @Column({ nullable: true })
+    @ApiProperty({description: 'Giới tính'})
+    @Column({nullable: true})
     gender?: string;
 
-    @ApiProperty({ description: 'Dân tộc' })
-    @Column({ nullable: true })
+    @ApiProperty({description: 'Dân tộc'})
+    @Column({nullable: true})
     ethnicity?: string;
 
-    @ApiProperty({ description: 'Là Đảng viên?' })
-    @Column({ type: 'boolean', default: false })
+    @ApiProperty({description: 'Là Đảng viên?'})
+    @Column({type: 'boolean', default: false})
     is_party_member?: boolean;
 
-    @ApiProperty({ description: 'Ngày cấp CCCD' })
-    @Column({ type: 'date', nullable: true })
+    @ApiProperty({description: 'Ngày cấp CCCD'})
+    @Column({type: 'date', nullable: true})
     cccd_issue_date?: Date;
 
-    @ApiProperty({ description: 'Nơi thường trú' })
-    @Column({ type: 'text', nullable: true })
+    @ApiProperty({description: 'Nơi thường trú'})
+    @Column({type: 'text', nullable: true})
     permanent_address?: string;
 
-    @ApiProperty({ description: 'Nơi tạm trú' })
-    @Column({ type: 'text', nullable: true })
+    @ApiProperty({description: 'Nơi tạm trú'})
+    @Column({type: 'text', nullable: true})
     temporary_address?: string;
 
-    @ApiProperty({ description: 'Quê quán' })
-    @Column({ nullable: true })
+    @ApiProperty({description: 'Quê quán'})
+    @Column({nullable: true})
     hometown?: string;
 
     @CreateDateColumn()
@@ -146,7 +146,7 @@ export class User {
     reset_token_expiry?: Date;
 
     @ApiProperty()
-    @Column({ default: true })
+    @Column({default: true})
     must_change_password: boolean;
 
     constructor(data: Partial<User> = {}) {

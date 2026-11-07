@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   Table,
   Card,
@@ -62,6 +62,10 @@ export const RewardDisciplineTab: React.FC<RewardDisciplineTabProps> = ({
   const [modalLoading, setModalLoading] = useState(false);
   const [batchModalOpen, setBatchModalOpen] = useState(false);
   const [form] = Form.useForm();
+
+  const activeUsers = useMemo(() => {
+    return users.filter((u) => !u.status || u.status.trim().toLowerCase() === 'active');
+  }, [users]);
 
   const fetchItems = async () => {
     setLoading(true);
@@ -317,7 +321,7 @@ export const RewardDisciplineTab: React.FC<RewardDisciplineTabProps> = ({
         <Form form={form} layout="vertical" onFinish={handleCreate} style={{ marginTop: 16 }}>
           <Form.Item name="user_id" label="Nhân viên" rules={[{ required: true, message: 'Chọn nhân viên' }]}>
             <Select showSearch placeholder="Chọn nhân viên" optionFilterProp="children">
-              {users.map((u) => (
+              {activeUsers.map((u) => (
                 <Select.Option key={u.user_id} value={u.user_id}>
                   {u.name} ({u.employee_code || u.user_id})
                 </Select.Option>

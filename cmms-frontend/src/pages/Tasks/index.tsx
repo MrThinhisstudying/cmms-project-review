@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import {
     Card,
     Row,
@@ -15,6 +16,8 @@ import {
     Segmented,
     Empty,
     Badge,
+    Grid,
+    Drawer,
     message,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -38,8 +41,7 @@ import {
     SendOutlined,
     InboxOutlined,
     SyncOutlined,
-    CalendarOutlined,
-    BarChartOutlined,
+    FilterOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useAuthContext } from "../../context/AuthContext/AuthContext";
@@ -85,8 +87,23 @@ const DEFAULT_STATS: ITaskStats = {
     waitingMyReview: 0,
 };
 
-const TasksPage: React.FC = () => {
+export interface TasksPageProps {
+    mode?: "tasks" | "calendar" | "dashboard" | "kpi";
+}
+
+const TasksPage: React.FC<TasksPageProps> = ({ mode }) => {
     const { user: currentUser } = useAuthContext();
+    const location = useLocation();
+    const screens = Grid.useBreakpoint();
+    const isMobile = !screens.md;
+    const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
+
+    // Xác định chế độ dựa theo prop hoặc URL path
+    const activeMode: "tasks" | "calendar" | "dashboard" | "kpi" = mode || (
+        location.pathname.startsWith('/lich_cong_viec') ? 'calendar' :
+        location.pathname.startsWith('/dashboard_lanh_dao') ? 'dashboard' :
+        location.pathname.startsWith('/kpi_thi_dua') ? 'kpi' : 'tasks'
+    );
 
     // Data state
     const [tasks, setTasks] = useState<IWorkTask[]>([]);
@@ -111,9 +128,33 @@ const TasksPage: React.FC = () => {
         undefined
     );
     const [searchText, setSearchText] = useState("");
-    const [displayMode, setDisplayMode] = useState<
-        "TABLE" | "KANBAN" | "CALENDAR" | "DASHBOARD" | "KPI"
-    >("TABLE");
+    const [displayMode, setDisplayMode] = useState<"TABLE" | "KANBAN">("TABLE");
+
+    const headerTitle = useMemo(() => {
+        switch (activeMode) {
+            case "calendar":
+                return "Lịch Công việc Toàn hệ thống";
+            case "dashboard":
+                return "Dashboard Lãnh đạo & Điều hành Tiến độ";
+            case "kpi":
+                return "Bình xét KPI & Đánh giá Thi đua";
+            default:
+                return "Trung tâm Quản lý Công việc & Giao việc";
+        }
+    }, [activeMode]);
+
+    const headerSubtitle = useMemo(() => {
+        switch (activeMode) {
+            case "calendar":
+                return "Theo dõi toàn bộ lịch trình công tác, phân ca, bảo dưỡng và hạn chót hoàn thành theo thời gian thực";
+            case "dashboard":
+                return "Báo cáo chỉ số điều hành, tỷ lệ hoàn thành công việc và tiến độ theo từng Đơn vị / Phòng ban";
+            case "kpi":
+                return "Hệ thống tính điểm KPI tự động, xếp loại mức độ hoàn thành nhiệm vụ và bảng vinh danh thi đua";
+            default:
+                return "Giao việc phân cấp (Ban Giám đốc → Đội trưởng/Phó → Tổ trưởng/Phó (Cán bộ) → Nhân viên) & Chia sẻ theo Nhóm trang thiết bị";
+        }
+    }, [activeMode]);
 
     // Modals state
     const [formOpen, setFormOpen] = useState(false);
@@ -133,7 +174,11 @@ const TasksPage: React.FC = () => {
             ]);
             setProjects(projList);
             setDepartments(deptList);
-            setUsers(userList);
+            // Lọc chỉ giữ các tài khoản đang hoạt động (loại trừ tài khoản ngưng hoạt động / khóa)
+            const activeUserList = (userList || []).filter(
+                (u: IUser) => !u.status || u.status.trim().toLowerCase() === "active"
+            );
+            setUsers(activeUserList);
         } catch (err) {
             console.error("Failed to load task master data:", err);
         }
@@ -720,8 +765,27 @@ const TasksPage: React.FC = () => {
         },
     ];
 
+    const activeFilterCount = [
+        projectFilter,
+        deptFilter,
+        deviceGroupFilter,
+        typeFilter,
+        priorityFilter,
+        statusFilter,
+    ].filter(Boolean).length;
+
+    const handleResetTaskFilters = () => {
+        setProjectFilter(undefined);
+        setDeptFilter(undefined);
+        setDeviceGroupFilter(undefined);
+        setTypeFilter(undefined);
+        setPriorityFilter(undefined);
+        setStatusFilter(undefined);
+        setSearchText("");
+    };
+
     return (
-        <div style={{ padding: "16px 20px" }}>
+        <div style={{ padding: isMobile ? "8px 4px" : "16px 20px" }}>
             {/* ─────────────── PAGE HEADER ─────────────── */}
             <div
                 style={{
@@ -729,24 +793,24 @@ const TasksPage: React.FC = () => {
                     justifyContent: "space-between",
                     alignItems: "center",
                     flexWrap: "wrap",
-                    gap: 12,
-                    marginBottom: 16,
+                    gap: isMobile ? 8 : 12,
+                    marginBottom: isMobile ? 10 : 16,
                 }}
             >
-                <div>
+                <div style={{ minWidth: 0, flex: 1 }}>
                     <h2
                         style={{
                             margin: 0,
-                            fontSize: 22,
+                            fontSize: isMobile ? 17 : 22,
                             fontWeight: 700,
                             color: "#0f172a",
                         }}
                     >
-                        Trung tâm Quản lý Công việc & Giao việc
+                        {headerTitle}
                     </h2>
                     <div
                         style={{
-                            fontSize: 13,
+                            fontSize: 12.5,
                             color: "#64748b",
                             marginTop: 2,
                             display: "flex",
@@ -755,41 +819,44 @@ const TasksPage: React.FC = () => {
                             gap: 6,
                         }}
                     >
-                        <span>
-                            Giao việc phân cấp (Ban Giám đốc → Đội trưởng/Phó → Tổ trưởng/Phó (Cán bộ) → Nhân viên) & Chia sẻ theo Nhóm trang thiết bị
-                        </span>
-                        {assignmentContext && (
-                            <Tag color="blue" style={{ margin: 0, fontWeight: 600 }}>
+                        {!isMobile && <span>{headerSubtitle}</span>}
+                        {activeMode === "tasks" && assignmentContext && (
+                            <Tag color="blue" style={{ margin: 0, fontWeight: 600, fontSize: 11 }}>
                                 {assignmentContext.hierarchyLabel}
                             </Tag>
                         )}
-                        {assignmentContext &&
+                        {activeMode === "tasks" &&
+                            assignmentContext &&
                             assignmentContext.myDeviceGroups.map((dg) => (
-                                <Tag key={dg.id} color="cyan" style={{ margin: 0 }}>
-                                    ⚙ Nhóm TB của tôi: {dg.name}
+                                <Tag key={dg.id} color="cyan" style={{ margin: 0, fontSize: 11 }}>
+                                    ⚙ Nhóm TB: {dg.name}
                                 </Tag>
                             ))}
                     </div>
                 </div>
 
-                <Space wrap>
+                <Space wrap size={isMobile ? 6 : 8}>
+                    {activeMode === "tasks" && (
+                        <Button
+                            size={isMobile ? "small" : "middle"}
+                            icon={<FolderOpenOutlined />}
+                            onClick={() => setProjectModalOpen(true)}
+                        >
+                            {isMobile ? `Dự án (${projects.length})` : `Dự án / Chiến dịch (${projects.length})`}
+                        </Button>
+                    )}
                     <Button
-                        icon={<FolderOpenOutlined />}
-                        onClick={() => setProjectModalOpen(true)}
-                    >
-                        Dự án / Chiến dịch ({projects.length})
-                    </Button>
-                    <Button
+                        size={isMobile ? "small" : "middle"}
                         icon={<ReloadOutlined />}
                         onClick={() => fetchTaskList(false)}
                         loading={loading}
                     >
-                        Làm mới
+                        {!isMobile && "Làm mới"}
                     </Button>
                     {assignmentContext?.canCreateTask !== false && (
                         <Button
                             type="primary"
-                            size="large"
+                            size={isMobile ? "middle" : "large"}
                             icon={<PlusOutlined />}
                             onClick={handleOpenCreateTask}
                             style={{
@@ -805,26 +872,40 @@ const TasksPage: React.FC = () => {
                 </Space>
             </div>
 
-            {/* ─────────────── INTERACTIVE KPI CARDS ─────────────── */}
+            {/* ─────────────── INTERACTIVE KPI CARDS & FILTERS (CHỈ HIỂN THỊ Ở CHẾ ĐỘ TASKS) ─────────────── */}
+            {activeMode === "tasks" && (
+            <>
             <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(155px, 1fr))",
-                    gap: 12,
-                    marginBottom: 16,
-                }}
+                style={
+                    isMobile
+                        ? {
+                              display: "flex",
+                              overflowX: "auto",
+                              gap: 8,
+                              paddingBottom: 4,
+                              marginBottom: 10,
+                          }
+                        : {
+                              display: "grid",
+                              gridTemplateColumns: "repeat(auto-fit, minmax(155px, 1fr))",
+                              gap: 12,
+                              marginBottom: 16,
+                          }
+                }
             >
                 {kpiCards.map((card) => (
                     <div
                         key={card.key}
                         onClick={card.onClick}
                         style={{
+                            minWidth: isMobile ? 116 : undefined,
+                            flexShrink: 0,
                             background: card.active ? card.bg : "#ffffff",
                             border: card.active
                                 ? `2px solid ${card.color}`
                                 : "1px solid #e2e8f0",
-                            borderRadius: 12,
-                            padding: "12px 14px",
+                            borderRadius: isMobile ? 10 : 12,
+                            padding: isMobile ? "8px 10px" : "12px 14px",
                             cursor: "pointer",
                             transition: "all 0.2s ease",
                             boxShadow: card.active
@@ -837,29 +918,31 @@ const TasksPage: React.FC = () => {
                                 display: "flex",
                                 justifyContent: "space-between",
                                 alignItems: "center",
-                                marginBottom: 6,
+                                marginBottom: isMobile ? 2 : 6,
+                                gap: 4,
                             }}
                         >
                             <span
                                 style={{
-                                    fontSize: 12.5,
+                                    fontSize: isMobile ? 11 : 12.5,
                                     fontWeight: 600,
                                     color: "#475569",
+                                    whiteSpace: "nowrap",
                                 }}
                             >
                                 {card.title}
                             </span>
                             <span
                                 style={{
-                                    width: 28,
-                                    height: 28,
-                                    borderRadius: 8,
+                                    width: isMobile ? 22 : 28,
+                                    height: isMobile ? 22 : 28,
+                                    borderRadius: 6,
                                     background: card.bg,
                                     color: card.color,
                                     display: "inline-flex",
                                     alignItems: "center",
                                     justifyContent: "center",
-                                    fontSize: 14,
+                                    fontSize: isMobile ? 12 : 14,
                                 }}
                             >
                                 {card.icon}
@@ -867,7 +950,7 @@ const TasksPage: React.FC = () => {
                         </div>
                         <div
                             style={{
-                                fontSize: 22,
+                                fontSize: isMobile ? 18 : 22,
                                 fontWeight: 800,
                                 color: card.color,
                                 lineHeight: 1.1,
@@ -884,9 +967,10 @@ const TasksPage: React.FC = () => {
                 size="small"
                 style={{
                     borderRadius: 12,
-                    marginBottom: 16,
+                    marginBottom: isMobile ? 10 : 16,
                     border: "1px solid #e2e8f0",
                 }}
+                styles={{ body: { padding: isMobile ? 10 : 12 } }}
             >
                 <div
                     style={{
@@ -894,239 +978,493 @@ const TasksPage: React.FC = () => {
                         justifyContent: "space-between",
                         alignItems: "center",
                         flexWrap: "wrap",
-                        gap: 10,
-                        marginBottom: 12,
-                        paddingBottom: 10,
+                        gap: 8,
+                        marginBottom: 10,
+                        paddingBottom: 8,
                         borderBottom: "1px solid #f1f5f9",
                     }}
                 >
-                    <Segmented
-                        value={viewMode}
-                        onChange={(val) =>
-                            setViewMode(
-                                val as
-                                    | "ALL"
-                                    | "MY_ASSIGNED"
-                                    | "MY_CREATED"
-                                    | "COLLABORATING"
-                                    | "PENDING_MY_REVIEW"
-                            )
-                        }
-                        options={[
-                            { label: "Tất cả trong phạm vi", value: "ALL" },
-                            {
-                                label: `Việc tôi nhận (${stats.myAssigned})`,
-                                value: "MY_ASSIGNED",
-                            },
-                            {
-                                label: `Việc tôi giao (${stats.myCreated})`,
-                                value: "MY_CREATED",
-                            },
-                            {
-                                label: "Việc tôi phối hợp / theo dõi",
-                                value: "COLLABORATING",
-                            },
-                            {
-                                label: (
-                                    <Badge
-                                        count={stats.waitingMyReview}
-                                        size="small"
-                                        offset={[6, -2]}
-                                    >
-                                        <span>Chờ tôi nghiệm thu</span>
-                                    </Badge>
-                                ),
-                                value: "PENDING_MY_REVIEW",
-                            },
-                        ]}
-                    />
+                    <div style={{ overflowX: "auto", maxWidth: "100%" }}>
+                        <Segmented
+                            size={isMobile ? "small" : "middle"}
+                            value={viewMode}
+                            onChange={(val) =>
+                                setViewMode(
+                                    val as
+                                        | "ALL"
+                                        | "MY_ASSIGNED"
+                                        | "MY_CREATED"
+                                        | "COLLABORATING"
+                                        | "PENDING_MY_REVIEW"
+                                )
+                            }
+                            options={[
+                                { label: isMobile ? "Tất cả" : "Tất cả trong phạm vi", value: "ALL" },
+                                {
+                                    label: `Tôi nhận (${stats.myAssigned})`,
+                                    value: "MY_ASSIGNED",
+                                },
+                                {
+                                    label: `Tôi giao (${stats.myCreated})`,
+                                    value: "MY_CREATED",
+                                },
+                                {
+                                    label: isMobile ? "Phối hợp" : "Việc tôi phối hợp / theo dõi",
+                                    value: "COLLABORATING",
+                                },
+                                {
+                                    label: (
+                                        <Badge
+                                            count={stats.waitingMyReview}
+                                            size="small"
+                                            offset={[6, -2]}
+                                        >
+                                            <span>{isMobile ? "Chờ duyệt" : "Chờ tôi nghiệm thu"}</span>
+                                        </Badge>
+                                    ),
+                                    value: "PENDING_MY_REVIEW",
+                                },
+                            ]}
+                        />
+                    </div>
 
-                    <Segmented
-                        value={displayMode}
-                        onChange={(val) =>
-                            setDisplayMode(
-                                val as
-                                    | "TABLE"
-                                    | "KANBAN"
-                                    | "CALENDAR"
-                                    | "DASHBOARD"
-                                    | "KPI"
-                            )
-                        }
-                        options={[
-                            {
-                                label: "Danh sách",
-                                value: "TABLE",
-                                icon: <TableOutlined />,
-                            },
-                            {
-                                label: "Bảng Kanban",
-                                value: "KANBAN",
-                                icon: <AppstoreOutlined />,
-                            },
-                            {
-                                label: "Lịch công việc",
-                                value: "CALENDAR",
-                                icon: <CalendarOutlined />,
-                            },
-                            {
-                                label: "Dashboard Lãnh đạo",
-                                value: "DASHBOARD",
-                                icon: <BarChartOutlined />,
-                            },
-                            {
-                                label: "Bình xét KPI & Thi đua",
-                                value: "KPI",
-                                icon: <TrophyOutlined />,
-                            },
-                        ]}
-                    />
+                    {!isMobile && (
+                        <Segmented
+                            value={displayMode}
+                            onChange={(val) => setDisplayMode(val as "TABLE" | "KANBAN")}
+                            options={[
+                                {
+                                    label: "Danh sách",
+                                    value: "TABLE",
+                                    icon: <TableOutlined />,
+                                },
+                                {
+                                    label: "Bảng Kanban",
+                                    value: "KANBAN",
+                                    icon: <AppstoreOutlined />,
+                                },
+                            ]}
+                        />
+                    )}
                 </div>
 
-                <Row gutter={[10, 10]}>
-                    <Col xs={24} sm={8} md={5}>
+                {isMobile ? (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                         <Input
                             allowClear
                             prefix={<SearchOutlined style={{ color: "#94a3b8" }} />}
-                            placeholder="Tìm theo mã CV, tên công việc..."
+                            placeholder="Tìm mã CV, tên việc..."
                             value={searchText}
                             onChange={(e) => setSearchText(e.target.value)}
+                            style={{ flex: 1 }}
                         />
-                    </Col>
+                        <Badge count={activeFilterCount} size="small">
+                            <Button
+                                icon={<FilterOutlined />}
+                                onClick={() => setFilterDrawerOpen(true)}
+                            >
+                                Lọc
+                            </Button>
+                        </Badge>
+                        <Segmented
+                            value={displayMode}
+                            onChange={(val) => setDisplayMode(val as "TABLE" | "KANBAN")}
+                            options={[
+                                { value: "TABLE", icon: <TableOutlined /> },
+                                { value: "KANBAN", icon: <AppstoreOutlined /> },
+                            ]}
+                        />
+                    </div>
+                ) : (
+                    <Row gutter={[10, 10]}>
+                        <Col xs={24} sm={8} md={5}>
+                            <Input
+                                allowClear
+                                prefix={<SearchOutlined style={{ color: "#94a3b8" }} />}
+                                placeholder="Tìm theo mã CV, tên công việc..."
+                                value={searchText}
+                                onChange={(e) => setSearchText(e.target.value)}
+                            />
+                        </Col>
 
-                    <Col xs={12} sm={8} md={4}>
-                        <Select
-                            allowClear
-                            style={{ width: "100%" }}
-                            placeholder="Dự án / Chiến dịch"
-                            value={projectFilter}
-                            onChange={(val) => setProjectFilter(val)}
-                            options={projects.map((p) => ({
-                                value: p.id,
-                                label: p.name,
-                            }))}
-                        />
-                    </Col>
+                        <Col xs={12} sm={8} md={4}>
+                            <Select
+                                allowClear
+                                style={{ width: "100%" }}
+                                placeholder="Dự án / Chiến dịch"
+                                value={projectFilter}
+                                onChange={(val) => setProjectFilter(val)}
+                                options={projects.map((p) => ({
+                                    value: p.id,
+                                    label: p.name,
+                                }))}
+                            />
+                        </Col>
 
-                    <Col xs={12} sm={8} md={4}>
-                        <Select
-                            allowClear
-                            style={{ width: "100%" }}
-                            placeholder="Đơn vị / Phòng ban"
-                            value={deptFilter}
-                            onChange={(val) => setDeptFilter(val)}
-                            options={departments.map((d) => ({
-                                value: d.dept_id,
-                                label: d.name,
-                            }))}
-                        />
-                    </Col>
+                        <Col xs={12} sm={8} md={4}>
+                            <Select
+                                allowClear
+                                style={{ width: "100%" }}
+                                placeholder="Đơn vị / Phòng ban"
+                                value={deptFilter}
+                                onChange={(val) => setDeptFilter(val)}
+                                options={departments.map((d) => ({
+                                    value: d.dept_id,
+                                    label: d.name,
+                                }))}
+                            />
+                        </Col>
 
-                    <Col xs={12} sm={8} md={4}>
-                        <Select
-                            allowClear
-                            style={{ width: "100%" }}
-                            placeholder="Nhóm trang thiết bị"
-                            value={deviceGroupFilter}
-                            onChange={(val) => setDeviceGroupFilter(val)}
-                            options={(assignmentContext?.allDeviceGroups || []).map(
-                                (dg) => ({
-                                    value: dg.id,
-                                    label: `⚙ ${dg.name}`,
-                                })
-                            )}
-                        />
-                    </Col>
+                        <Col xs={12} sm={8} md={4}>
+                            <Select
+                                allowClear
+                                style={{ width: "100%" }}
+                                placeholder="Nhóm trang thiết bị"
+                                value={deviceGroupFilter}
+                                onChange={(val) => setDeviceGroupFilter(val)}
+                                options={(assignmentContext?.allDeviceGroups || []).map(
+                                    (dg) => ({
+                                        value: dg.id,
+                                        label: `⚙ ${dg.name}`,
+                                    })
+                                )}
+                            />
+                        </Col>
 
-                    <Col xs={12} sm={8} md={2}>
-                        <Select
-                            allowClear
-                            style={{ width: "100%" }}
-                            placeholder="Phân loại"
-                            value={typeFilter}
-                            onChange={(val) => setTypeFilter(val)}
-                            options={Object.entries(TASK_TYPE_CONFIG).map(
-                                ([k, v]) => ({
-                                    value: k as WorkTaskType,
-                                    label: v.label,
-                                })
-                            )}
-                        />
-                    </Col>
+                        <Col xs={12} sm={8} md={2}>
+                            <Select
+                                allowClear
+                                style={{ width: "100%" }}
+                                placeholder="Phân loại"
+                                value={typeFilter}
+                                onChange={(val) => setTypeFilter(val)}
+                                options={Object.entries(TASK_TYPE_CONFIG).map(
+                                    ([k, v]) => ({
+                                        value: k as WorkTaskType,
+                                        label: v.label,
+                                    })
+                                )}
+                            />
+                        </Col>
 
-                    <Col xs={12} sm={8} md={2}>
-                        <Select
-                            allowClear
-                            style={{ width: "100%" }}
-                            placeholder="Mức ưu tiên"
-                            value={priorityFilter}
-                            onChange={(val) => setPriorityFilter(val)}
-                            options={Object.entries(TASK_PRIORITY_CONFIG).map(
-                                ([k, v]) => ({
-                                    value: k,
-                                    label: v.label,
-                                })
-                            )}
-                        />
-                    </Col>
+                        <Col xs={12} sm={8} md={2}>
+                            <Select
+                                allowClear
+                                style={{ width: "100%" }}
+                                placeholder="Mức ưu tiên"
+                                value={priorityFilter}
+                                onChange={(val) => setPriorityFilter(val)}
+                                options={Object.entries(TASK_PRIORITY_CONFIG).map(
+                                    ([k, v]) => ({
+                                        value: k,
+                                        label: v.label,
+                                    })
+                                )}
+                            />
+                        </Col>
 
-                    <Col xs={12} sm={8} md={3}>
-                        <Select
-                            allowClear
-                            style={{ width: "100%" }}
-                            placeholder="Trạng thái"
-                            value={statusFilter}
-                            onChange={(val) => setStatusFilter(val)}
-                            options={Object.entries(TASK_STATUS_CONFIG).map(
-                                ([k, v]) => ({
-                                    value: k,
-                                    label: v.label,
-                                })
-                            )}
-                        />
-                    </Col>
-                </Row>
+                        <Col xs={12} sm={8} md={3}>
+                            <Select
+                                allowClear
+                                style={{ width: "100%" }}
+                                placeholder="Trạng thái"
+                                value={statusFilter}
+                                onChange={(val) => setStatusFilter(val)}
+                                options={Object.entries(TASK_STATUS_CONFIG).map(
+                                    ([k, v]) => ({
+                                        value: k,
+                                        label: v.label,
+                                    })
+                                )}
+                            />
+                        </Col>
+                    </Row>
+                )}
             </Card>
 
+            {/* Mobile Filter Bottom Drawer */}
+            <Drawer
+                title="Bộ lọc công việc"
+                placement="bottom"
+                height="auto"
+                open={filterDrawerOpen}
+                onClose={() => setFilterDrawerOpen(false)}
+                extra={
+                    <Button size="small" type="link" onClick={handleResetTaskFilters}>
+                        Xóa bộ lọc
+                    </Button>
+                }
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, paddingBottom: 12 }}>
+                    <Select
+                        allowClear
+                        style={{ width: "100%" }}
+                        placeholder="Dự án / Chiến dịch"
+                        value={projectFilter}
+                        onChange={(val) => setProjectFilter(val)}
+                        options={projects.map((p) => ({ value: p.id, label: p.name }))}
+                    />
+                    <Select
+                        allowClear
+                        style={{ width: "100%" }}
+                        placeholder="Đơn vị / Phòng ban"
+                        value={deptFilter}
+                        onChange={(val) => setDeptFilter(val)}
+                        options={departments.map((d) => ({ value: d.dept_id, label: d.name }))}
+                    />
+                    <Select
+                        allowClear
+                        style={{ width: "100%" }}
+                        placeholder="Nhóm trang thiết bị"
+                        value={deviceGroupFilter}
+                        onChange={(val) => setDeviceGroupFilter(val)}
+                        options={(assignmentContext?.allDeviceGroups || []).map((dg) => ({
+                            value: dg.id,
+                            label: `⚙ ${dg.name}`,
+                        }))}
+                    />
+                    <Row gutter={10}>
+                        <Col span={12}>
+                            <Select
+                                allowClear
+                                style={{ width: "100%" }}
+                                placeholder="Phân loại"
+                                value={typeFilter}
+                                onChange={(val) => setTypeFilter(val)}
+                                options={Object.entries(TASK_TYPE_CONFIG).map(([k, v]) => ({
+                                    value: k as WorkTaskType,
+                                    label: v.label,
+                                }))}
+                            />
+                        </Col>
+                        <Col span={12}>
+                            <Select
+                                allowClear
+                                style={{ width: "100%" }}
+                                placeholder="Mức ưu tiên"
+                                value={priorityFilter}
+                                onChange={(val) => setPriorityFilter(val)}
+                                options={Object.entries(TASK_PRIORITY_CONFIG).map(([k, v]) => ({
+                                    value: k,
+                                    label: v.label,
+                                }))}
+                            />
+                        </Col>
+                    </Row>
+                    <Select
+                        allowClear
+                        style={{ width: "100%" }}
+                        placeholder="Trạng thái"
+                        value={statusFilter}
+                        onChange={(val) => setStatusFilter(val)}
+                        options={Object.entries(TASK_STATUS_CONFIG).map(([k, v]) => ({
+                            value: k,
+                            label: v.label,
+                        }))}
+                    />
+                    <Button
+                        type="primary"
+                        block
+                        onClick={() => setFilterDrawerOpen(false)}
+                        style={{ marginTop: 4, borderRadius: 8 }}
+                    >
+                        Áp dụng ({tasks.length} kết quả)
+                    </Button>
+                </div>
+            </Drawer>
+            </>
+            )}
+
             {/* ─────────────── CONTENT: TABLE / KANBAN / CALENDAR / DASHBOARD / KPI ─────────────── */}
-            {displayMode === "KPI" ? (
+            {activeMode === "kpi" ? (
                 <KpiEvaluationView
                     departments={departments}
                     onOpenDetail={handleOpenDetail}
                 />
-            ) : displayMode === "DASHBOARD" ? (
+            ) : activeMode === "dashboard" ? (
                 <ExecutiveDashboardView
                     departments={departments}
                     projects={projects}
                     onOpenDetail={handleOpenDetail}
                     onRefreshTasks={() => fetchTaskList(true)}
                 />
-            ) : displayMode === "CALENDAR" ? (
+            ) : activeMode === "calendar" ? (
                 <TaskCalendarView
                     tasks={tasks}
                     onOpenDetail={handleOpenDetail}
                 />
             ) : displayMode === "TABLE" ? (
-                <Card
-                    size="small"
-                    style={{
-                        borderRadius: 12,
-                        border: "1px solid #e2e8f0",
-                    }}
-                >
-                    <Table
-                        rowKey="id"
-                        loading={loading}
-                        columns={columns}
-                        dataSource={tasks}
-                        scroll={{ x: 1200 }}
-                        pagination={{
-                            pageSize: 12,
-                            showSizeChanger: true,
-                            showTotal: (total) => `Tổng cộng ${total} công việc`,
+                isMobile ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {tasks.length === 0 ? (
+                            <Card style={{ borderRadius: 12, textAlign: "center" }}>
+                                <Empty description="Không có công việc nào phù hợp" />
+                            </Card>
+                        ) : (
+                            tasks.map((record) => {
+                                const sCfg =
+                                    TASK_STATUS_CONFIG[record.status] || TASK_STATUS_CONFIG.NEW;
+                                const pCfg =
+                                    TASK_PRIORITY_CONFIG[record.priority] ||
+                                    TASK_PRIORITY_CONFIG.NORMAL;
+                                const dMeta = getDeadlineMeta(record);
+                                const subCount = (record.subtasks || []).length;
+
+                                return (
+                                    <div
+                                        key={record.id}
+                                        onClick={() => handleOpenDetail(record.id)}
+                                        style={{
+                                            background: "#ffffff",
+                                            borderRadius: 12,
+                                            padding: "12px 14px",
+                                            border: "1px solid #e2e8f0",
+                                            boxShadow: "0 1px 3px rgba(15, 23, 42, 0.05)",
+                                            cursor: "pointer",
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                                marginBottom: 6,
+                                                gap: 6,
+                                            }}
+                                        >
+                                            <Space size={4} wrap>
+                                                <Tag
+                                                    color={record.parent_id ? "purple" : "blue"}
+                                                    style={{ margin: 0, fontWeight: 700 }}
+                                                >
+                                                    {record.code}
+                                                </Tag>
+                                                <span
+                                                    style={{
+                                                        fontSize: 11,
+                                                        fontWeight: 700,
+                                                        color: sCfg.color,
+                                                        background: sCfg.bg,
+                                                        padding: "1px 8px",
+                                                        borderRadius: 999,
+                                                    }}
+                                                >
+                                                    ● {sCfg.label}
+                                                </span>
+                                            </Space>
+                                            <span
+                                                style={{
+                                                    fontSize: 11,
+                                                    fontWeight: 600,
+                                                    color: pCfg.color,
+                                                    background: pCfg.bg,
+                                                    padding: "1px 8px",
+                                                    borderRadius: 999,
+                                                    flexShrink: 0,
+                                                }}
+                                            >
+                                                {pCfg.label}
+                                            </span>
+                                        </div>
+
+                                        <div
+                                            style={{
+                                                fontWeight: 600,
+                                                fontSize: 14,
+                                                color: "#0f172a",
+                                                marginBottom: 6,
+                                                lineHeight: 1.35,
+                                            }}
+                                        >
+                                            {record.title}
+                                        </div>
+
+                                        {subCount > 0 && (
+                                            <div style={{ fontSize: 11.5, color: "#7c3aed", marginBottom: 6 }}>
+                                                <BranchesOutlined /> {subCount} việc con
+                                            </div>
+                                        )}
+
+                                        <Progress
+                                            percent={record.progress}
+                                            size="small"
+                                            strokeColor={
+                                                record.status === "COMPLETED" ? "#16a34a" : "#2563eb"
+                                            }
+                                        />
+
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                justifyContent: "space-between",
+                                                alignItems: "center",
+                                                marginTop: 8,
+                                                paddingTop: 8,
+                                                borderTop: "1px solid #f1f5f9",
+                                            }}
+                                        >
+                                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                                <Avatar
+                                                    size={22}
+                                                    src={getBackendImageUrl(record.assignee?.avatar)}
+                                                    icon={<UserOutlined />}
+                                                    style={{ backgroundColor: "#059669" }}
+                                                />
+                                                <div>
+                                                    <div style={{ fontSize: 12.5, fontWeight: 600, color: "#0f172a" }}>
+                                                        {record.assignee?.name || "—"}
+                                                    </div>
+                                                    {record.department && (
+                                                        <div style={{ fontSize: 11, color: "#64748b" }}>
+                                                            {record.department.name}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div style={{ textAlign: "right" }}>
+                                                <div style={{ fontSize: 11.5, color: "#475569" }}>
+                                                    <ClockCircleOutlined />{" "}
+                                                    {dayjs(record.deadline).format("HH:mm DD/MM")}
+                                                </div>
+                                                <span
+                                                    style={{
+                                                        fontSize: 11,
+                                                        fontWeight: 700,
+                                                        color: dMeta.color,
+                                                    }}
+                                                >
+                                                    {dMeta.text}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                ) : (
+                    <Card
+                        size="small"
+                        style={{
+                            borderRadius: 12,
+                            border: "1px solid #e2e8f0",
                         }}
-                    />
-                </Card>
+                    >
+                        <Table
+                            rowKey="id"
+                            loading={loading}
+                            columns={columns}
+                            dataSource={tasks}
+                            scroll={{ x: 1200 }}
+                            pagination={{
+                                pageSize: 12,
+                                showSizeChanger: true,
+                                showTotal: (total) => `Tổng cộng ${total} công việc`,
+                            }}
+                        />
+                    </Card>
+                )
             ) : (
                 <Row gutter={[14, 14]}>
                     {kanbanColumns.map((col) => {

@@ -208,8 +208,9 @@ export const uploadSignature = async (userId: number, file: File, token: string 
     const formData = new FormData();
     formData.append("file", file);
 
+    const baseUrl = (process.env.REACT_APP_BASE_URL || "").replace(/\/+$/, "");
     const response = await fetch(
-      `${process.env.REACT_APP_BASE_URL}/user/${userId}/signature`,
+      `${baseUrl}/user/${userId}/signature`,
       {
         method: "POST",
         headers: {
@@ -219,8 +220,14 @@ export const uploadSignature = async (userId: number, file: File, token: string 
       }
     );
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.message || "Upload failed");
+    let data: { message?: string; data?: { signature_url: string } } = {};
+    try {
+      data = await response.json();
+    } catch {
+      // Non-JSON response (ví dụ Nginx trả về lỗi 413, 502 dạng HTML)
+    }
+
+    if (!response.ok) throw new Error(data.message || `Lỗi tải lên chữ ký (${response.status}: ${response.statusText || 'Không xác định'})`);
     return data.data; // { signature_url: string }
   } catch (error) {
     throw error;
@@ -232,8 +239,9 @@ export const uploadAvatar = async (userId: number, file: File, token: string | n
     const formData = new FormData();
     formData.append("file", file);
 
+    const baseUrl = (process.env.REACT_APP_BASE_URL || "").replace(/\/+$/, "");
     const response = await fetch(
-      `${process.env.REACT_APP_BASE_URL}/user/${userId}/avatar`,
+      `${baseUrl}/user/${userId}/avatar`,
       {
         method: "POST",
         headers: {
@@ -243,8 +251,14 @@ export const uploadAvatar = async (userId: number, file: File, token: string | n
       }
     );
 
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.message || "Upload failed");
+    let data: { message?: string; data?: { avatar: string } } = {};
+    try {
+      data = await response.json();
+    } catch {
+      // Non-JSON response (ví dụ Nginx trả về lỗi 413, 502 dạng HTML)
+    }
+
+    if (!response.ok) throw new Error(data.message || `Lỗi tải lên ảnh đại diện (${response.status}: ${response.statusText || 'Không xác định'})`);
     return data.data; // { avatar: string }
   } catch (error) {
     throw error;

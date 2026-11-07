@@ -10,6 +10,8 @@ import {
     Progress,
     Empty,
     Segmented,
+    Button,
+    Grid,
 } from "antd";
 import type { Dayjs } from "dayjs";
 import dayjs from "dayjs";
@@ -36,6 +38,8 @@ const TaskCalendarView: React.FC<TaskCalendarViewProps> = ({
     tasks,
     onOpenDetail,
 }) => {
+    const screens = Grid.useBreakpoint();
+    const isMobile = !screens.md;
     const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
     const [calendarScope, setCalendarScope] = useState<"DEADLINE" | "SPAN">(
         "DEADLINE"
@@ -48,6 +52,25 @@ const TaskCalendarView: React.FC<TaskCalendarViewProps> = ({
             const key = dayjs(t.deadline).format("YYYY-MM-DD");
             if (!map.has(key)) map.set(key, []);
             map.get(key)!.push(t);
+        });
+        return map;
+    }, [tasks]);
+
+    // Thống kê số lượng công việc đang triển khai trong từng ngày (start_date -> deadline)
+    const activeTasksCountByDate = useMemo(() => {
+        const map = new Map<string, number>();
+        tasks.forEach((t) => {
+            if (!t.deadline) return;
+            const start = t.start_date ? dayjs(t.start_date).startOf("day") : dayjs(t.created_at).startOf("day");
+            const end = dayjs(t.deadline).endOf("day");
+            let curr = start;
+            let safetyCount = 0;
+            while ((curr.isBefore(end) || curr.isSame(end, "day")) && safetyCount < 60) {
+                const key = curr.format("YYYY-MM-DD");
+                map.set(key, (map.get(key) || 0) + 1);
+                curr = curr.add(1, "day");
+                safetyCount++;
+            }
         });
         return map;
     }, [tasks]);
@@ -73,6 +96,30 @@ const TaskCalendarView: React.FC<TaskCalendarViewProps> = ({
         });
     }, [tasks, selectedDate]);
 
+    // Tự động chuyển tab thông minh khi người dùng click vào một ngày bất kỳ
+    const handleSelectDate = (date: Dayjs) => {
+        setSelectedDate(date);
+        const dateStr = date.format("YYYY-MM-DD");
+        const dueCount = (tasksByDeadlineDate.get(dateStr) || []).length;
+
+        const startOfDay = date.startOf("day");
+        const endOfDay = date.endOf("day");
+        const spanCount = tasks.filter((t) => {
+            const start = t.start_date ? dayjs(t.start_date) : dayjs(t.created_at);
+            const end = dayjs(t.deadline);
+            return (
+                (start.isBefore(endOfDay) || start.isSame(endOfDay)) &&
+                (end.isAfter(startOfDay) || end.isSame(startOfDay))
+            );
+        }).length;
+
+        if (dueCount === 0 && spanCount > 0) {
+            setCalendarScope("SPAN");
+        } else if (dueCount > 0) {
+            setCalendarScope("DEADLINE");
+        }
+    };
+
     const displayedDayTasks =
         calendarScope === "DEADLINE"
             ? dueOnSelectedDate
@@ -81,7 +128,49 @@ const TaskCalendarView: React.FC<TaskCalendarViewProps> = ({
     const dateCellRender = (value: Dayjs) => {
         const key = value.format("YYYY-MM-DD");
         const dayTasks = tasksByDeadlineDate.get(key) || [];
-        if (dayTasks.length === 0) return null;
+        const activeCount = activeTasksCountByDate.get(key) || 0;
+
+        if (dayTasks.length === 0 && activeCount === 0) return null;
+
+        // Trên điện thoại (fullscreen=false): hiển thị chấm tròn chỉ báo gọn gàng dưới ngày
+        if (isMobile) {
+            const hasOverdue = dayTasks.some((t) => isTaskOverdue(t));
+            const hasUrgent = dayTasks.some((t) => t.priority === "URGENT");
+            const dotColor = hasOverdue
+                ? "#dc2626"
+                : hasUrgent
+                ? "#d97706"
+                : dayTasks.length > 0
+                ? "#2563eb"
+                : "#38bdf8";
+
+            return (
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        gap: 2,
+                        marginTop: 2,
+                    }}
+                >
+                    <span
+                        style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: "50%",
+                            background: dotColor,
+                            display: "inline-block",
+                        }}
+                    />
+                    {dayTasks.length > 1 && (
+                        <span style={{ fontSize: 9, fontWeight: 700, color: dotColor }}>
+                            {dayTasks.length}
+                        </span>
+                    )}
+                </div>
+            );
+        }
 
         return (
             <div
@@ -92,6 +181,7 @@ const TaskCalendarView: React.FC<TaskCalendarViewProps> = ({
                     marginTop: 2,
                 }}
             >
+                {/* 1. Hiển thị thẻ công việc đúng tại Ngày Hạn Chót (Deadline) */}
                 {dayTasks.slice(0, 3).map((t) => {
                     const overdue = isTaskOverdue(t);
                     const isDone = t.status === "COMPLETED";
@@ -110,12 +200,16 @@ const TaskCalendarView: React.FC<TaskCalendarViewProps> = ({
                         ? "#b45309"
                         : "#1d4ed8";
 
+                    const start = t.start_date ? dayjs(t.start_date) : dayjs(t.created_at);
+                    const end = dayjs(t.deadline);
+                    const spanDays = Math.max(1, end.diff(start, "day") + 1);
+
                     return (
                         <div
                             key={t.id}
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onOpenDetail(t.id);
+                                handleSelectDate(value);
                             }}
                             style={{
                                 background: pillBg,
@@ -129,25 +223,64 @@ const TaskCalendarView: React.FC<TaskCalendarViewProps> = ({
                                 textOverflow: "ellipsis",
                                 cursor: "pointer",
                                 borderLeft: `3px solid ${pillColor}`,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 4,
                             }}
-                            title={`[${t.code}] ${t.title} — Thực hiện: ${
-                                t.assignee?.name || "—"
-                            }`}
                         >
-                            {t.title}
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", flex: 1 }}>
+                                {t.title}
+                            </span>
+                            {spanDays > 1 && (
+                                <span style={{ fontSize: 9.5, opacity: 0.8, flexShrink: 0, fontWeight: 700 }}>
+                                    {spanDays}d
+                                </span>
+                            )}
                         </div>
                     );
                 })}
                 {dayTasks.length > 3 && (
                     <div
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectDate(value);
+                        }}
                         style={{
-                            fontSize: 11,
+                            fontSize: 10.5,
                             color: "#475569",
                             fontWeight: 600,
                             paddingLeft: 4,
+                            cursor: "pointer",
                         }}
                     >
-                        +{dayTasks.length - 3} công việc khác
+                        +{dayTasks.length - 3} hạn chót khác
+                    </div>
+                )}
+
+                {/* 2. Nếu ngày này không có hạn chót nhưng có công việc đang chạy ngầm trong kỳ */}
+                {dayTasks.length === 0 && activeCount > 0 && (
+                    <div
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelectDate(value);
+                        }}
+                        style={{
+                            fontSize: 10,
+                            color: "#0369a1",
+                            background: "#f0f9ff",
+                            borderRadius: 4,
+                            padding: "1px 5px",
+                            fontWeight: 600,
+                            border: "1px dashed #bae6fd",
+                            marginTop: 2,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            cursor: "pointer",
+                        }}
+                    >
+                        ⚡ {activeCount} việc đang làm
                     </div>
                 )}
             </div>
@@ -190,8 +323,9 @@ const TaskCalendarView: React.FC<TaskCalendarViewProps> = ({
                     }
                 >
                     <Calendar
+                        fullscreen={!isMobile}
                         value={selectedDate}
-                        onSelect={(date) => setSelectedDate(date)}
+                        onSelect={handleSelectDate}
                         cellRender={(current, info) => {
                             if (info.type === "date") return dateCellRender(current);
                             return info.originNode;
@@ -262,13 +396,25 @@ const TaskCalendarView: React.FC<TaskCalendarViewProps> = ({
                             <Empty
                                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                                 description={
-                                    calendarScope === "DEADLINE"
-                                        ? `Không có công việc nào đến hạn vào ngày ${selectedDate.format(
-                                              "DD/MM/YYYY"
-                                          )}`
-                                        : `Không có công việc nào triển khai trong ngày ${selectedDate.format(
-                                              "DD/MM/YYYY"
-                                          )}`
+                                    calendarScope === "DEADLINE" ? (
+                                        <div>
+                                            <div style={{ color: "#64748b" }}>
+                                                Không có công việc nào chốt hạn vào ngày {selectedDate.format("DD/MM/YYYY")}
+                                            </div>
+                                            {activeSpanningSelectedDate.length > 0 && (
+                                                <Button
+                                                    size="small"
+                                                    type="link"
+                                                    style={{ padding: 0, marginTop: 4, fontWeight: 600 }}
+                                                    onClick={() => setCalendarScope("SPAN")}
+                                                >
+                                                    Xem {activeSpanningSelectedDate.length} công việc đang triển khai trong ngày này →
+                                                </Button>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        `Không có công việc nào triển khai trong ngày ${selectedDate.format("DD/MM/YYYY")}`
+                                    )
                                 }
                             />
                         ) : (
@@ -279,6 +425,9 @@ const TaskCalendarView: React.FC<TaskCalendarViewProps> = ({
                                     TASK_PRIORITY_CONFIG[t.priority] ||
                                     TASK_PRIORITY_CONFIG.NORMAL;
                                 const dMeta = getDeadlineMeta(t);
+                                const start = t.start_date ? dayjs(t.start_date) : dayjs(t.created_at);
+                                const end = dayjs(t.deadline);
+                                const spanDays = Math.max(1, end.diff(start, "day") + 1);
 
                                 return (
                                     <div
@@ -340,10 +489,31 @@ const TaskCalendarView: React.FC<TaskCalendarViewProps> = ({
                                                 fontWeight: 600,
                                                 fontSize: 13.5,
                                                 color: "#0f172a",
-                                                marginBottom: 6,
+                                                marginBottom: 4,
                                             }}
                                         >
                                             {t.title}
+                                        </div>
+
+                                        {/* Kỳ hạn thực hiện rõ ràng */}
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 6,
+                                                fontSize: 12,
+                                                color: "#64748b",
+                                                marginBottom: 8,
+                                                flexWrap: "wrap",
+                                            }}
+                                        >
+                                            <CalendarOutlined style={{ color: "#3b82f6" }} />
+                                            <span>
+                                                Kỳ thực hiện: <b>{start.format("DD/MM/YYYY")}</b> → <b>{end.format("DD/MM/YYYY")}</b>
+                                            </span>
+                                            <Tag style={{ margin: 0, fontSize: 10.5, borderRadius: 4, lineHeight: "18px" }}>
+                                                {spanDays} ngày
+                                            </Tag>
                                         </div>
 
                                         <Progress

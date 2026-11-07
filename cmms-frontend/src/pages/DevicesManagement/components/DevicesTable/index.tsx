@@ -1,5 +1,5 @@
 import React from 'react';
-import { Table, Button, Space, Tag, Popconfirm, Tooltip, Typography } from 'antd';
+import { Table, Button, Space, Tag, Popconfirm, Tooltip, Grid, Empty } from 'antd';
 import {
   EditOutlined,
   DeleteOutlined,
@@ -10,13 +10,10 @@ import {
   ClockCircleOutlined,
   CloseCircleOutlined,
   CalendarOutlined,
-  CheckCircleOutlined,
 } from '@ant-design/icons';
 import { IDevice, DeviceStatus } from '../../../../types/devicesManagement.types';
 import { calculateDeviceExpiries } from '../../../../utils/deviceExpiries';
 import dayjs from 'dayjs';
-
-const { Text } = Typography;
 
 interface DevicesTableProps {
   dataSource: IDevice[];
@@ -405,12 +402,115 @@ const DevicesTable: React.FC<DevicesTableProps> = ({
     },
   ];
 
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
+
   const rowSelection = onSelectChange
     ? {
         selectedRowKeys,
         onChange: onSelectChange,
       }
     : undefined;
+
+  if (isMobile) {
+    if (dataSource.length === 0) {
+      return (
+        <div style={{ background: '#fff', borderRadius: 12, padding: 24, textAlign: 'center' }}>
+          <Empty description="Không tìm thấy thiết bị nào" />
+        </div>
+      );
+    }
+
+    const statusConfig: Record<string, { label: string; color: string }> = {
+      MOI: { label: 'Mới', color: 'cyan' },
+      DANG_SU_DUNG: { label: 'Đang sử dụng', color: 'success' },
+      SU_DUNG_HAN_CHE: { label: 'Hạn chế', color: 'warning' },
+      DANG_SUA_CHUA: { label: 'Đang sửa chữa', color: 'error' },
+      THANH_LY: { label: 'Thanh lý', color: 'default' },
+      HUY_BO: { label: 'Hủy bỏ', color: 'default' },
+    };
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {dataSource.map((d) => {
+          const stCfg = statusConfig[d.status as string] || { label: d.status, color: 'default' };
+          return (
+            <div
+              key={d.device_id}
+              onClick={() => onView(d)}
+              style={{
+                background: '#fff',
+                borderRadius: 12,
+                padding: '12px 14px',
+                border: '1px solid #e2e8f0',
+                boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)',
+                cursor: 'pointer',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 6,
+                  gap: 6,
+                }}
+              >
+                <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>
+                  {d.name}
+                </span>
+                <Tag color={stCfg.color} style={{ margin: 0 }}>
+                  {stCfg.label}
+                </Tag>
+              </div>
+
+              <div style={{ fontSize: 12.5, color: '#475569', marginBottom: 8 }}>
+                Biển số: <b>{d.reg_number || 'N/A'}</b> • Nhóm:{' '}
+                <b>{(d as any).device_group?.name || (d as any).deviceType?.name || '---'}</b>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  paddingTop: 8,
+                  borderTop: '1px solid #f1f5f9',
+                }}
+              >
+                <span style={{ fontSize: 12, color: '#64748b' }}>
+                  Đơn vị: {d.using_department || '---'}
+                </span>
+                <Space size={6}>
+                  <Button
+                    size="small"
+                    icon={<QrcodeOutlined />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onShowQR(d);
+                    }}
+                  >
+                    QR
+                  </Button>
+                  <Button
+                    type="primary"
+                    size="small"
+                    icon={<EyeOutlined />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onView(d);
+                    }}
+                  >
+                    Hồ sơ
+                  </Button>
+                </Space>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div style={{ background: '#fff', borderRadius: 12, overflow: 'hidden' }}>

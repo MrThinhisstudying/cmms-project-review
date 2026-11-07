@@ -1,12 +1,10 @@
 import React, { useState } from "react";
-import { Modal, Upload, Button, Steps, Result, Table, Typography, Card, Space, Divider, Tag } from "antd";
+import { Modal, Upload, Button, Steps, Result, Table, Card, Divider, Tag } from "antd";
 import {
   InboxOutlined,
   UploadOutlined,
   DownloadOutlined,
   FileExcelOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
   FileTextOutlined,
 } from "@ant-design/icons";
 import { useMaintenance } from "../../../hooks/useMaintenance";
@@ -14,7 +12,6 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 
 const { Dragger } = Upload;
-const { Text } = Typography;
 
 interface MaintenanceImportModalProps {
   open: boolean;

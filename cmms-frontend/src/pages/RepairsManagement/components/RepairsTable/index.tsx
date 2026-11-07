@@ -1,5 +1,5 @@
 import React from "react";
-import { Table, Button, Tag, Space, Tooltip, Popconfirm, Dropdown } from "antd";
+import { Table, Button, Tag, Space, Tooltip, Popconfirm, Dropdown, Grid, Empty } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import type { MenuProps } from "antd";
 import {
@@ -722,12 +722,110 @@ const RepairsTable: React.FC<RepairsTableProps> = ({
     },
   ];
 
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
+
   const rowSelection = onSelectChange
     ? {
         selectedRowKeys,
         onChange: onSelectChange,
       }
     : undefined;
+
+  if (isMobile) {
+    if (rows.length === 0) {
+      return (
+        <div style={{ background: "#fff", borderRadius: 12, padding: 24, textAlign: "center" }}>
+          <Empty description="Không có phiếu sửa chữa nào" />
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {rows.map((r) => (
+          <div
+            key={r.repair_id}
+            onClick={() => onView?.(r)}
+            style={{
+              background: "#fff",
+              borderRadius: 12,
+              padding: "12px 14px",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 1px 3px rgba(15, 23, 42, 0.05)",
+              cursor: "pointer",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 6,
+                gap: 6,
+                flexWrap: "wrap",
+              }}
+            >
+              <span style={{ fontWeight: 700, fontSize: 13.5, color: "#2563eb" }}>
+                Phiếu #{r.repair_id}
+              </span>
+              {getStatusBadge(r)}
+            </div>
+
+            <div style={{ fontWeight: 600, fontSize: 14, color: "#0f172a", marginBottom: 4 }}>
+              {r.device?.name || "Thiết bị"} •{" "}
+              <span style={{ color: "#475569" }}>BS: {r.device?.reg_number || "N/A"}</span>
+            </div>
+
+            {r.description_defect && (
+              <div
+                style={{
+                  fontSize: 12.5,
+                  color: "#475569",
+                  marginBottom: 8,
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden",
+                }}
+              >
+                Tình trạng: {r.description_defect}
+              </div>
+            )}
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                paddingTop: 8,
+                borderTop: "1px solid #f1f5f9",
+                fontSize: 12,
+                color: "#64748b",
+              }}
+            >
+              <span>
+                👤 {r.created_by?.name || "—"} •{" "}
+                {r.created_at ? dayjs(r.created_at).format("DD/MM/YYYY") : "---"}
+              </span>
+              <Button
+                type="primary"
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onView?.(r);
+                }}
+                style={{ borderRadius: 6, fontSize: 12 }}
+              >
+                Xem & Duyệt
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div style={{ background: "#fff", borderRadius: 12, overflow: "hidden" }}>

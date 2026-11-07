@@ -9,6 +9,7 @@ import {
   DatePicker,
   Button,
   message,
+  Grid,
 } from "antd";
 import {
   SearchOutlined,
@@ -28,8 +29,11 @@ import moment from "moment";
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
+const { useBreakpoint } = Grid;
 
 const MaintenanceManagement: React.FC = () => {
+  const screens = useBreakpoint();
+  const isMobile = !screens.md;
   // --- STATE QUẢN LÝ MODAL ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreatePlanOpen, setIsCreatePlanOpen] = useState(false);
@@ -196,7 +200,7 @@ const MaintenanceManagement: React.FC = () => {
     <div
       style={{
         width: "100%",
-        padding: "24px",
+        padding: isMobile ? "4px 0 24px 0" : "20px",
         background: "#f4f6f9",
         minHeight: "100vh",
       }}
@@ -210,10 +214,10 @@ const MaintenanceManagement: React.FC = () => {
         onBatchMaintenance={() => setIsBatchOpen(true)}
       />
 
-      {/* KPI Statistic Cards (Click để lọc nhanh) */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 20 }}>
+      {/* KPI Statistic Cards (Click để lọc nhanh - 2x2 trên Mobile, 4 cột trên Desktop) */}
+      <Row gutter={[isMobile ? 10 : 16, isMobile ? 10 : 16]} style={{ marginBottom: isMobile ? 12 : 20 }}>
         {/* Card 1: Tổng số thiết bị */}
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={12} sm={12} lg={6}>
           <Card
             hoverable
             onClick={() => setFilterStatus(undefined)}
@@ -226,32 +230,34 @@ const MaintenanceManagement: React.FC = () => {
               background: "linear-gradient(135deg, #ffffff 0%, #f6faff 100%)",
               transition: "all 0.3s ease",
               cursor: "pointer",
+              height: "100%",
             }}
-            styles={{ body: { padding: "16px 20px" } }}
+            styles={{ body: { padding: isMobile ? "10px 12px" : "16px 20px" } }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: 13, color: "#64748b", fontWeight: 500, marginBottom: 4 }}>
-                  Tổng Thiết Bị Theo Dõi
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: isMobile ? 11.5 : 13, color: "#64748b", fontWeight: 500, marginBottom: 2 }}>
+                  {isMobile ? "Tổng Thiết Bị" : "Tổng Thiết Bị Theo Dõi"}
                 </div>
-                <div style={{ fontSize: 28, fontWeight: 700, color: "#0f172a" }}>
+                <div style={{ fontSize: isMobile ? 22 : 28, fontWeight: 700, color: "#0f172a", lineHeight: 1.2 }}>
                   {kpiStats.total}
                 </div>
-                <div style={{ fontSize: 12, color: "#1677ff", marginTop: 4 }}>
-                  {filterStatus === undefined ? "● Đang xem tất cả" : "Bấm để xem tất cả"}
+                <div style={{ fontSize: isMobile ? 10.5 : 12, color: "#1677ff", marginTop: 2 }}>
+                  {filterStatus === undefined ? "● Đang xem tất cả" : "Bấm xem tất cả"}
                 </div>
               </div>
               <div
                 style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 14,
+                  width: isMobile ? 38 : 52,
+                  height: isMobile ? 38 : 52,
+                  borderRadius: isMobile ? 10 : 14,
                   background: "#e6f4ff",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 24,
+                  fontSize: isMobile ? 18 : 24,
                   color: "#1677ff",
+                  flexShrink: 0,
                 }}
               >
                 🚚
@@ -261,7 +267,7 @@ const MaintenanceManagement: React.FC = () => {
         </Col>
 
         {/* Card 2: Quá hạn cần bảo dưỡng */}
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={12} sm={12} lg={6}>
           <Card
             hoverable
             onClick={() => setFilterStatus(filterStatus === "overdue" ? undefined : "overdue")}
@@ -274,32 +280,34 @@ const MaintenanceManagement: React.FC = () => {
               background: "linear-gradient(135deg, #ffffff 0%, #fff8f8 100%)",
               transition: "all 0.3s ease",
               cursor: "pointer",
+              height: "100%",
             }}
-            styles={{ body: { padding: "16px 20px" } }}
+            styles={{ body: { padding: isMobile ? "10px 12px" : "16px 20px" } }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: 13, color: "#ff4d4f", fontWeight: 600, marginBottom: 4 }}>
-                  Quá Hạn Cần Làm Gấp
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: isMobile ? 11.5 : 13, color: "#ff4d4f", fontWeight: 600, marginBottom: 2 }}>
+                  {isMobile ? "Quá Hạn Gấp" : "Quá Hạn Cần Làm Gấp"}
                 </div>
-                <div style={{ fontSize: 28, fontWeight: 700, color: "#cf1322" }}>
+                <div style={{ fontSize: isMobile ? 22 : 28, fontWeight: 700, color: "#cf1322", lineHeight: 1.2 }}>
                   {kpiStats.overdue}
                 </div>
-                <div style={{ fontSize: 12, color: "#ff4d4f", marginTop: 4 }}>
-                  {filterStatus === "overdue" ? "● Đang lọc quá hạn" : "Bấm để lọc danh sách"}
+                <div style={{ fontSize: isMobile ? 10.5 : 12, color: "#ff4d4f", marginTop: 2 }}>
+                  {filterStatus === "overdue" ? "● Đang lọc quá hạn" : "Bấm để lọc"}
                 </div>
               </div>
               <div
                 style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 14,
+                  width: isMobile ? 38 : 52,
+                  height: isMobile ? 38 : 52,
+                  borderRadius: isMobile ? 10 : 14,
                   background: "#fff1f0",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 24,
+                  fontSize: isMobile ? 18 : 24,
                   color: "#ff4d4f",
+                  flexShrink: 0,
                 }}
               >
                 ⚠️
@@ -309,7 +317,7 @@ const MaintenanceManagement: React.FC = () => {
         </Col>
 
         {/* Card 3: Sắp đến hạn */}
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={12} sm={12} lg={6}>
           <Card
             hoverable
             onClick={() => setFilterStatus(filterStatus === "warning" ? undefined : "warning")}
@@ -322,32 +330,34 @@ const MaintenanceManagement: React.FC = () => {
               background: "linear-gradient(135deg, #ffffff 0%, #fffdf5 100%)",
               transition: "all 0.3s ease",
               cursor: "pointer",
+              height: "100%",
             }}
-            styles={{ body: { padding: "16px 20px" } }}
+            styles={{ body: { padding: isMobile ? "10px 12px" : "16px 20px" } }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: 13, color: "#d48806", fontWeight: 600, marginBottom: 4 }}>
-                  Sắp Đến Hạn (≤ 5 ngày)
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: isMobile ? 11.5 : 13, color: "#d48806", fontWeight: 600, marginBottom: 2 }}>
+                  {isMobile ? "Sắp Đến Hạn" : "Sắp Đến Hạn (≤ 5 ngày)"}
                 </div>
-                <div style={{ fontSize: 28, fontWeight: 700, color: "#d46b08" }}>
+                <div style={{ fontSize: isMobile ? 22 : 28, fontWeight: 700, color: "#d46b08", lineHeight: 1.2 }}>
                   {kpiStats.warning}
                 </div>
-                <div style={{ fontSize: 12, color: "#faad14", marginTop: 4 }}>
-                  {filterStatus === "warning" ? "● Đang lọc sắp đến hạn" : "Bấm để lọc danh sách"}
+                <div style={{ fontSize: isMobile ? 10.5 : 12, color: "#faad14", marginTop: 2 }}>
+                  {filterStatus === "warning" ? "● Đang lọc sắp hạn" : "Bấm để lọc"}
                 </div>
               </div>
               <div
                 style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 14,
+                  width: isMobile ? 38 : 52,
+                  height: isMobile ? 38 : 52,
+                  borderRadius: isMobile ? 10 : 14,
                   background: "#fffbe6",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 24,
+                  fontSize: isMobile ? 18 : 24,
                   color: "#faad14",
+                  flexShrink: 0,
                 }}
               >
                 ⏱️
@@ -357,7 +367,7 @@ const MaintenanceManagement: React.FC = () => {
         </Col>
 
         {/* Card 4: Đang theo dõi ổn định */}
-        <Col xs={24} sm={12} lg={6}>
+        <Col xs={12} sm={12} lg={6}>
           <Card
             hoverable
             onClick={() => setFilterStatus(filterStatus === "active" ? undefined : "active")}
@@ -370,32 +380,34 @@ const MaintenanceManagement: React.FC = () => {
               background: "linear-gradient(135deg, #ffffff 0%, #f7fff4 100%)",
               transition: "all 0.3s ease",
               cursor: "pointer",
+              height: "100%",
             }}
-            styles={{ body: { padding: "16px 20px" } }}
+            styles={{ body: { padding: isMobile ? "10px 12px" : "16px 20px" } }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontSize: 13, color: "#389e0d", fontWeight: 600, marginBottom: 4 }}>
-                  Đang Theo Dõi Ổn Định
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: isMobile ? 11.5 : 13, color: "#389e0d", fontWeight: 600, marginBottom: 2 }}>
+                  {isMobile ? "Đang Ổn Định" : "Đang Theo Dõi Ổn Định"}
                 </div>
-                <div style={{ fontSize: 28, fontWeight: 700, color: "#237804" }}>
+                <div style={{ fontSize: isMobile ? 22 : 28, fontWeight: 700, color: "#237804", lineHeight: 1.2 }}>
                   {kpiStats.normal}
                 </div>
-                <div style={{ fontSize: 12, color: "#52c41a", marginTop: 4 }}>
-                  {filterStatus === "active" ? "● Đang lọc ổn định" : "Bấm để lọc danh sách"}
+                <div style={{ fontSize: isMobile ? 10.5 : 12, color: "#52c41a", marginTop: 2 }}>
+                  {filterStatus === "active" ? "● Đang lọc ổn định" : "Bấm để lọc"}
                 </div>
               </div>
               <div
                 style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 14,
+                  width: isMobile ? 38 : 52,
+                  height: isMobile ? 38 : 52,
+                  borderRadius: isMobile ? 10 : 14,
                   background: "#f6ffed",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 24,
+                  fontSize: isMobile ? 18 : 24,
                   color: "#52c41a",
+                  flexShrink: 0,
                 }}
               >
                 🛡️
@@ -407,19 +419,19 @@ const MaintenanceManagement: React.FC = () => {
 
       {/* Filter Bar (Bộ lọc thông minh) */}
       <Card
-        styles={{ body: { padding: "18px 20px" } }}
+        styles={{ body: { padding: isMobile ? "12px 14px" : "18px 20px" } }}
         style={{
-          marginBottom: 16,
+          marginBottom: isMobile ? 12 : 16,
           borderRadius: 12,
           border: "1px solid #e2e8f0",
           boxShadow: "0 2px 10px rgba(0,0,0,0.03)",
           background: "#ffffff",
         }}
       >
-        <Row gutter={[16, 16]} align="middle">
+        <Row gutter={[10, 10]} align="middle">
           <Col xs={24} md={7}>
             <Input
-              placeholder="🔍 Tìm theo tên xe, biển số, số khung..."
+              placeholder="Tìm theo tên xe, biển số, số khung..."
               prefix={<SearchOutlined style={{ color: "#94a3b8" }} />}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
@@ -460,7 +472,7 @@ const MaintenanceManagement: React.FC = () => {
               <Option value="active">🔵 Đang theo dõi</Option>
             </Select>
           </Col>
-          <Col xs={16} md={5}>
+          <Col xs={24} sm={16} md={5}>
             <RangePicker
               style={{ width: "100%", borderRadius: 8 }}
               size="middle"
@@ -469,7 +481,7 @@ const MaintenanceManagement: React.FC = () => {
               onChange={(dates) => setDateRange(dates)}
             />
           </Col>
-          <Col xs={8} md={4} style={{ textAlign: "right" }}>
+          <Col xs={24} sm={8} md={4} style={{ textAlign: "right" }}>
             <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
               {(searchText || filterLevel || filterStatus || dateRange) && (
                 <Button size="small" onClick={handleResetFilters} style={{ borderRadius: 6, fontSize: 12 }}>
@@ -522,6 +534,7 @@ const MaintenanceManagement: React.FC = () => {
                 color: "#fff",
                 fontSize: 18,
                 boxShadow: "0 2px 8px rgba(22, 119, 255, 0.3)",
+                flexShrink: 0,
               }}
             >
               <ToolFilled />
@@ -541,7 +554,7 @@ const MaintenanceManagement: React.FC = () => {
         open={isModalOpen}
         onCancel={() => setIsModalOpen(false)}
         footer={null}
-        width={750}
+        width="min(750px, calc(100vw - 16px))"
         destroyOnClose
         maskClosable={false}
         centered

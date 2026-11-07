@@ -1,14 +1,8 @@
-import {
-    Injectable,
-    NotFoundException,
-    ForbiddenException,
-    BadRequestException,
-    Logger,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
-import { Cron } from '@nestjs/schedule';
-import { MailerService } from '@nestjs-modules/mailer';
+import {Injectable, NotFoundException, ForbiddenException, BadRequestException, Logger} from '@nestjs/common';
+import {InjectRepository} from '@nestjs/typeorm';
+import {In, Repository} from 'typeorm';
+import {Cron} from '@nestjs/schedule';
+import {MailerService} from '@nestjs-modules/mailer';
 import {
     WorkTask,
     WorkTaskPriority,
@@ -18,16 +12,16 @@ import {
     ITaskAttachment,
     ITaskCollaborator,
 } from './entities/work-task.entity';
-import { TaskProject, TaskProjectStatus } from './entities/task-project.entity';
-import { TaskComment, TaskCommentActionType } from './entities/task-comment.entity';
-import { User } from '../user/user.entity';
-import { UserRole } from '../user/user-role.enum';
-import { Department } from '../departments/department.entity';
-import { UserDepartment } from '../departments/entities/user-department.entity';
-import { DeviceGroup } from '../device-groups/entities/device-group.entity';
-import { UserDeviceGroup } from '../device-groups/entities/user-device-group.entity';
-import { NotificationService } from '../notification/notification.service';
-import { RepairsGateway } from '../repairs/repairs.gateway';
+import {TaskProject, TaskProjectStatus} from './entities/task-project.entity';
+import {TaskComment, TaskCommentActionType} from './entities/task-comment.entity';
+import {User} from '../user/user.entity';
+import {UserRole} from '../user/user-role.enum';
+import {Department} from '../departments/department.entity';
+import {UserDepartment} from '../departments/entities/user-department.entity';
+import {DeviceGroup} from '../device-groups/entities/device-group.entity';
+import {UserDeviceGroup} from '../device-groups/entities/user-device-group.entity';
+import {NotificationService} from '../notification/notification.service';
+import {RepairsGateway} from '../repairs/repairs.gateway';
 
 export type TaskHierarchyTier = 'DIRECTOR' | 'UNIT_LEAD' | 'TEAM_LEAD' | 'STAFF';
 
@@ -62,7 +56,8 @@ export interface CreateTaskDto {
     priority?: WorkTaskPriority;
     project_id?: number | null;
     parent_id?: number | null;
-    assignee_id: number;
+    assignee_id?: number;
+    assignee_ids?: number[];
     dept_id?: number | null;
     device_group_id?: number | null;
     collaborator_ids?: number[];
@@ -103,9 +98,9 @@ export interface IStalledTaskAlert {
     alertType: 'OVERDUE' | 'NEW_OVER_24H' | 'PENDING_REVIEW_OVER_24H' | 'CHANGE_REQUESTED';
     alertLabel: string;
     hoursDelayed: number;
-    assignee?: { user_id: number; name: string; avatar?: string; position?: string };
-    assigner?: { user_id: number; name: string };
-    department?: { dept_id: number; name: string };
+    assignee?: {user_id: number; name: string; avatar?: string; position?: string};
+    assigner?: {user_id: number; name: string};
+    department?: {dept_id: number; name: string};
 }
 
 @Injectable()
@@ -135,10 +130,10 @@ export class TasksService {
     ) {}
 
     // ═══════════════════ PROJECTS ═══════════════════
-    async findAllProjects(query?: { status?: string; dept_id?: number }): Promise<TaskProject[]> {
+    async findAllProjects(query?: {status?: string; dept_id?: number}): Promise<TaskProject[]> {
         const projects = await this.projectRepo.find({
             relations: ['department', 'manager'],
-            order: { created_at: 'DESC' },
+            order: {created_at: 'DESC'},
         });
         return projects.filter((p) => {
             if (query?.status && p.status !== query.status) return false;
@@ -175,7 +170,7 @@ export class TasksService {
         });
 
         const savedProject = await this.projectRepo.save(project);
-        this.gateway.notifyTaskUpdate({ action: 'PROJECT_CREATED', actorId: currentUser.user_id });
+        this.gateway.notifyTaskUpdate({action: 'PROJECT_CREATED', actorId: currentUser.user_id});
         return savedProject;
     }
 
@@ -191,17 +186,17 @@ export class TasksService {
             end_date: string | null;
         }>,
     ): Promise<TaskProject> {
-        const project = await this.projectRepo.findOne({ where: { id } });
+        const project = await this.projectRepo.findOne({where: {id}});
         if (!project) throw new NotFoundException('Không tìm thấy dự án / chiến dịch');
         Object.assign(project, dto);
         const savedProject = await this.projectRepo.save(project);
-        this.gateway.notifyTaskUpdate({ action: 'PROJECT_UPDATED' });
+        this.gateway.notifyTaskUpdate({action: 'PROJECT_UPDATED'});
         return savedProject;
     }
 
     async deleteProject(id: number): Promise<void> {
         await this.projectRepo.delete(id);
-        this.gateway.notifyTaskUpdate({ action: 'PROJECT_DELETED' });
+        this.gateway.notifyTaskUpdate({action: 'PROJECT_DELETED'});
     }
 
     // ═══════════════════ HELPERS ═══════════════════
@@ -209,7 +204,7 @@ export class TasksService {
         const year = new Date().getFullYear();
         const lastTask = await this.taskRepo
             .createQueryBuilder('t')
-            .where('t.code LIKE :prefix', { prefix: `CV-${year}-%` })
+            .where('t.code LIKE :prefix', {prefix: `CV-${year}-%`})
             .orderBy('t.id', 'DESC')
             .getOne();
 
@@ -222,10 +217,7 @@ export class TasksService {
         return `CV-${year}-${String(nextNum).padStart(4, '0')}`;
     }
 
-    private async buildCollaborators(
-        userIds?: number[],
-        explicitCollaborators?: ITaskCollaborator[],
-    ): Promise<ITaskCollaborator[]> {
+    private async buildCollaborators(userIds?: number[], explicitCollaborators?: ITaskCollaborator[]): Promise<ITaskCollaborator[]> {
         if (explicitCollaborators && explicitCollaborators.length > 0) {
             return explicitCollaborators.map((c) => ({
                 user_id: Number(c.user_id),
@@ -238,9 +230,10 @@ export class TasksService {
         if (!userIds || userIds.length === 0) return [];
         const uniqueIds = Array.from(new Set(userIds));
         const users = await this.userRepo.find({
-            where: { user_id: In(uniqueIds) },
+            where: {user_id: In(uniqueIds)},
         });
-        return users.map((u) => ({
+        const activeUsers = users.filter((u) => !u.status || u.status.trim().toLowerCase() === 'active');
+        return activeUsers.map((u) => ({
             user_id: u.user_id,
             name: u.name,
             role: 'COLLABORATOR',
@@ -254,7 +247,7 @@ export class TasksService {
         userId: number,
         actionType: TaskCommentActionType,
         content: string,
-        attachments: Array<{ name: string; url: string }> = [],
+        attachments: Array<{name: string; url: string}> = [],
     ): Promise<TaskComment> {
         const log = this.commentRepo.create({
             task_id: taskId,
@@ -265,7 +258,7 @@ export class TasksService {
             attachments,
         });
         const saved = await this.commentRepo.save(log);
-        this.gateway.notifyTaskUpdate({ taskId, action: actionType, actorId: userId });
+        this.gateway.notifyTaskUpdate({taskId, action: actionType, actorId: userId});
         return saved;
     }
 
@@ -274,15 +267,33 @@ export class TasksService {
         message: string,
         excludeUserId?: number,
         emailSubject?: string,
+        meta?: {
+            taskId?: number;
+            taskCode?: string;
+            actionType?: string;
+            title?: string;
+        },
     ): Promise<number> {
-        const targets = Array.from(new Set(userIds)).filter((id) => id && id !== excludeUserId);
+        const targets = Array.from(new Set(userIds)).filter(
+            (id) => id && (excludeUserId === undefined || id !== excludeUserId || userIds.length === 1),
+        );
         if (targets.length === 0) return 0;
 
-        const users = await this.userRepo.find({ where: { user_id: In(targets) } });
+        const users = await this.userRepo.find({where: {user_id: In(targets)}});
         let sentCount = 0;
         for (const u of users) {
             await this.notificationService.createForUser(u, message);
             sentCount += 1;
+
+            // Bắn realtime Socket.IO đến từng user nhận thông báo
+            this.gateway.sendToUser(u.user_id, {
+                message,
+                taskId: meta?.taskId,
+                taskCode: meta?.taskCode,
+                actionType: meta?.actionType || 'TASK_NOTIFICATION',
+                title: meta?.title || emailSubject || 'Thông báo công việc',
+                timestamp: new Date().toISOString(),
+            });
 
             if (emailSubject && u.email && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
                 try {
@@ -296,6 +307,10 @@ export class TasksService {
                 }
             }
         }
+        this.gateway.notifyTaskUpdate({
+            taskId: meta?.taskId,
+            action: meta?.actionType,
+        });
         this.gateway.notifyDashboardRefresh();
         return sentCount;
     }
@@ -309,64 +324,43 @@ export class TasksService {
      * 4. STAFF (Nhân viên / Kỹ thuật viên / Vận hành viên) -> Xem việc cá nhân + Thấy toàn bộ công việc của các thành viên trong CÙNG Nhóm trang thiết bị (DeviceGroup).
      */
     async getAssignmentContext(currentUser: User): Promise<ITaskAssignmentContext> {
-        const [allDepts, allUserDepts, allDeviceGroups, allUserDeviceGroups, allUsers] =
-            await Promise.all([
-                this.deptRepo.find(),
-                this.userDeptRepo.find({ relations: ['department'] }),
-                this.deviceGroupRepo.find({ relations: ['department'] }),
-                this.userDeviceGroupRepo.find(),
-                this.userRepo.find({ relations: ['department'] }),
-            ]);
+        const [allDepts, allUserDepts, allDeviceGroups, allUserDeviceGroups, allUsers] = await Promise.all([
+            this.deptRepo.find(),
+            this.userDeptRepo.find({relations: ['department']}),
+            this.deviceGroupRepo.find({relations: ['department']}),
+            this.userDeviceGroupRepo.find(),
+            this.userRepo.find({relations: ['department']}),
+        ]);
 
         const deptMap = new Map<number, Department>();
         allDepts.forEach((d) => deptMap.set(d.dept_id, d));
 
         const getUserTier = (userId: number, role?: UserRole): TaskHierarchyTier => {
-            if (
-                role &&
-                [UserRole.ADMIN, UserRole.DIRECTOR, UserRole.HR_MANAGER].includes(role)
-            ) {
+            if (role && [UserRole.ADMIN, UserRole.DIRECTOR, UserRole.HR_MANAGER].includes(role)) {
                 return 'DIRECTOR';
             }
 
             const isUnitManagerInDept = allDepts.some(
-                (d) =>
-                    (d.level === 'DOI' || d.level === 'PHONG_BAN') &&
-                    (d.manager_id === userId || d.deputy_id === userId),
+                (d) => (d.level === 'DOI' || d.level === 'PHONG_BAN') && (d.manager_id === userId || d.deputy_id === userId),
             );
             const isUnitLeadInUD = allUserDepts.some(
                 (ud) =>
                     ud.user_id === userId &&
                     ['LEAD', 'DEPUTY_LEAD'].includes(ud.role_in_dept) &&
-                    (ud.department?.level === 'DOI' ||
-                        ud.department?.level === 'PHONG_BAN'),
+                    (ud.department?.level === 'DOI' || ud.department?.level === 'PHONG_BAN'),
             );
             if (role === UserRole.UNIT_HEAD || isUnitManagerInDept || isUnitLeadInUD) {
                 return 'UNIT_LEAD';
             }
 
-            const isToManagerInDept = allDepts.some(
-                (d) =>
-                    d.level === 'TO' &&
-                    (d.manager_id === userId || d.deputy_id === userId),
-            );
+            const isToManagerInDept = allDepts.some((d) => d.level === 'TO' && (d.manager_id === userId || d.deputy_id === userId));
             const isToLeadInUD = allUserDepts.some(
-                (ud) =>
-                    ud.user_id === userId &&
-                    ['LEAD', 'DEPUTY_LEAD'].includes(ud.role_in_dept) &&
-                    ud.department?.level === 'TO',
+                (ud) => ud.user_id === userId && ['LEAD', 'DEPUTY_LEAD'].includes(ud.role_in_dept) && ud.department?.level === 'TO',
             );
             const isDeviceGroupLeader =
                 allDeviceGroups.some((dg) => dg.leader_id === userId) ||
-                allUserDeviceGroups.some(
-                    (udg) => udg.user_id === userId && udg.is_group_lead,
-                );
-            if (
-                role === UserRole.TEAM_LEAD ||
-                isToManagerInDept ||
-                isToLeadInUD ||
-                isDeviceGroupLeader
-            ) {
+                allUserDeviceGroups.some((udg) => udg.user_id === userId && udg.is_group_lead);
+            if (role === UserRole.TEAM_LEAD || isToManagerInDept || isToLeadInUD || isDeviceGroupLeader) {
                 return 'TEAM_LEAD';
             }
 
@@ -387,15 +381,9 @@ export class TasksService {
         if (meFull?.department?.dept_id) {
             myDeptIdSet.add(meFull.department.dept_id);
         }
-        allUserDepts
-            .filter((ud) => ud.user_id === currentUser.user_id && ud.dept_id)
-            .forEach((ud) => myDeptIdSet.add(ud.dept_id));
+        allUserDepts.filter((ud) => ud.user_id === currentUser.user_id && ud.dept_id).forEach((ud) => myDeptIdSet.add(ud.dept_id));
         allDepts
-            .filter(
-                (d) =>
-                    d.manager_id === currentUser.user_id ||
-                    d.deputy_id === currentUser.user_id,
-            )
+            .filter((d) => d.manager_id === currentUser.user_id || d.deputy_id === currentUser.user_id)
             .forEach((d) => myDeptIdSet.add(d.dept_id));
 
         // Tập hợp các đơn vị được quản lý (Nếu là cấp Đội -> bao gồm cả các Tổ con trực thuộc Đội)
@@ -410,33 +398,35 @@ export class TasksService {
             });
         }
 
-        // Tập hợp Nhóm trang thiết bị (DeviceGroup) của từng group
+        // Lọc danh sách nhân sự đang hoạt động (loại trừ tài khoản đã khóa/ngưng hoạt động)
+        const isUserActive = (u: User) => !u.status || u.status.trim().toLowerCase() === 'active';
+        const activeUsers = allUsers.filter(isUserActive);
+        const activeUserIdSet = new Set<number>(activeUsers.map((u) => u.user_id));
+
+        // Tập hợp Nhóm trang thiết bị (DeviceGroup) của từng group (chỉ tính thành viên đang hoạt động)
         const groupMembersMap = new Map<number, Set<number>>();
         allDeviceGroups.forEach((dg) => {
             const set = new Set<number>();
-            if (dg.leader_id) set.add(dg.leader_id);
+            if (dg.leader_id && activeUserIdSet.has(dg.leader_id)) set.add(dg.leader_id);
             groupMembersMap.set(dg.id, set);
         });
         allUserDeviceGroups.forEach((udg) => {
-            if (!groupMembersMap.has(udg.group_id)) {
-                groupMembersMap.set(udg.group_id, new Set<number>());
+            if (!activeUserIdSet.has(udg.user_id)) return;
+            let groupSet = groupMembersMap.get(udg.group_id);
+            if (!groupSet) {
+                groupSet = new Set<number>();
+                groupMembersMap.set(udg.group_id, groupSet);
             }
-            groupMembersMap.get(udg.group_id)!.add(udg.user_id);
+            groupSet.add(udg.user_id);
         });
 
         // Các nhóm thiết bị mà currentUser trực tiếp tham gia hoặc thuộc Đội quản lý
         const myDeviceGroupIds = new Set<number>();
-        allUserDeviceGroups
-            .filter((udg) => udg.user_id === currentUser.user_id)
-            .forEach((udg) => myDeviceGroupIds.add(udg.group_id));
-        allDeviceGroups
-            .filter((dg) => dg.leader_id === currentUser.user_id)
-            .forEach((dg) => myDeviceGroupIds.add(dg.id));
+        allUserDeviceGroups.filter((udg) => udg.user_id === currentUser.user_id).forEach((udg) => myDeviceGroupIds.add(udg.group_id));
+        allDeviceGroups.filter((dg) => dg.leader_id === currentUser.user_id).forEach((dg) => myDeviceGroupIds.add(dg.id));
 
         if (myTier === 'UNIT_LEAD') {
-            allDeviceGroups
-                .filter((dg) => dg.dept_id && managedDeptIdSet.has(dg.dept_id))
-                .forEach((dg) => myDeviceGroupIds.add(dg.id));
+            allDeviceGroups.filter((dg) => dg.dept_id && managedDeptIdSet.has(dg.dept_id)).forEach((dg) => myDeviceGroupIds.add(dg.id));
         }
 
         // Xác định danh sách user thuộc từng đơn vị
@@ -444,57 +434,49 @@ export class TasksService {
             const s = new Set<number>();
             const uObj = allUsers.find((u) => u.user_id === uId);
             if (uObj?.department?.dept_id) s.add(uObj.department.dept_id);
-            allUserDepts
-                .filter((ud) => ud.user_id === uId && ud.dept_id)
-                .forEach((ud) => s.add(ud.dept_id));
+            allUserDepts.filter((ud) => ud.user_id === uId && ud.dept_id).forEach((ud) => s.add(ud.dept_id));
             return s;
         };
 
         // Xác định danh sách nhân sự được phép nhận việc từ currentUser (Ban Giám đốc -> Đội -> Tổ -> Nhân viên)
+        // BẮT BUỘC CHỈ CHỨA TÀI KHOẢN ĐANG HOẠT ĐỘNG (ACTIVE)
         const assignableUserIdSet = new Set<number>();
         if (myTier === 'DIRECTOR') {
-            allUsers.forEach((u) => assignableUserIdSet.add(u.user_id));
+            activeUsers.forEach((u) => assignableUserIdSet.add(u.user_id));
         } else if (myTier === 'UNIT_LEAD') {
             // Đội (phó) trưởng: giao xuống Đội phó, Tổ (phó) trưởng và Nhân viên trong Đội + các Tổ trực thuộc + Nhóm thiết bị của Đội
-            allUsers.forEach((u) => {
+            activeUsers.forEach((u) => {
                 const targetTier = getUserTier(u.user_id, u.role);
                 if (targetTier === 'DIRECTOR') return; // Không giao ngược lên Ban Giám đốc
                 const uDepts = getUserDeptIds(u.user_id);
-                const inManagedDept = Array.from(uDepts).some((dId) =>
-                    managedDeptIdSet.has(dId),
-                );
-                const inManagedDeviceGroup = Array.from(myDeviceGroupIds).some((gId) =>
-                    groupMembersMap.get(gId)?.has(u.user_id),
-                );
-                if (
-                    u.user_id === currentUser.user_id ||
-                    inManagedDept ||
-                    inManagedDeviceGroup
-                ) {
+                const inManagedDept = Array.from(uDepts).some((dId) => managedDeptIdSet.has(dId));
+                const inManagedDeviceGroup = Array.from(myDeviceGroupIds).some((gId) => groupMembersMap.get(gId)?.has(u.user_id));
+                if (u.user_id === currentUser.user_id || inManagedDept || inManagedDeviceGroup) {
                     assignableUserIdSet.add(u.user_id);
                 }
             });
         } else if (myTier === 'TEAM_LEAD') {
             // Tổ (phó) trưởng / Cán bộ / Nhóm trưởng thiết bị: giao xuống Tổ phó và Nhân viên trong Tổ mình hoặc trong Nhóm thiết bị của mình
-            allUsers.forEach((u) => {
+            activeUsers.forEach((u) => {
                 const targetTier = getUserTier(u.user_id, u.role);
                 if (targetTier === 'DIRECTOR' || targetTier === 'UNIT_LEAD') return; // Không giao ngược lên Đội trưởng / Ban Giám đốc
                 const uDepts = getUserDeptIds(u.user_id);
                 const inMyTo = Array.from(uDepts).some((dId) => {
                     const dept = deptMap.get(dId);
-                    return (
-                        managedDeptIdSet.has(dId) &&
-                        (!dept || dept.level === 'TO')
-                    );
+                    return managedDeptIdSet.has(dId) && (!dept || dept.level === 'TO');
                 });
-                const inMyDeviceGroup = Array.from(myDeviceGroupIds).some((gId) =>
-                    groupMembersMap.get(gId)?.has(u.user_id),
-                );
-                if (
-                    u.user_id === currentUser.user_id ||
-                    inMyTo ||
-                    inMyDeviceGroup
-                ) {
+                const inMyDeviceGroup = Array.from(myDeviceGroupIds).some((gId) => groupMembersMap.get(gId)?.has(u.user_id));
+                if (u.user_id === currentUser.user_id || inMyTo || inMyDeviceGroup) {
+                    assignableUserIdSet.add(u.user_id);
+                }
+            });
+        } else if (myTier === 'STAFF') {
+            // Nhân viên: canCreateTask = false (không tự tạo việc gốc), nhưng khi là người nhận việc chính thì được chia việc con cho đồng đội cùng Tổ / cùng Nhóm thiết bị
+            activeUsers.forEach((u) => {
+                const uDepts = getUserDeptIds(u.user_id);
+                const inSameDept = Array.from(uDepts).some((dId) => myDeptIdSet.has(dId));
+                const inSameDeviceGroup = Array.from(myDeviceGroupIds).some((gId) => groupMembersMap.get(gId)?.has(u.user_id));
+                if (u.user_id === currentUser.user_id || inSameDept || inSameDeviceGroup) {
                     assignableUserIdSet.add(u.user_id);
                 }
             });
@@ -505,12 +487,7 @@ export class TasksService {
             .map((dg) => {
                 const isLead =
                     dg.leader_id === currentUser.user_id ||
-                    allUserDeviceGroups.some(
-                        (udg) =>
-                            udg.group_id === dg.id &&
-                            udg.user_id === currentUser.user_id &&
-                            udg.is_group_lead,
-                    );
+                    allUserDeviceGroups.some((udg) => udg.group_id === dg.id && udg.user_id === currentUser.user_id && udg.is_group_lead);
                 return {
                     id: dg.id,
                     name: dg.name,
@@ -543,17 +520,8 @@ export class TasksService {
 
     private async getAccessibleTasksForUser(currentUser: User): Promise<WorkTask[]> {
         const allTasks = await this.taskRepo.find({
-            relations: [
-                'assigner',
-                'assignee',
-                'department',
-                'device_group',
-                'project',
-                'parent',
-                'subtasks',
-                'subtasks.assignee',
-            ],
-            order: { created_at: 'DESC' },
+            relations: ['assigner', 'assignee', 'department', 'device_group', 'project', 'parent', 'subtasks', 'subtasks.assignee'],
+            order: {created_at: 'DESC'},
         });
 
         const ctx = await this.getAssignmentContext(currentUser);
@@ -563,9 +531,7 @@ export class TasksService {
 
         const managedDeptSet = new Set<number>(ctx.managedDeptIds);
         const assignableUserSet = new Set<number>(ctx.assignableUserIds);
-        const myDeviceGroupIdSet = new Set<number>(
-            ctx.myDeviceGroups.map((dg) => dg.id),
-        );
+        const myDeviceGroupIdSet = new Set<number>(ctx.myDeviceGroups.map((dg) => dg.id));
 
         // Tập hợp toàn bộ đồng đội nằm trong CÙNG Nhóm trang thiết bị (DeviceGroup) với currentUser
         const peerUserIdsInMyDeviceGroups = new Set<number>();
@@ -577,16 +543,10 @@ export class TasksService {
 
         return allTasks.filter((t) => {
             // 1. Việc trực tiếp của bản thân (Người giao, Người nhận, hoặc Người phối hợp)
-            if (
-                t.assigner_id === currentUser.user_id ||
-                t.assignee_id === currentUser.user_id
-            ) {
+            if (t.assigner_id === currentUser.user_id || t.assignee_id === currentUser.user_id) {
                 return true;
             }
-            if (
-                Array.isArray(t.collaborators) &&
-                t.collaborators.some((c) => c.user_id === currentUser.user_id)
-            ) {
+            if (Array.isArray(t.collaborators) && t.collaborators.some((c) => c.user_id === currentUser.user_id)) {
                 return true;
             }
 
@@ -598,20 +558,14 @@ export class TasksService {
             if (peerUserIdsInMyDeviceGroups.has(t.assignee_id)) {
                 return true;
             }
-            if (
-                Array.isArray(t.collaborators) &&
-                t.collaborators.some((c) => peerUserIdsInMyDeviceGroups.has(c.user_id))
-            ) {
+            if (Array.isArray(t.collaborators) && t.collaborators.some((c) => peerUserIdsInMyDeviceGroups.has(c.user_id))) {
                 return true;
             }
 
             // 3. Phân cấp quản lý Đội (UNIT_LEAD) -> Tổ (TEAM_LEAD) -> Nhân viên
             if (ctx.hierarchyTier === 'UNIT_LEAD') {
                 if (t.dept_id && managedDeptSet.has(t.dept_id)) return true;
-                if (
-                    assignableUserSet.has(t.assignee_id) ||
-                    assignableUserSet.has(t.assigner_id)
-                ) {
+                if (assignableUserSet.has(t.assignee_id) || assignableUserSet.has(t.assigner_id)) {
                     return true;
                 }
             } else if (ctx.hierarchyTier === 'TEAM_LEAD') {
@@ -619,11 +573,7 @@ export class TasksService {
                 if (assignableUserSet.has(t.assignee_id)) {
                     return true;
                 }
-                if (
-                    t.dept_id &&
-                    managedDeptSet.has(t.dept_id) &&
-                    assignableUserSet.has(t.assigner_id)
-                ) {
+                if (t.dept_id && managedDeptSet.has(t.dept_id) && assignableUserSet.has(t.assigner_id)) {
                     return true;
                 }
             }
@@ -660,30 +610,19 @@ export class TasksService {
         ]);
 
         const now = new Date();
-        const isOverdue = (t: WorkTask) =>
-            !['COMPLETED', 'CANCELLED'].includes(t.status) && new Date(t.deadline) < now;
+        const isOverdue = (t: WorkTask) => !['COMPLETED', 'CANCELLED'].includes(t.status) && new Date(t.deadline) < now;
 
-        const newCount = accessibleTasks.filter(
-            (t) => t.status === 'NEW' || t.status === 'CHANGE_REQUESTED',
-        ).length;
-        const inProgress = accessibleTasks.filter(
-            (t) => t.status === 'IN_PROGRESS' || t.status === 'REJECTED',
-        ).length;
+        const newCount = accessibleTasks.filter((t) => t.status === 'NEW' || t.status === 'CHANGE_REQUESTED').length;
+        const inProgress = accessibleTasks.filter((t) => t.status === 'IN_PROGRESS' || t.status === 'REJECTED').length;
         const pendingReview = accessibleTasks.filter((t) => t.status === 'PENDING_REVIEW').length;
         const completed = accessibleTasks.filter((t) => t.status === 'COMPLETED').length;
         const overdue = accessibleTasks.filter(isOverdue).length;
         const myAssigned = accessibleTasks.filter(
-            (t) =>
-                t.assignee_id === currentUser.user_id &&
-                !['COMPLETED', 'CANCELLED'].includes(t.status),
+            (t) => t.assignee_id === currentUser.user_id && !['COMPLETED', 'CANCELLED'].includes(t.status),
         ).length;
-        const myCreated = accessibleTasks.filter(
-            (t) => t.assigner_id === currentUser.user_id,
-        ).length;
+        const myCreated = accessibleTasks.filter((t) => t.assigner_id === currentUser.user_id).length;
         const waitingMyReview = accessibleTasks.filter(
-            (t) =>
-                t.assigner_id === currentUser.user_id &&
-                (t.status === 'PENDING_REVIEW' || t.status === 'CHANGE_REQUESTED'),
+            (t) => t.assigner_id === currentUser.user_id && (t.status === 'PENDING_REVIEW' || t.status === 'CHANGE_REQUESTED'),
         ).length;
 
         const stats = {
@@ -719,16 +658,12 @@ export class TasksService {
                 case 'COLLABORATING':
                 case 'MY_COLLABORATING':
                     filtered = filtered.filter(
-                        (t) =>
-                            Array.isArray(t.collaborators) &&
-                            t.collaborators.some((c) => c.user_id === currentUser.user_id),
+                        (t) => Array.isArray(t.collaborators) && t.collaborators.some((c) => c.user_id === currentUser.user_id),
                     );
                     break;
                 case 'PENDING_MY_REVIEW':
                     filtered = filtered.filter(
-                        (t) =>
-                            t.assigner_id === currentUser.user_id &&
-                            (t.status === 'PENDING_REVIEW' || t.status === 'CHANGE_REQUESTED'),
+                        (t) => t.assigner_id === currentUser.user_id && (t.status === 'PENDING_REVIEW' || t.status === 'CHANGE_REQUESTED'),
                     );
                     break;
                 case 'OVERDUE':
@@ -753,15 +688,9 @@ export class TasksService {
         }
         if (query.device_group_id) {
             const targetGroupId = Number(query.device_group_id);
-            const targetGroup = assignmentContext.allDeviceGroups.find(
-                (dg) => dg.id === targetGroupId,
-            );
+            const targetGroup = assignmentContext.allDeviceGroups.find((dg) => dg.id === targetGroupId);
             const groupMemberSet = new Set<number>(targetGroup?.member_ids || []);
-            filtered = filtered.filter(
-                (t) =>
-                    t.device_group_id === targetGroupId ||
-                    groupMemberSet.has(t.assignee_id),
-            );
+            filtered = filtered.filter((t) => t.device_group_id === targetGroupId || groupMemberSet.has(t.assignee_id));
         }
         if (query.project_id) {
             filtered = filtered.filter((t) => t.project_id === Number(query.project_id));
@@ -785,12 +714,12 @@ export class TasksService {
             );
         }
 
-        return { items: filtered, tasks: filtered, stats, assignmentContext };
+        return {items: filtered, tasks: filtered, stats, assignmentContext};
     }
 
     async findOneTask(id: number): Promise<WorkTask> {
         const task = await this.taskRepo.findOne({
-            where: { id },
+            where: {id},
             relations: [
                 'assigner',
                 'assignee',
@@ -815,115 +744,160 @@ export class TasksService {
                     c.type = c.action_type === 'COMMENT' ? 'COMMENT' : 'SYSTEM_LOG';
                 }
             });
-            task.comments.sort(
-                (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-            );
+            task.comments.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
         }
         return task;
     }
 
     // ═══════════════════ STEP 1: CREATE / ASSIGN TASK ═══════════════════
     async createTask(currentUser: User, dto: CreateTaskDto): Promise<WorkTask> {
-        if (!dto.title || !dto.assignee_id || !dto.deadline) {
-            throw new BadRequestException(
-                'Vui lòng nhập đầy đủ Tiêu đề, Người nhận và Hạn hoàn thành',
-            );
+        const rawIds = Array.isArray(dto.assignee_ids) && dto.assignee_ids.length > 0 ? dto.assignee_ids : dto.assignee_id ? [dto.assignee_id] : [];
+        const targetAssigneeIds = Array.from(new Set(rawIds.map((id) => Number(id)).filter((id) => !isNaN(id) && id > 0)));
+
+        if (!dto.title || targetAssigneeIds.length === 0 || !dto.deadline) {
+            throw new BadRequestException('Vui lòng nhập đầy đủ Tiêu đề, Người nhận việc và Hạn hoàn thành');
         }
 
         // Kiểm tra phân cấp quyền giao việc: Ban Giám đốc -> Đội (phó) trưởng -> Tổ (phó) trưởng -> Nhân viên
         const assignCtx = await this.getAssignmentContext(currentUser);
-        if (!assignCtx.canCreateTask) {
-            throw new ForbiddenException(
-                'Chỉ Ban Giám đốc, Đội trưởng/Đội phó, Tổ trưởng/Tổ phó (Cán bộ) mới có quyền giao việc mới',
-            );
-        }
-        if (!assignCtx.assignableUserIds.includes(Number(dto.assignee_id))) {
-            throw new ForbiddenException(
-                'Phân cấp giao việc: Bạn chỉ được phép giao việc cho cấp dưới trực thuộc Đội / Tổ hoặc Nhóm trang thiết bị do mình phụ trách (Ban Giám đốc → Đội → Tổ → Nhân viên)',
-            );
-        }
 
-        const assignee = await this.userRepo.findOne({
-            where: { user_id: Number(dto.assignee_id) },
-            relations: ['department', 'user_departments', 'user_device_groups'],
-        });
-        if (!assignee) throw new NotFoundException('Không tìm thấy người nhận việc');
-
-        const code = await this.generateTaskCode();
-        const collaborators = await this.buildCollaborators(
-            dto.collaborator_ids,
-            dto.collaborators,
-        );
-
-        let deptId = dto.dept_id || null;
-        if (!deptId) {
-            const primaryUd = assignee.user_departments?.find((ud) => ud.is_primary);
-            deptId = primaryUd?.dept_id || assignee.department?.dept_id || null;
-        }
-
-        // Tự động gắn Nhóm trang thiết bị (device_group_id) nếu không chọn thủ công nhưng người nhận thuộc 1 nhóm thiết bị
-        let deviceGroupId = dto.device_group_id || null;
-        if (!deviceGroupId && assignee.user_device_groups?.length) {
-            deviceGroupId = assignee.user_device_groups[0].group_id;
-        }
-
-        const task = this.taskRepo.create({
-            code,
-            title: dto.title.trim(),
-            description: dto.description || '',
-            task_type: dto.task_type || 'DIRECTIVE',
-            priority: dto.priority || 'NORMAL',
-            status: 'NEW',
-            progress: 0,
-            project_id: dto.project_id || null,
-            parent_id: dto.parent_id || null,
-            assigner_id: currentUser.user_id,
-            assignee_id: Number(dto.assignee_id),
-            dept_id: deptId,
-            device_group_id: deviceGroupId,
-            collaborators,
-            checklist: dto.checklist || [],
-            tags: dto.tags || [],
-            attachments: dto.attachments || [],
-            start_date: dto.start_date ? new Date(dto.start_date) : new Date(),
-            deadline: new Date(dto.deadline),
-            kpi_weight: dto.kpi_weight !== undefined ? Number(dto.kpi_weight) : 1.0,
-        });
-
-        const saved = await this.taskRepo.save(task);
-
-        await this.logActivity(
-            saved.id,
-            currentUser.user_id,
-            'CREATED',
-            `Đã tạo và giao công việc cho ${assignee.name} (Hạn: ${new Date(
-                dto.deadline,
-            ).toLocaleDateString('vi-VN')})`,
-        );
-
+        let isParentAssignee = false;
         if (dto.parent_id) {
-            await this.logActivity(
-                Number(dto.parent_id),
-                currentUser.user_id,
-                'SUBTASK_CREATED',
-                `Đã chia nhỏ đầu việc con [${saved.code}] "${saved.title}" cho ${assignee.name}`,
+            const parentTask = await this.taskRepo.findOne({
+                where: {id: Number(dto.parent_id)},
+            });
+            if (parentTask && parentTask.assignee_id === currentUser.user_id) {
+                isParentAssignee = true;
+            }
+        }
+
+        if (!assignCtx.canCreateTask && !isParentAssignee) {
+            throw new ForbiddenException(
+                'Chỉ Ban Giám đốc, Đội trưởng/Đội phó, Tổ trưởng/Tổ phó (Cán bộ) hoặc Người chịu trách nhiệm chính của công việc mới có quyền chia việc con',
             );
         }
 
-        const notifyIds = [
-            Number(dto.assignee_id),
-            ...collaborators.map((c) => c.user_id),
-        ];
-        await this.notifyUsers(
-            notifyIds,
-            `📋 [Giao việc mới - ${saved.code}] ${
-                currentUser.name || 'Lãnh đạo'
-            } đã giao cho bạn công việc: "${saved.title}"`,
-            currentUser.user_id,
-            `[Giao việc mới] ${saved.code} - ${saved.title}`,
-        );
+        for (const targetId of targetAssigneeIds) {
+            if (!assignCtx.assignableUserIds.includes(targetId)) {
+                throw new ForbiddenException(
+                    `Phân cấp giao việc: Nhân sự #${targetId} nằm ngoài phạm vi Đội / Tổ hoặc Nhóm trang thiết bị do bạn phụ trách`,
+                );
+            }
+        }
 
-        return this.findOneTask(saved.id);
+        const collaborators = await this.buildCollaborators(dto.collaborator_ids, dto.collaborators);
+
+        const createdTasks: WorkTask[] = [];
+
+        for (const targetId of targetAssigneeIds) {
+            const assignee = await this.userRepo.findOne({
+                where: {user_id: targetId},
+                relations: ['department', 'user_departments', 'user_device_groups'],
+            });
+            if (!assignee) continue;
+            if (assignee.status && assignee.status.trim().toLowerCase() !== 'active') {
+                throw new BadRequestException(`Tài khoản "${assignee.name || targetId}" đã ngưng hoạt động, không thể phân công công việc`);
+            }
+
+            const code = await this.generateTaskCode();
+
+            let deptId = dto.dept_id || null;
+            if (!deptId) {
+                const primaryUd = assignee.user_departments?.find((ud) => ud.is_primary);
+                deptId = primaryUd?.dept_id || assignee.department?.dept_id || null;
+            }
+
+            // Tự động gắn Nhóm trang thiết bị (device_group_id) nếu không chọn thủ công nhưng người nhận thuộc 1 nhóm thiết bị
+            let deviceGroupId = dto.device_group_id || null;
+            if (!deviceGroupId && assignee.user_device_groups?.length) {
+                deviceGroupId = assignee.user_device_groups[0].group_id;
+            }
+
+            // Clone checklist with unique IDs for this specific assignee
+            const clonedChecklist = (dto.checklist || []).map((item, idx) => ({
+                id: `chk_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+                title: item.title,
+                completed: false,
+            }));
+
+            const task = this.taskRepo.create({
+                code,
+                title: dto.title.trim(),
+                description: dto.description || '',
+                task_type: dto.task_type || 'DIRECTIVE',
+                priority: dto.priority || 'NORMAL',
+                status: 'NEW',
+                progress: 0,
+                project_id: dto.project_id || null,
+                parent_id: dto.parent_id || null,
+                assigner_id: currentUser.user_id,
+                assignee_id: targetId,
+                dept_id: deptId,
+                device_group_id: deviceGroupId,
+                collaborators,
+                checklist: clonedChecklist,
+                tags: dto.tags || [],
+                attachments: dto.attachments || [],
+                start_date: dto.start_date ? new Date(dto.start_date) : new Date(),
+                deadline: new Date(dto.deadline),
+                kpi_weight: dto.kpi_weight !== undefined ? Number(dto.kpi_weight) : 1.0,
+            });
+
+            const saved = await this.taskRepo.save(task);
+            createdTasks.push(saved);
+
+            const batchNote = targetAssigneeIds.length > 1 ? ` (Đợt giao hàng loạt cho ${targetAssigneeIds.length} nhân sự)` : '';
+
+            await this.logActivity(
+                saved.id,
+                currentUser.user_id,
+                'CREATED',
+                `Đã tạo và giao công việc${batchNote} cho ${assignee.name} (Hạn: ${new Date(dto.deadline).toLocaleDateString('vi-VN')})`,
+            );
+
+            if (dto.parent_id) {
+                await this.logActivity(
+                    Number(dto.parent_id),
+                    currentUser.user_id,
+                    'SUBTASK_CREATED',
+                    `Đã chia nhỏ đầu việc con [${saved.code}] "${saved.title}" cho ${assignee.name}`,
+                );
+            }
+
+            const notifyIds = [targetId, ...collaborators.map((c) => c.user_id)];
+            await this.notifyUsers(
+                notifyIds,
+                `📋 [Giao việc mới - ${saved.code}] ${currentUser.name || 'Lãnh đạo'} đã giao cho bạn công việc: "${saved.title}"`,
+                targetId === currentUser.user_id ? undefined : currentUser.user_id,
+                `[Giao việc mới] ${saved.code} - ${saved.title}`,
+                {
+                    taskId: saved.id,
+                    taskCode: saved.code,
+                    actionType: 'NEW_TASK',
+                    title: 'Giao việc mới',
+                },
+            );
+
+            // Bắn popup realtime xác nhận giao việc cho người giao việc (nếu giao cho người khác)
+            if (targetId !== currentUser.user_id) {
+                this.gateway.sendToUser(currentUser.user_id, {
+                    taskId: saved.id,
+                    taskCode: saved.code,
+                    actionType: 'TASK_DISPATCHED',
+                    title: 'Giao việc thành công',
+                    message: `Đã giao thành công công việc [${saved.code}] "${saved.title}" cho ${assignee.name}`,
+                    timestamp: new Date().toISOString(),
+                });
+            }
+        }
+
+        if (createdTasks.length === 0) {
+            throw new BadRequestException('Không thể khởi tạo công việc cho danh sách nhân sự đã chọn');
+        }
+
+        const firstTask = await this.findOneTask(createdTasks[0].id);
+        (firstTask as any).batchCount = createdTasks.length;
+        return firstTask;
     }
 
     // ═══════════════════ STEP 2: ACCEPT OR REQUEST CHANGE ═══════════════════
@@ -939,17 +913,11 @@ export class TasksService {
     ): Promise<WorkTask> {
         const task = await this.findOneTask(id);
 
-        const isCollaborator =
-            Array.isArray(task.collaborators) &&
-            task.collaborators.some((c) => c.user_id === currentUser.user_id);
+        const isCollaborator = Array.isArray(task.collaborators) && task.collaborators.some((c) => c.user_id === currentUser.user_id);
         const isAssigneeOrAdmin =
-            task.assignee_id === currentUser.user_id ||
-            isCollaborator ||
-            [UserRole.ADMIN, UserRole.DIRECTOR].includes(currentUser.role);
+            task.assignee_id === currentUser.user_id || isCollaborator || [UserRole.ADMIN, UserRole.DIRECTOR].includes(currentUser.role);
         if (!isAssigneeOrAdmin) {
-            throw new ForbiddenException(
-                'Chỉ người nhận việc mới có quyền xác nhận tiếp nhận công việc này',
-            );
+            throw new ForbiddenException('Chỉ người nhận việc mới có quyền xác nhận tiếp nhận công việc này');
         }
 
         if (dto.action === 'ACCEPT') {
@@ -965,25 +933,27 @@ export class TasksService {
                 task.id,
                 currentUser.user_id,
                 'ACCEPTED',
-                dto.note
-                    ? `Đã tiếp nhận công việc. Ghi chú: ${dto.note}`
-                    : 'Đã xác nhận tiếp nhận và bắt đầu thực hiện công việc.',
+                dto.note ? `Đã tiếp nhận công việc. Ghi chú: ${dto.note}` : 'Đã xác nhận tiếp nhận và bắt đầu thực hiện công việc.',
             );
 
             await this.notifyUsers(
                 [task.assigner_id],
-                `✅ [${task.code}] ${
-                    currentUser.name || task.assignee?.name
-                } đã tiếp nhận công việc "${task.title}"`,
+                `✅ [Tiếp nhận - ${task.code}] ${currentUser.name || task.assignee?.name} đã tiếp nhận công việc "${task.title}"`,
                 currentUser.user_id,
+                `[Tiếp nhận công việc] ${task.code}`,
+                {
+                    taskId: task.id,
+                    taskCode: task.code,
+                    actionType: 'TASK_ACCEPTED',
+                    title: 'Tiếp nhận công việc',
+                },
             );
         } else {
             const reasonText = (dto.reason || dto.note || '').trim();
             if (!reasonText) {
                 throw new BadRequestException('Vui lòng nhập lý do đề nghị điều chỉnh');
             }
-            const requesterName =
-                currentUser.name || task.assignee?.name || 'Người nhận việc';
+            const requesterName = currentUser.name || task.assignee?.name || 'Người nhận việc';
             const oldDeadlineStr = new Date(task.deadline).toLocaleString('vi-VN', {
                 hour: '2-digit',
                 minute: '2-digit',
@@ -1004,9 +974,7 @@ export class TasksService {
             task.status = 'CHANGE_REQUESTED';
             task.change_request_note = reasonText;
             task.change_request_reason = reasonText;
-            task.proposed_deadline = dto.proposed_deadline
-                ? new Date(dto.proposed_deadline)
-                : null;
+            task.proposed_deadline = dto.proposed_deadline ? new Date(dto.proposed_deadline) : null;
             await this.taskRepo.save(task);
 
             await this.logActivity(
@@ -1020,6 +988,13 @@ export class TasksService {
                 [task.assigner_id],
                 `⚠️ [Xin gia hạn - ${task.code}] ${requesterName} đề nghị điều chỉnh hạn công việc "${task.title}" (${oldDeadlineStr} → ${proposedDateStr})`,
                 currentUser.user_id,
+                `[Xin gia hạn] ${task.code}`,
+                {
+                    taskId: task.id,
+                    taskCode: task.code,
+                    actionType: 'REQUEST_CHANGE',
+                    title: 'Đề nghị gia hạn / Điều chỉnh',
+                },
             );
         }
 
@@ -1037,19 +1012,12 @@ export class TasksService {
         },
     ): Promise<WorkTask> {
         const task = await this.findOneTask(id);
-        const isAssignerOrAdmin =
-            task.assigner_id === currentUser.user_id ||
-            [UserRole.ADMIN, UserRole.DIRECTOR].includes(currentUser.role);
+        const isAssignerOrAdmin = task.assigner_id === currentUser.user_id || [UserRole.ADMIN, UserRole.DIRECTOR].includes(currentUser.role);
         if (!isAssignerOrAdmin) {
-            throw new ForbiddenException(
-                'Chỉ người giao việc mới có quyền phản hồi đề nghị điều chỉnh',
-            );
+            throw new ForbiddenException('Chỉ người giao việc mới có quyền phản hồi đề nghị điều chỉnh');
         }
 
-        const isApproved =
-            dto.approved !== undefined
-                ? dto.approved
-                : dto.decision === 'APPROVE_CHANGE';
+        const isApproved = dto.approved !== undefined ? dto.approved : dto.decision === 'APPROVE_CHANGE';
 
         const oldDeadlineStr = new Date(task.deadline).toLocaleString('vi-VN', {
             hour: '2-digit',
@@ -1098,9 +1066,7 @@ export class TasksService {
         } else {
             // Khi từ chối gia hạn: quay về trạng thái NEW (Mới giao - Chờ nhân viên xác nhận tiếp nhận),
             // KHÔNG tự động chuyển sang IN_PROGRESS thay nhân viên.
-            const rejectSummary = `❌ Đã từ chối gia hạn (Giữ hạn gốc ${oldDeadlineStr})${
-                dto.note ? ` — Chỉ đạo: ${dto.note}` : ''
-            }`;
+            const rejectSummary = `❌ Đã từ chối gia hạn (Giữ hạn gốc ${oldDeadlineStr})${dto.note ? ` — Chỉ đạo: ${dto.note}` : ''}`;
             task.status = 'NEW';
             task.proposed_deadline = null;
             task.change_request_reason = rejectSummary;
@@ -1139,13 +1105,8 @@ export class TasksService {
     ): Promise<WorkTask> {
         const task = await this.findOneTask(id);
 
-        if (
-            (dto.checklist !== undefined || dto.progress !== undefined) &&
-            (task.status === 'NEW' || task.status === 'CHANGE_REQUESTED')
-        ) {
-            throw new BadRequestException(
-                'Vui lòng bấm "Tiếp nhận công việc" trước khi cập nhật tiến độ hoặc tích chọn Checklist',
-            );
+        if ((dto.checklist !== undefined || dto.progress !== undefined) && (task.status === 'NEW' || task.status === 'CHANGE_REQUESTED')) {
+            throw new BadRequestException('Vui lòng bấm "Tiếp nhận công việc" trước khi cập nhật tiến độ hoặc tích chọn Checklist');
         }
 
         if (dto.checklist !== undefined) {
@@ -1165,12 +1126,7 @@ export class TasksService {
         await this.taskRepo.save(task);
 
         if (dto.note) {
-            await this.logActivity(
-                task.id,
-                currentUser.user_id,
-                'PROGRESS_UPDATE',
-                `Cập nhật tiến độ (${task.progress}%): ${dto.note}`,
-            );
+            await this.logActivity(task.id, currentUser.user_id, 'PROGRESS_UPDATE', `Cập nhật tiến độ (${task.progress}%): ${dto.note}`);
         } else {
             this.gateway.notifyTaskUpdate({
                 taskId: task.id,
@@ -1194,9 +1150,7 @@ export class TasksService {
     ): Promise<WorkTask> {
         const task = await this.findOneTask(id);
 
-        const noteText = (
-            dto.completion_note || 'Đã hoàn thành toàn bộ nội dung công việc.'
-        ).trim();
+        const noteText = (dto.completion_note || 'Đã hoàn thành toàn bộ nội dung công việc.').trim();
 
         task.status = 'PENDING_REVIEW';
         task.progress = 100;
@@ -1216,16 +1170,35 @@ export class TasksService {
             currentUser.user_id,
             'SUBMITTED',
             `Báo cáo hoàn thành (100%) và trình duyệt nghiệm thu: ${task.completion_note}`,
-            incomingFiles.map((a) => ({ name: a.name, url: a.url })),
+            incomingFiles.map((a) => ({name: a.name, url: a.url})),
         );
 
-        await this.notifyUsers(
-            [task.assigner_id],
-            `📩 [Chờ duyệt - ${task.code}] ${
-                currentUser.name || task.assignee?.name
-            } đã báo cáo hoàn thành công việc "${task.title}"`,
-            currentUser.user_id,
-        );
+        if (task.assigner_id !== currentUser.user_id) {
+            await this.notifyUsers(
+                [task.assigner_id],
+                `🚀 [Báo cáo hoàn thành - ${task.code}] ${currentUser.name || task.assignee?.name} đã báo cáo hoàn thành công việc "${
+                    task.title
+                }". Chờ nghiệm thu.`,
+                currentUser.user_id,
+                `[Báo cáo hoàn thành] ${task.code} - ${task.title}`,
+                {
+                    taskId: task.id,
+                    taskCode: task.code,
+                    actionType: 'SUBMIT_FOR_REVIEW',
+                    title: 'Báo cáo hoàn thành',
+                },
+            );
+        }
+
+        // Bắn popup realtime xác nhận nộp báo cáo cho chính người báo cáo
+        this.gateway.sendToUser(currentUser.user_id, {
+            taskId: task.id,
+            taskCode: task.code,
+            actionType: 'SUBMIT_FOR_REVIEW',
+            title: 'Nộp báo cáo thành công',
+            message: `Bạn đã nộp báo cáo hoàn thành công việc [${task.code}] "${task.title}". Đang chờ duyệt nghiệm thu.`,
+            timestamp: new Date().toISOString(),
+        });
 
         return this.findOneTask(task.id);
     }
@@ -1242,13 +1215,9 @@ export class TasksService {
         },
     ): Promise<WorkTask> {
         const task = await this.findOneTask(id);
-        const isAssignerOrLeader =
-            task.assigner_id === currentUser.user_id ||
-            [UserRole.ADMIN, UserRole.DIRECTOR].includes(currentUser.role);
+        const isAssignerOrLeader = task.assigner_id === currentUser.user_id || [UserRole.ADMIN, UserRole.DIRECTOR].includes(currentUser.role);
         if (!isAssignerOrLeader) {
-            throw new ForbiddenException(
-                'Chỉ người giao việc hoặc Ban Giám đốc mới có quyền duyệt nghiệm thu',
-            );
+            throw new ForbiddenException('Chỉ người giao việc hoặc Ban Giám đốc mới có quyền duyệt nghiệm thu');
         }
 
         const effectiveDecision = dto.action || dto.decision || 'APPROVE';
@@ -1260,17 +1229,11 @@ export class TasksService {
             task.completed_at = completedAt;
             task.review_note = dto.review_note || 'Đồng ý nghiệm thu hoàn thành.';
 
-            const checkDate = task.submitted_at
-                ? new Date(task.submitted_at)
-                : completedAt;
+            const checkDate = task.submitted_at ? new Date(task.submitted_at) : completedAt;
             const isOnTime = checkDate <= new Date(task.deadline);
             const weight = Number(task.kpi_weight) || 1.0;
             task.kpi_score =
-                dto.kpi_score !== undefined
-                    ? Number(dto.kpi_score)
-                    : isOnTime
-                    ? Number((weight * 10).toFixed(1))
-                    : Number((weight * 5).toFixed(1));
+                dto.kpi_score !== undefined ? Number(dto.kpi_score) : isOnTime ? Number((weight * 10).toFixed(1)) : Number((weight * 5).toFixed(1));
 
             await this.taskRepo.save(task);
 
@@ -1278,23 +1241,38 @@ export class TasksService {
                 task.id,
                 currentUser.user_id,
                 'APPROVED',
-                `Đã phê duyệt hoàn thành công việc (${
-                    isOnTime ? 'Đúng hạn' : 'Trễ hạn'
-                } - Điểm KPI: +${task.kpi_score}). ${
+                `Đã phê duyệt hoàn thành công việc (${isOnTime ? 'Đúng hạn' : 'Trễ hạn'} - Điểm KPI: +${task.kpi_score}). ${
                     dto.review_note ? `Nhận xét: ${dto.review_note}` : ''
                 }`,
             );
 
-            await this.notifyUsers(
-                [task.assignee_id],
-                `🎉 [Đã duyệt hoàn thành - ${task.code}] Công việc "${task.title}" đã được nghiệm thu (+${task.kpi_score} điểm KPI)`,
-                currentUser.user_id,
-            );
+            if (task.assignee_id !== currentUser.user_id) {
+                await this.notifyUsers(
+                    [task.assignee_id],
+                    `🏆 [Nghiệm thu hoàn tất - ${task.code}] Công việc "${task.title}" đã được nghiệm thu (+${task.kpi_score} điểm KPI)`,
+                    currentUser.user_id,
+                    `[Nghiệm thu hoàn tất] ${task.code}`,
+                    {
+                        taskId: task.id,
+                        taskCode: task.code,
+                        actionType: 'TASK_APPROVED',
+                        title: 'Nghiệm thu hoàn tất',
+                    },
+                );
+            }
+
+            // Bắn popup xác nhận cho người duyệt
+            this.gateway.sendToUser(currentUser.user_id, {
+                taskId: task.id,
+                taskCode: task.code,
+                actionType: 'TASK_APPROVED',
+                title: 'Nghiệm thu thành công',
+                message: `Đã nghiệm thu hoàn tất công việc [${task.code}] cho ${task.assignee?.name || 'nhân sự'} (+${task.kpi_score} KPI)`,
+                timestamp: new Date().toISOString(),
+            });
         } else {
             if (!dto.review_note || !dto.review_note.trim()) {
-                throw new BadRequestException(
-                    'Vui lòng nhập lý do từ chối / trả lại để người nhận khắc phục',
-                );
+                throw new BadRequestException('Vui lòng nhập lý do từ chối / trả lại để người nhận khắc phục');
             }
             task.status = 'REJECTED';
             task.progress = 80;
@@ -1308,11 +1286,30 @@ export class TasksService {
                 `Từ chối nghiệm thu & yêu cầu thực hiện lại. Lý do: ${task.review_note}`,
             );
 
-            await this.notifyUsers(
-                [task.assignee_id],
-                `🔄 [Yêu cầu làm lại - ${task.code}] Công việc "${task.title}" bị trả lại: ${task.review_note}`,
-                currentUser.user_id,
-            );
+            if (task.assignee_id !== currentUser.user_id) {
+                await this.notifyUsers(
+                    [task.assignee_id],
+                    `🔄 [Yêu cầu làm lại - ${task.code}] Công việc "${task.title}" bị trả lại: ${task.review_note}`,
+                    currentUser.user_id,
+                    `[Yêu cầu làm lại] ${task.code}`,
+                    {
+                        taskId: task.id,
+                        taskCode: task.code,
+                        actionType: 'TASK_REJECTED',
+                        title: 'Yêu cầu làm lại công việc',
+                    },
+                );
+            }
+
+            // Bắn popup xác nhận cho người duyệt
+            this.gateway.sendToUser(currentUser.user_id, {
+                taskId: task.id,
+                taskCode: task.code,
+                actionType: 'TASK_REJECTED',
+                title: 'Đã yêu cầu làm lại',
+                message: `Đã trả lại công việc [${task.code}] với lý do: "${task.review_note}"`,
+                timestamp: new Date().toISOString(),
+            });
         }
 
         return this.findOneTask(task.id);
@@ -1323,6 +1320,12 @@ export class TasksService {
         const task = await this.findOneTask(id);
 
         if (dto.assignee_id !== undefined && Number(dto.assignee_id) !== task.assignee_id) {
+            const assignee = await this.userRepo.findOne({
+                where: {user_id: Number(dto.assignee_id)},
+            });
+            if (!assignee || (assignee.status && assignee.status.trim().toLowerCase() !== 'active')) {
+                throw new BadRequestException('Tài khoản đã ngưng hoạt động, không thể bàn giao công việc');
+            }
             const assignCtx = await this.getAssignmentContext(currentUser);
             if (!assignCtx.assignableUserIds.includes(Number(dto.assignee_id))) {
                 throw new ForbiddenException(
@@ -1342,10 +1345,7 @@ export class TasksService {
         if (dto.dept_id !== undefined) task.dept_id = dto.dept_id;
         if (dto.device_group_id !== undefined) task.device_group_id = dto.device_group_id;
         if (dto.collaborator_ids !== undefined || dto.collaborators !== undefined) {
-            task.collaborators = await this.buildCollaborators(
-                dto.collaborator_ids,
-                dto.collaborators,
-            );
+            task.collaborators = await this.buildCollaborators(dto.collaborator_ids, dto.collaborators);
         }
         if (dto.checklist !== undefined) task.checklist = dto.checklist;
         if (dto.tags !== undefined) task.tags = dto.tags;
@@ -1363,49 +1363,40 @@ export class TasksService {
         return this.findOneTask(task.id);
     }
 
-    async addComment(
-        currentUser: User,
-        id: number,
-        dto: { content: string; attachments?: Array<{ name: string; url: string }> },
-    ): Promise<TaskComment> {
+    async addComment(currentUser: User, id: number, dto: {content: string; attachments?: Array<{name: string; url: string}>}): Promise<TaskComment> {
         const task = await this.findOneTask(id);
         if (!dto.content || !dto.content.trim()) {
             throw new BadRequestException('Nội dung trao đổi không được để trống');
         }
 
-        const savedComment = await this.logActivity(
-            task.id,
-            currentUser.user_id,
-            'COMMENT',
-            dto.content.trim(),
-            dto.attachments || [],
-        );
+        const savedComment = await this.logActivity(task.id, currentUser.user_id, 'COMMENT', dto.content.trim(), dto.attachments || []);
 
         const participantIds = [
             task.assigner_id,
             task.assignee_id,
-            ...(Array.isArray(task.collaborators)
-                ? task.collaborators.map((c) => c.user_id)
-                : []),
+            ...(Array.isArray(task.collaborators) ? task.collaborators.map((c) => c.user_id) : []),
         ];
         await this.notifyUsers(
             participantIds,
-            `💬 [${task.code}] ${currentUser.name} đã bình luận trong công việc "${task.title}"`,
+            `💬 [Trao đổi - ${task.code}] ${currentUser.name} đã thêm trao đổi trong "${task.title}": "${dto.content}"`,
             currentUser.user_id,
+            `[Trao đổi công việc] ${task.code}`,
+            {
+                taskId: task.id,
+                taskCode: task.code,
+                actionType: 'TASK_COMMENT',
+                title: 'Trao đổi / Nhật ký mới',
+            },
         );
 
         return savedComment;
     }
 
-    async deleteTask(currentUser: User, id: number): Promise<{ message: string }> {
+    async deleteTask(currentUser: User, id: number): Promise<{message: string}> {
         const task = await this.findOneTask(id);
-        const canDelete =
-            task.assigner_id === currentUser.user_id ||
-            [UserRole.ADMIN, UserRole.DIRECTOR].includes(currentUser.role);
+        const canDelete = task.assigner_id === currentUser.user_id || [UserRole.ADMIN, UserRole.DIRECTOR].includes(currentUser.role);
         if (!canDelete) {
-            throw new ForbiddenException(
-                'Chỉ người giao việc hoặc Quản trị viên mới có quyền xóa công việc này',
-            );
+            throw new ForbiddenException('Chỉ người giao việc hoặc Quản trị viên mới có quyền xóa công việc này');
         }
         await this.taskRepo.remove(task);
         this.gateway.notifyTaskUpdate({
@@ -1413,7 +1404,7 @@ export class TasksService {
             action: 'DELETED',
             actorId: currentUser.user_id,
         });
-        return { message: 'Đã xóa công việc thành công' };
+        return {message: 'Đã xóa công việc thành công'};
     }
 
     // ═══════════════════ PHASE 2: CRONJOB REMINDERS (T-3, T-1, OVERDUE, STALLED) ═══════════════════
@@ -1447,14 +1438,11 @@ export class TasksService {
         for (const task of activeTasks) {
             const deadline = new Date(task.deadline);
             const diffHours = (deadline.getTime() - now.getTime()) / (1000 * 3600);
-            const createdHoursAgo =
-                (now.getTime() - new Date(task.created_at).getTime()) / (1000 * 3600);
+            const createdHoursAgo = (now.getTime() - new Date(task.created_at).getTime()) / (1000 * 3600);
 
             // Prevent spamming more than once every 10 hours unless forced manually by leader
             const remindedRecently =
-                !force &&
-                task.last_reminded_at &&
-                (now.getTime() - new Date(task.last_reminded_at).getTime()) / (1000 * 3600) < 10;
+                !force && task.last_reminded_at && (now.getTime() - new Date(task.last_reminded_at).getTime()) / (1000 * 3600) < 10;
 
             if (diffHours < 0) {
                 overdueCount += 1;
@@ -1462,7 +1450,9 @@ export class TasksService {
                     const overdueDays = Math.max(1, Math.ceil(Math.abs(diffHours) / 24));
                     notificationsSent += await this.notifyUsers(
                         [task.assignee_id, task.assigner_id],
-                        `🚨 [QUÁ HẠN ${overdueDays} NGÀY - ${task.code}] Công việc "${task.title}" đã quá hạn hoàn thành (${deadline.toLocaleDateString('vi-VN')}). Đề nghị xử lý khẩn trương!`,
+                        `🚨 [QUÁ HẠN ${overdueDays} NGÀY - ${task.code}] Công việc "${
+                            task.title
+                        }" đã quá hạn hoàn thành (${deadline.toLocaleDateString('vi-VN')}). Đề nghị xử lý khẩn trương!`,
                         undefined,
                         `[Cảnh báo Quá hạn] ${task.code} - ${task.title}`,
                     );
@@ -1473,12 +1463,12 @@ export class TasksService {
                 dueT1Count += 1;
                 if (!remindedRecently) {
                     const hoursLeft = Math.max(1, Math.round(diffHours));
-                    const collabIds = Array.isArray(task.collaborators)
-                        ? task.collaborators.map((c) => c.user_id)
-                        : [];
+                    const collabIds = Array.isArray(task.collaborators) ? task.collaborators.map((c) => c.user_id) : [];
                     notificationsSent += await this.notifyUsers(
                         [task.assignee_id, ...collabIds],
-                        `⏰ [Nhắc hạn T-1 - Còn ${hoursLeft} giờ] Công việc [${task.code}] "${task.title}" sắp đến hạn vào ${deadline.toLocaleString('vi-VN')}`,
+                        `⏰ [Nhắc hạn T-1 - Còn ${hoursLeft} giờ] Công việc [${task.code}] "${task.title}" sắp đến hạn vào ${deadline.toLocaleString(
+                            'vi-VN',
+                        )}`,
                         undefined,
                         `[Nhắc việc khẩn T-1] ${task.code} - ${task.title}`,
                     );
@@ -1491,7 +1481,9 @@ export class TasksService {
                     const daysLeft = Math.ceil(diffHours / 24);
                     notificationsSent += await this.notifyUsers(
                         [task.assignee_id],
-                        `🔔 [Nhắc hạn T-${daysLeft}] Công việc [${task.code}] "${task.title}" còn ${daysLeft} ngày đến hạn (${deadline.toLocaleDateString('vi-VN')})`,
+                        `🔔 [Nhắc hạn T-${daysLeft}] Công việc [${task.code}] "${
+                            task.title
+                        }" còn ${daysLeft} ngày đến hạn (${deadline.toLocaleDateString('vi-VN')})`,
                     );
                     task.last_reminded_at = now;
                     await this.taskRepo.save(task);
@@ -1523,11 +1515,7 @@ export class TasksService {
     }
 
     // ═══════════════════ PHASE 2: DIRECT NUDGE ("ĐÔN ĐỐC CÔNG VIỆC") ═══════════════════
-    async nudgeTask(
-        currentUser: User,
-        id: number,
-        note?: string,
-    ): Promise<{ message: string; task: WorkTask }> {
+    async nudgeTask(currentUser: User, id: number, note?: string): Promise<{message: string; task: WorkTask}> {
         const task = await this.findOneTask(id);
         const nudgeContent = note?.trim()
             ? `⚡ [Đôn đốc tiến độ]: ${note.trim()}`
@@ -1537,11 +1525,7 @@ export class TasksService {
 
         const targetIds = [
             task.assignee_id,
-            ...(Array.isArray(task.collaborators)
-                ? task.collaborators
-                      .filter((c) => c.role === 'COLLABORATOR')
-                      .map((c) => c.user_id)
-                : []),
+            ...(Array.isArray(task.collaborators) ? task.collaborators.filter((c) => c.role === 'COLLABORATOR').map((c) => c.user_id) : []),
         ];
 
         await this.notifyUsers(
@@ -1563,10 +1547,7 @@ export class TasksService {
     }
 
     // ═══════════════════ PHASE 2: EXECUTIVE DASHBOARD & WORKLOAD ANALYTICS ═══════════════════
-    async getExecutiveDashboard(
-        currentUser: User,
-        query?: { dept_id?: number; project_id?: number; month?: string },
-    ) {
+    async getExecutiveDashboard(currentUser: User, query?: {dept_id?: number; project_id?: number; month?: string}) {
         let tasks = await this.getAccessibleTasksForUser(currentUser);
 
         if (query?.dept_id) {
@@ -1585,22 +1566,15 @@ export class TasksService {
         }
 
         const now = new Date();
-        const isOverdue = (t: WorkTask) =>
-            !['COMPLETED', 'CANCELLED'].includes(t.status) && new Date(t.deadline) < now;
+        const isOverdue = (t: WorkTask) => !['COMPLETED', 'CANCELLED'].includes(t.status) && new Date(t.deadline) < now;
 
         const completedTasks = tasks.filter((t) => t.status === 'COMPLETED');
         const completedOnTime = completedTasks.filter((t) => {
-            const doneDate = t.completed_at
-                ? new Date(t.completed_at)
-                : t.submitted_at
-                ? new Date(t.submitted_at)
-                : new Date(t.updated_at);
+            const doneDate = t.completed_at ? new Date(t.completed_at) : t.submitted_at ? new Date(t.submitted_at) : new Date(t.updated_at);
             return doneDate <= new Date(t.deadline);
         });
 
-        const activeTasks = tasks.filter(
-            (t) => !['COMPLETED', 'CANCELLED'].includes(t.status),
-        );
+        const activeTasks = tasks.filter((t) => !['COMPLETED', 'CANCELLED'].includes(t.status));
         const overdueTasks = tasks.filter(isOverdue);
 
         // Stalled / Attention Tasks detection
@@ -1609,11 +1583,8 @@ export class TasksService {
             if (['COMPLETED', 'CANCELLED'].includes(t.status)) continue;
 
             const deadlineDate = new Date(t.deadline);
-            const createdHours =
-                (now.getTime() - new Date(t.created_at).getTime()) / (1000 * 3600);
-            const submittedHours = t.submitted_at
-                ? (now.getTime() - new Date(t.submitted_at).getTime()) / (1000 * 3600)
-                : 0;
+            const createdHours = (now.getTime() - new Date(t.created_at).getTime()) / (1000 * 3600);
+            const submittedHours = t.submitted_at ? (now.getTime() - new Date(t.submitted_at).getTime()) / (1000 * 3600) : 0;
 
             let alertType: IStalledTaskAlert['alertType'] | null = null;
             let alertLabel = '';
@@ -1621,13 +1592,8 @@ export class TasksService {
 
             if (deadlineDate < now) {
                 alertType = 'OVERDUE';
-                hoursDelayed = Math.round(
-                    (now.getTime() - deadlineDate.getTime()) / (1000 * 3600),
-                );
-                alertLabel =
-                    hoursDelayed >= 24
-                        ? `Quá hạn ${Math.floor(hoursDelayed / 24)} ngày`
-                        : `Quá hạn ${Math.max(1, hoursDelayed)} giờ`;
+                hoursDelayed = Math.round((now.getTime() - deadlineDate.getTime()) / (1000 * 3600));
+                alertLabel = hoursDelayed >= 24 ? `Quá hạn ${Math.floor(hoursDelayed / 24)} ngày` : `Quá hạn ${Math.max(1, hoursDelayed)} giờ`;
             } else if (t.status === 'CHANGE_REQUESTED') {
                 alertType = 'CHANGE_REQUESTED';
                 hoursDelayed = Math.round(createdHours);
@@ -1693,12 +1659,12 @@ export class TasksService {
             label: string;
             color: string;
         }> = [
-            { status: 'NEW', label: 'Mới giao', color: '#2563eb' },
-            { status: 'CHANGE_REQUESTED', label: 'Đề nghị điều chỉnh', color: '#d97706' },
-            { status: 'IN_PROGRESS', label: 'Đang thực hiện', color: '#0284c7' },
-            { status: 'PENDING_REVIEW', label: 'Chờ nghiệm thu', color: '#7c3aed' },
-            { status: 'REJECTED', label: 'Yêu cầu làm lại', color: '#dc2626' },
-            { status: 'COMPLETED', label: 'Đã hoàn thành', color: '#16a34a' },
+            {status: 'NEW', label: 'Mới giao', color: '#2563eb'},
+            {status: 'CHANGE_REQUESTED', label: 'Đề nghị điều chỉnh', color: '#d97706'},
+            {status: 'IN_PROGRESS', label: 'Đang thực hiện', color: '#0284c7'},
+            {status: 'PENDING_REVIEW', label: 'Chờ nghiệm thu', color: '#7c3aed'},
+            {status: 'REJECTED', label: 'Yêu cầu làm lại', color: '#dc2626'},
+            {status: 'COMPLETED', label: 'Đã hoàn thành', color: '#16a34a'},
         ];
         const statusBreakdown = statusMeta.map((sm) => ({
             ...sm,
@@ -1711,10 +1677,10 @@ export class TasksService {
             label: string;
             color: string;
         }> = [
-            { priority: 'URGENT', label: 'Khẩn cấp', color: '#dc2626' },
-            { priority: 'HIGH', label: 'Cao', color: '#d97706' },
-            { priority: 'NORMAL', label: 'Bình thường', color: '#2563eb' },
-            { priority: 'LOW', label: 'Thấp', color: '#64748b' },
+            {priority: 'URGENT', label: 'Khẩn cấp', color: '#dc2626'},
+            {priority: 'HIGH', label: 'Cao', color: '#d97706'},
+            {priority: 'NORMAL', label: 'Bình thường', color: '#2563eb'},
+            {priority: 'LOW', label: 'Thấp', color: '#64748b'},
         ];
         const priorityBreakdown = priorityMeta.map((pm) => ({
             ...pm,
@@ -1740,8 +1706,9 @@ export class TasksService {
         for (const t of tasks) {
             const dId = t.department?.dept_id || t.dept_id || 0;
             const dName = t.department?.name || 'Chưa phân đơn vị';
-            if (!deptMap.has(dId)) {
-                deptMap.set(dId, {
+            let entry = deptMap.get(dId);
+            if (!entry) {
+                entry = {
                     dept_id: dId,
                     dept_name: dName,
                     total: 0,
@@ -1751,9 +1718,9 @@ export class TasksService {
                     completed: 0,
                     completedOnTime: 0,
                     overdue: 0,
-                });
+                };
+                deptMap.set(dId, entry);
             }
-            const entry = deptMap.get(dId)!;
             entry.total += 1;
             if (t.status === 'NEW' || t.status === 'CHANGE_REQUESTED') entry.newCount += 1;
             if (t.status === 'IN_PROGRESS' || t.status === 'REJECTED') entry.inProgress += 1;
@@ -1769,10 +1736,7 @@ export class TasksService {
         const departmentWorkload = Array.from(deptMap.values())
             .map((d) => ({
                 ...d,
-                onTimeRate:
-                    d.completed > 0
-                        ? Math.round((d.completedOnTime / d.completed) * 100)
-                        : 100,
+                onTimeRate: d.completed > 0 ? Math.round((d.completedOnTime / d.completed) * 100) : 100,
             }))
             .sort((a, b) => b.total - a.total);
 
@@ -1798,8 +1762,9 @@ export class TasksService {
         for (const t of tasks) {
             if (!t.assignee_id) continue;
             const uId = t.assignee_id;
-            if (!empMap.has(uId)) {
-                empMap.set(uId, {
+            let emp = empMap.get(uId);
+            if (!emp) {
+                emp = {
                     user_id: uId,
                     name: t.assignee?.name || `Nhân sự #${uId}`,
                     avatar: t.assignee?.avatar,
@@ -1812,16 +1777,11 @@ export class TasksService {
                     completedOnTime: 0,
                     overdue: 0,
                     totalKpiScore: 0,
-                });
+                };
+                empMap.set(uId, emp);
             }
-            const emp = empMap.get(uId)!;
             emp.total += 1;
-            if (
-                t.status === 'NEW' ||
-                t.status === 'CHANGE_REQUESTED' ||
-                t.status === 'IN_PROGRESS' ||
-                t.status === 'REJECTED'
-            ) {
+            if (t.status === 'NEW' || t.status === 'CHANGE_REQUESTED' || t.status === 'IN_PROGRESS' || t.status === 'REJECTED') {
                 emp.inProgress += 1;
             }
             if (t.status === 'PENDING_REVIEW') emp.pendingReview += 1;
@@ -1829,9 +1789,7 @@ export class TasksService {
                 emp.completed += 1;
                 const doneAt = t.completed_at ? new Date(t.completed_at) : new Date(t.updated_at);
                 if (doneAt <= new Date(t.deadline)) emp.completedOnTime += 1;
-                emp.totalKpiScore = Number(
-                    (emp.totalKpiScore + Number(t.kpi_score || 0)).toFixed(1),
-                );
+                emp.totalKpiScore = Number((emp.totalKpiScore + Number(t.kpi_score || 0)).toFixed(1));
             }
             if (isOverdue(t)) emp.overdue += 1;
         }
@@ -1839,18 +1797,11 @@ export class TasksService {
         const employeeWorkload = Array.from(empMap.values())
             .map((e) => ({
                 ...e,
-                onTimeRate:
-                    e.completed > 0
-                        ? Math.round((e.completedOnTime / e.completed) * 100)
-                        : 100,
+                onTimeRate: e.completed > 0 ? Math.round((e.completedOnTime / e.completed) * 100) : 100,
             }))
             .sort((a, b) => b.total - a.total);
 
-        const totalKpiScore = Number(
-            completedTasks
-                .reduce((acc, t) => acc + Number(t.kpi_score || 0), 0)
-                .toFixed(1),
-        );
+        const totalKpiScore = Number(completedTasks.reduce((acc, t) => acc + Number(t.kpi_score || 0), 0).toFixed(1));
 
         return {
             summary: {
@@ -1859,23 +1810,11 @@ export class TasksService {
                 completedTasks: completedTasks.length,
                 overdueTasks: overdueTasks.length,
                 stalledCount: stalledTasks.length,
-                pendingReviewCount: tasks.filter((t) => t.status === 'PENDING_REVIEW')
-                    .length,
-                completionRate:
-                    tasks.length > 0
-                        ? Math.round((completedTasks.length / tasks.length) * 100)
-                        : 0,
-                onTimeCompletionRate:
-                    completedTasks.length > 0
-                        ? Math.round(
-                              (completedOnTime.length / completedTasks.length) * 100,
-                          )
-                        : 100,
+                pendingReviewCount: tasks.filter((t) => t.status === 'PENDING_REVIEW').length,
+                completionRate: tasks.length > 0 ? Math.round((completedTasks.length / tasks.length) * 100) : 0,
+                onTimeCompletionRate: completedTasks.length > 0 ? Math.round((completedOnTime.length / completedTasks.length) * 100) : 100,
                 totalKpiScore,
-                avgKpiScore:
-                    completedTasks.length > 0
-                        ? Number((totalKpiScore / completedTasks.length).toFixed(1))
-                        : 0,
+                avgKpiScore: completedTasks.length > 0 ? Number((totalKpiScore / completedTasks.length).toFixed(1)) : 0,
             },
             statusBreakdown,
             priorityBreakdown,
@@ -1891,20 +1830,20 @@ export class TasksService {
         completionRate: number,
         onTimeRate: number,
         overdueUnfinished: number,
-    ): { grade: 'A+' | 'A' | 'B' | 'C'; gradeLabel: string } {
+    ): {grade: 'A+' | 'A' | 'B' | 'C'; gradeLabel: string} {
         if (totalAssigned === 0) {
-            return { grade: 'B', gradeLabel: 'Chưa phát sinh việc' };
+            return {grade: 'B', gradeLabel: 'Chưa phát sinh việc'};
         }
         if (completionRate >= 90 && onTimeRate >= 90 && overdueUnfinished === 0) {
-            return { grade: 'A+', gradeLabel: 'Hoàn thành xuất sắc' };
+            return {grade: 'A+', gradeLabel: 'Hoàn thành xuất sắc'};
         }
         if (completionRate >= 75 && onTimeRate >= 75 && overdueUnfinished <= 1) {
-            return { grade: 'A', gradeLabel: 'Hoàn thành tốt' };
+            return {grade: 'A', gradeLabel: 'Hoàn thành tốt'};
         }
         if (completionRate >= 50) {
-            return { grade: 'B', gradeLabel: 'Hoàn thành nhiệm vụ' };
+            return {grade: 'B', gradeLabel: 'Hoàn thành nhiệm vụ'};
         }
-        return { grade: 'C', gradeLabel: 'Cần chấn chỉnh tiến độ' };
+        return {grade: 'C', gradeLabel: 'Cần chấn chỉnh tiến độ'};
     }
 
     async getKpiEvaluationReport(
@@ -1956,8 +1895,7 @@ export class TasksService {
         }
 
         const now = new Date();
-        const isOverdue = (t: WorkTask) =>
-            !['COMPLETED', 'CANCELLED'].includes(t.status) && new Date(t.deadline) < now;
+        const isOverdue = (t: WorkTask) => !['COMPLETED', 'CANCELLED'].includes(t.status) && new Date(t.deadline) < now;
 
         const empMap = new Map<
             number,
@@ -1994,8 +1932,9 @@ export class TasksService {
         for (const t of tasks) {
             if (!t.assignee_id) continue;
             const uId = t.assignee_id;
-            if (!empMap.has(uId)) {
-                empMap.set(uId, {
+            let row = empMap.get(uId);
+            if (!row) {
+                row = {
                     user_id: uId,
                     name: t.assignee?.name || `Nhân sự #${uId}`,
                     avatar: t.assignee?.avatar,
@@ -2011,21 +1950,16 @@ export class TasksService {
                     earnedKpiScore: 0,
                     penaltyScore: 0,
                     tasks: [],
-                });
+                };
+                empMap.set(uId, row);
             }
-
-            const row = empMap.get(uId)!;
             const weight = Number(t.kpi_weight || 1);
             row.totalAssigned += 1;
             row.totalWeight = Number((row.totalWeight + weight).toFixed(1));
 
             let onTime = true;
             if (t.status === 'COMPLETED') {
-                const doneAt = t.completed_at
-                    ? new Date(t.completed_at)
-                    : t.submitted_at
-                    ? new Date(t.submitted_at)
-                    : new Date(t.updated_at);
+                const doneAt = t.completed_at ? new Date(t.completed_at) : t.submitted_at ? new Date(t.submitted_at) : new Date(t.updated_at);
                 onTime = doneAt <= new Date(t.deadline);
                 if (onTime) {
                     row.completedOnTime += 1;
@@ -2044,9 +1978,7 @@ export class TasksService {
                 if (isOverdue(t)) {
                     onTime = false;
                     row.overdueUnfinished += 1;
-                    row.penaltyScore = Number(
-                        (row.penaltyScore + weight * 2).toFixed(1),
-                    );
+                    row.penaltyScore = Number((row.penaltyScore + weight * 2).toFixed(1));
                 }
             }
 
@@ -2067,33 +1999,12 @@ export class TasksService {
         const employeeRanking = Array.from(empMap.values())
             .map((e) => {
                 const completedTotal = e.completedOnTime + e.completedLate;
-                const completionRate =
-                    e.totalAssigned > 0
-                        ? Math.round((completedTotal / e.totalAssigned) * 100)
-                        : 0;
-                const onTimeRate =
-                    completedTotal > 0
-                        ? Math.round((e.completedOnTime / completedTotal) * 100)
-                        : e.overdueUnfinished > 0
-                        ? 0
-                        : 100;
-                const netKpiScore = Number(
-                    Math.max(0, e.earnedKpiScore - e.penaltyScore).toFixed(1),
-                );
+                const completionRate = e.totalAssigned > 0 ? Math.round((completedTotal / e.totalAssigned) * 100) : 0;
+                const onTimeRate = completedTotal > 0 ? Math.round((e.completedOnTime / completedTotal) * 100) : e.overdueUnfinished > 0 ? 0 : 100;
+                const netKpiScore = Number(Math.max(0, e.earnedKpiScore - e.penaltyScore).toFixed(1));
                 const maxPossibleScore = e.totalWeight * 10;
-                const kpiEfficiency =
-                    maxPossibleScore > 0
-                        ? Math.min(
-                              100,
-                              Math.round((netKpiScore / maxPossibleScore) * 100),
-                          )
-                        : 0;
-                const { grade, gradeLabel } = this.computeGrade(
-                    e.totalAssigned,
-                    completionRate,
-                    onTimeRate,
-                    e.overdueUnfinished,
-                );
+                const kpiEfficiency = maxPossibleScore > 0 ? Math.min(100, Math.round((netKpiScore / maxPossibleScore) * 100)) : 0;
+                const {grade, gradeLabel} = this.computeGrade(e.totalAssigned, completionRate, onTimeRate, e.overdueUnfinished);
 
                 return {
                     ...e,
@@ -2131,8 +2042,9 @@ export class TasksService {
 
         for (const emp of employeeRanking) {
             const key = emp.dept_name;
-            if (!deptAgg.has(key)) {
-                deptAgg.set(key, {
+            let d = deptAgg.get(key);
+            if (!d) {
+                d = {
                     dept_name: key,
                     memberCount: 0,
                     totalAssigned: 0,
@@ -2140,9 +2052,9 @@ export class TasksService {
                     completedOnTime: 0,
                     overdueUnfinished: 0,
                     netKpiScore: 0,
-                });
+                };
+                deptAgg.set(key, d);
             }
-            const d = deptAgg.get(key)!;
             d.memberCount += 1;
             d.totalAssigned += emp.totalAssigned;
             d.completedTotal += emp.completedTotal;
@@ -2153,28 +2065,14 @@ export class TasksService {
 
         const departmentRanking = Array.from(deptAgg.values())
             .map((d) => {
-                const completionRate =
-                    d.totalAssigned > 0
-                        ? Math.round((d.completedTotal / d.totalAssigned) * 100)
-                        : 0;
-                const onTimeRate =
-                    d.completedTotal > 0
-                        ? Math.round((d.completedOnTime / d.completedTotal) * 100)
-                        : 100;
-                const { grade, gradeLabel } = this.computeGrade(
-                    d.totalAssigned,
-                    completionRate,
-                    onTimeRate,
-                    d.overdueUnfinished,
-                );
+                const completionRate = d.totalAssigned > 0 ? Math.round((d.completedTotal / d.totalAssigned) * 100) : 0;
+                const onTimeRate = d.completedTotal > 0 ? Math.round((d.completedOnTime / d.completedTotal) * 100) : 100;
+                const {grade, gradeLabel} = this.computeGrade(d.totalAssigned, completionRate, onTimeRate, d.overdueUnfinished);
                 return {
                     ...d,
                     completionRate,
                     onTimeRate,
-                    avgScorePerMember:
-                        d.memberCount > 0
-                            ? Number((d.netKpiScore / d.memberCount).toFixed(1))
-                            : 0,
+                    avgScorePerMember: d.memberCount > 0 ? Number((d.netKpiScore / d.memberCount).toFixed(1)) : 0,
                     grade,
                     gradeLabel,
                 };
@@ -2197,11 +2095,7 @@ export class TasksService {
             summary: {
                 evaluatedEmployees: employeeRanking.length,
                 totalTasks: tasks.length,
-                totalNetKpiScore: Number(
-                    employeeRanking
-                        .reduce((s, e) => s + e.netKpiScore, 0)
-                        .toFixed(1),
-                ),
+                totalNetKpiScore: Number(employeeRanking.reduce((s, e) => s + e.netKpiScore, 0).toFixed(1)),
                 gradeCounts,
             },
             employeeRanking,
@@ -2211,9 +2105,9 @@ export class TasksService {
 
     async getUserTaskSummary(userId: number) {
         const tasks = await this.taskRepo.find({
-            where: { assignee_id: Number(userId) },
+            where: {assignee_id: Number(userId)},
             relations: ['assigner', 'department', 'project'],
-            order: { created_at: 'DESC' },
+            order: {created_at: 'DESC'},
         });
 
         const validTasks = tasks.filter((t) => t.status !== 'CANCELLED');
@@ -2228,11 +2122,7 @@ export class TasksService {
         for (const t of validTasks) {
             const weight = Number(t.kpi_weight || 1);
             if (t.status === 'COMPLETED') {
-                const doneAt = t.completed_at
-                    ? new Date(t.completed_at)
-                    : t.submitted_at
-                    ? new Date(t.submitted_at)
-                    : new Date(t.updated_at);
+                const doneAt = t.completed_at ? new Date(t.completed_at) : t.submitted_at ? new Date(t.submitted_at) : new Date(t.updated_at);
                 const onTime = doneAt <= new Date(t.deadline);
                 if (onTime) completedOnTime += 1;
                 else completedLate += 1;
@@ -2254,25 +2144,10 @@ export class TasksService {
         }
 
         const completedTotal = completedOnTime + completedLate;
-        const completionRate =
-            validTasks.length > 0
-                ? Math.round((completedTotal / validTasks.length) * 100)
-                : 0;
-        const onTimeRate =
-            completedTotal > 0
-                ? Math.round((completedOnTime / completedTotal) * 100)
-                : overdueUnfinished > 0
-                ? 0
-                : 100;
-        const netKpiScore = Number(
-            Math.max(0, earnedKpiScore - penaltyScore).toFixed(1),
-        );
-        const { grade, gradeLabel } = this.computeGrade(
-            validTasks.length,
-            completionRate,
-            onTimeRate,
-            overdueUnfinished,
-        );
+        const completionRate = validTasks.length > 0 ? Math.round((completedTotal / validTasks.length) * 100) : 0;
+        const onTimeRate = completedTotal > 0 ? Math.round((completedOnTime / completedTotal) * 100) : overdueUnfinished > 0 ? 0 : 100;
+        const netKpiScore = Number(Math.max(0, earnedKpiScore - penaltyScore).toFixed(1));
+        const {grade, gradeLabel} = this.computeGrade(validTasks.length, completionRate, onTimeRate, overdueUnfinished);
 
         return {
             totalAssigned: validTasks.length,

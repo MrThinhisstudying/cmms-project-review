@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Table, Card, Button, Input, Tag, Space, Modal, Form, Select, DatePicker, message, Tooltip, Row, Col, Typography } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, TeamOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -18,6 +18,9 @@ const RewardDisciplines: React.FC = () => {
 
     const [records, setRecords] = useState<IRewardDiscipline[]>([]);
     const [users, setUsers] = useState<any[]>([]);
+    const activeUsers = useMemo(() => {
+        return (users || []).filter(u => !u.status || u.status.trim().toLowerCase() === 'active');
+    }, [users]);
     const [loading, setLoading] = useState(false);
     const [searchText, setSearchText] = useState('');
     const [typeFilter, setTypeFilter] = useState<string | null>(null);
@@ -277,7 +280,7 @@ const RewardDisciplines: React.FC = () => {
                                         (option?.children as unknown as string).toLowerCase().includes(input.toLowerCase())
                                     }
                                 >
-                                    {users.map(u => (
+                                    {(editingRecord ? users : activeUsers).map(u => (
                                         <Option key={u.user_id} value={u.user_id}>
                                             {u.name} - {u.employee_code || 'N/A'} - {u.position || 'N/A'}
                                         </Option>

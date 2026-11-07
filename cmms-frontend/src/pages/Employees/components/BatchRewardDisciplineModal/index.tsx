@@ -83,6 +83,10 @@ export const BatchRewardDisciplineModal: React.FC<BatchRewardDisciplineModalProp
   const [activeTab, setActiveTab] = useState<'single_decision' | 'multi_grid' | 'excel_import'>('single_decision');
   const [submitting, setSubmitting] = useState(false);
 
+  const activeUsers = useMemo(() => {
+    return users.filter((u) => !u.status || u.status.trim().toLowerCase() === 'active');
+  }, [users]);
+
   // ──────────────────────────── TAB 1: SINGLE DECISION MULTI-USERS ────────────────────────────
   const [singleForm] = Form.useForm();
   const [selectedUserIds, setSelectedUserIds] = useState<number[]>([]);
@@ -102,9 +106,9 @@ export const BatchRewardDisciplineModal: React.FC<BatchRewardDisciplineModalProp
     return Array.from(set);
   }, [users]);
 
-  // Handle select all users of a department
+  // Handle select all users of a department (chỉ chọn tài khoản đang hoạt động)
   const handleSelectByDepartment = (deptName: string) => {
-    const deptUserIds = users
+    const deptUserIds = activeUsers
       .filter((u) => {
         const matchesPrimary = u.department?.name === deptName;
         const matchesSecondary = u.user_departments?.some((ud) => ud.department?.name === deptName);
@@ -118,8 +122,8 @@ export const BatchRewardDisciplineModal: React.FC<BatchRewardDisciplineModalProp
   };
 
   const handleSelectAllUsers = () => {
-    setSelectedUserIds(users.map((u) => u.user_id));
-    message.success(`Đã chọn toàn bộ ${users.length} nhân sự`);
+    setSelectedUserIds(activeUsers.map((u) => u.user_id));
+    message.success(`Đã chọn toàn bộ ${activeUsers.length} nhân sự`);
   };
 
   const handleClearAllUsers = () => {
@@ -640,7 +644,7 @@ export const BatchRewardDisciplineModal: React.FC<BatchRewardDisciplineModalProp
                             </Select>
                           )}
                           <Button size="small" onClick={handleSelectAllUsers}>
-                            Chọn tất cả ({users.length})
+                            Chọn tất cả ({activeUsers.length})
                           </Button>
                           {selectedUserIds.length > 0 && (
                             <Button size="small" danger onClick={handleClearAllUsers}>
@@ -665,7 +669,7 @@ export const BatchRewardDisciplineModal: React.FC<BatchRewardDisciplineModalProp
                           .toLowerCase()
                           .includes(input.toLowerCase())
                       }
-                      options={users.map((u) => {
+                      options={activeUsers.map((u) => {
                         const dept = u.department?.name || u.user_departments?.[0]?.department?.name || '';
                         return {
                           value: u.user_id,
@@ -783,7 +787,7 @@ export const BatchRewardDisciplineModal: React.FC<BatchRewardDisciplineModalProp
                             style={{ width: '100%' }}
                             optionFilterProp="children"
                           >
-                            {users.map((u) => (
+                            {activeUsers.map((u) => (
                               <Select.Option key={u.user_id} value={u.user_id}>
                                 {u.name} ({u.employee_code || u.user_id})
                               </Select.Option>

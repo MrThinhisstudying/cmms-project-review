@@ -89,10 +89,14 @@ else
     exit 1
 fi
 
-echo "💾 Đang sao lưu thư mục uploads (chữ ký số, avatar, chứng chỉ)..."
+echo "💾 Đang đồng bộ & sao lưu thư mục uploads (chữ ký số, avatar, chứng chỉ, quy chế)..."
+mkdir -p uploads/avatars uploads/signatures uploads/policies uploads/certificates uploads/tasks
+# Đồng bộ dữ liệu uploads đang nằm trong container cmms_backend ra host trước khi mount volume
+docker cp cmms_backend:/app/uploads/. uploads/ 2>/dev/null || true
 if [ -d "cmms-backend/uploads" ]; then
-    tar -czf "$BACKUP_DIR/cmms_uploads_$TIMESTAMP.tar.gz" -C cmms-backend uploads || true
-elif [ -d "uploads" ]; then
+    cp -rn cmms-backend/uploads/* uploads/ 2>/dev/null || true
+fi
+if [ -d "uploads" ]; then
     tar -czf "$BACKUP_DIR/cmms_uploads_$TIMESTAMP.tar.gz" uploads || true
 fi
 
@@ -134,9 +138,10 @@ BEGIN
 END \$\$;
 " || true
 
-echo "🔄 Khởi động lại Frontend & Nginx Proxy Manager..."
+echo "🔄 Khởi động lại Frontend & cập nhật cấu hình Nginx Proxy Manager..."
 docker compose up -d --no-deps frontend
 docker compose up -d npm
+docker exec nginx_proxy_manager nginx -s reload 2>/dev/null || docker compose restart npm || true
 
 # 8. DỌN DẸP DUNG LƯỢNG Ổ ĐĨA
 docker image prune -f

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   Table,
   Card,
@@ -69,6 +69,10 @@ export const ContractsTab: React.FC<ContractsTabProps> = ({ users, canWrite, onV
   const [editingContract, setEditingContract] = useState<ILaborContract | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [form] = Form.useForm();
+
+  const activeUsers = useMemo(() => {
+    return users.filter((u) => !u.status || u.status.trim().toLowerCase() === 'active');
+  }, [users]);
 
   const fetchContracts = async () => {
     setLoading(true);
@@ -409,7 +413,7 @@ export const ContractsTab: React.FC<ContractsTabProps> = ({ users, canWrite, onV
               optionFilterProp="children"
               disabled={!!editingContract}
             >
-              {users.map((u) => (
+              {(editingContract ? users : activeUsers).map((u) => (
                 <Select.Option key={u.user_id} value={u.user_id}>
                   {u.name} ({u.employee_code || u.user_id}) - {u.department?.name || ''}
                 </Select.Option>

@@ -3,6 +3,7 @@ import { Layout, Grid } from "antd";
 import { Outlet } from "react-router-dom";
 import TopBar from "./TopBar";
 import Sidebar from "./SideBar";
+import MobileBottomNav from "./MobileBottomNav";
 import { UsersProvider } from "../../context/UsersContext/UsersContext";
 import { DevicesProvider } from "../../context/DevicesContext/DevicesContext";
 import { DepartmentsProvider } from "../../context/DepartmentsContext/DepartmentsContext";
@@ -13,6 +14,7 @@ import { MaintenanceTasksProvider } from "../../context/MaintenanceTasksContext/
 import { InventoryProvider } from "../../context/InventoryContext/InventoryContext";
 import { RepairsProvider } from "../../context/RepairsContext/RepairsContext";
 import { PendingIncidentReportsModal } from "../../components/PendingIncidentReportsModal";
+import TaskNotificationPopup from "../../components/TaskNotificationPopup";
 
 const { Content } = Layout;
 
@@ -42,19 +44,22 @@ const MainLayout = () => {
                     <AuditProvider>
                       <NotificationProvider>
                         <PendingIncidentReportsModal />
+                        <TaskNotificationPopup />
                         <Layout style={{ minHeight: '100vh', background: '#f0f2f5' }}>
                           <Sidebar collapsed={collapsed} onCollapse={setCollapsed} isMobile={isMobile} />
-                          <Layout style={{ background: '#f0f2f5' }}>
+                          <Layout style={{ background: '#f0f2f5', minWidth: 0 }}>
                             <TopBar collapsed={collapsed} onToggle={toggleCollapsed} />
                             <Content style={{ 
-                                margin: isMobile ? '16px 8px' : '24px', 
-                                padding: 0, // Let pages handle their own internal padding if needed, or MainLayout provides only margins
+                                margin: isMobile ? '10px 8px 76px' : '20px 24px', 
+                                padding: 0,
                                 minHeight: 280, 
-                                background: 'transparent', // Transparent to show gray bg
-                                borderRadius: 8 
+                                background: 'transparent',
+                                borderRadius: 8,
+                                overflowX: 'hidden',
                             }}>
                                 <Outlet />
                             </Content>
+                            {isMobile && <MobileBottomNav onOpenMenu={() => setCollapsed(false)} />}
                           </Layout>
                         </Layout>
                       </NotificationProvider>

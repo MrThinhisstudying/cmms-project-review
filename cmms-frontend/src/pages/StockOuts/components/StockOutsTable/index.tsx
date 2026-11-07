@@ -6,13 +6,13 @@ import {
   CloseOutlined,
   UserOutlined,
   DropboxOutlined,
-  ToolOutlined,
   WarningOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useInventoryContext } from "../../../../context/InventoryContext/InventoryContext";
 import { IStockOut } from "../../../../types/inventory.types";
 import RepairTicketBadge from "../RepairTicketBadge";
+import { getBackendImageUrl } from "../../../../utils/imageUrl";
 
 interface Props {
   data: IStockOut[];
@@ -205,7 +205,7 @@ export default function StockOutsTable({
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Avatar
               icon={<UserOutlined />}
-              src={avatarUrl}
+              src={avatarUrl ? getBackendImageUrl(avatarUrl) : undefined}
               size={32}
               style={{
                 backgroundColor: "#e0f2fe",

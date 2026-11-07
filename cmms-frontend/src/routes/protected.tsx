@@ -22,6 +22,7 @@ import RewardDisciplines from "../pages/RewardDisciplines";
 import DevicePassportPage from "../pages/DevicePassport";
 import VehicleIncidentReportsPage from "../pages/VehicleIncidentReports";
 import TasksPage from "../pages/Tasks";
+import CompanyPoliciesPage from "../pages/CompanyPolicies";
 
 export const protectedRoutes = (userRole: string) => {
   const isFullAccess = ['admin', 'ADMIN', 'HR_MANAGER', 'DIRECTOR', 'UNIT_HEAD', 'TEAM_LEAD'].includes(userRole);
@@ -32,7 +33,11 @@ export const protectedRoutes = (userRole: string) => {
   if (isFullAccess) {
     const children: any[] = [
       { path: "/trang_chu/*", element: <Dashboard /> },
-      { path: "/quan_ly_cong_viec/*", element: <TasksPage /> },
+      { path: "/quan_ly_cong_viec/*", element: <TasksPage mode="tasks" /> },
+      { path: "/lich_cong_viec/*", element: <TasksPage mode="calendar" /> },
+      { path: "/dashboard_lanh_dao/*", element: <TasksPage mode="dashboard" /> },
+      { path: "/kpi_thi_dua/*", element: <TasksPage mode="kpi" /> },
+      { path: "/quy_che_quy_dinh/*", element: <CompanyPoliciesPage /> },
       { path: "/profile", element: <Profile /> },
       // Thiết bị & Vật tư
       { path: "/quan_ly_ttb_pt/*", element: <DevicesManagement /> },
@@ -95,7 +100,11 @@ export const protectedRoutes = (userRole: string) => {
         element: <MainLayout />,
         children: [
           { path: "/trang_chu/*", element: <Dashboard /> },
-          { path: "/quan_ly_cong_viec/*", element: <TasksPage /> },
+          { path: "/quan_ly_cong_viec/*", element: <TasksPage mode="tasks" /> },
+          { path: "/lich_cong_viec/*", element: <TasksPage mode="calendar" /> },
+          { path: "/dashboard_lanh_dao/*", element: <TasksPage mode="dashboard" /> },
+          { path: "/kpi_thi_dua/*", element: <TasksPage mode="kpi" /> },
+          { path: "/quy_che_quy_dinh/*", element: <CompanyPoliciesPage /> },
           { path: "/profile", element: <Profile /> },
           { path: "/quan_ly_ttb_pt/*", element: <DevicesManagement /> },
           { path: "/quan_ly_sua_chua/*", element: <RepairsManagement /> },

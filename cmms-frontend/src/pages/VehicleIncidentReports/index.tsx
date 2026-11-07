@@ -1,13 +1,13 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Table, Card, Button, Tag, Space, Input, Row, Col, Select, DatePicker,
-    Image, Modal, Form, Typography, notification, Descriptions, Divider, Alert, Spin
+    Image, Modal, Form, Typography, notification, Descriptions, Divider, Alert, Spin, Grid, Empty
 } from 'antd';
 import {
     SearchOutlined, ReloadOutlined, WarningOutlined, CheckCircleOutlined,
     ToolOutlined, FileAddOutlined, PhoneOutlined, EyeOutlined, ClockCircleOutlined,
-    CarOutlined, UserOutlined, ExclamationCircleOutlined, LinkOutlined
+    CarOutlined, ExclamationCircleOutlined, LinkOutlined, EnvironmentOutlined
 } from '@ant-design/icons';
 import {
     getVehicleIncidentReports,
@@ -19,12 +19,15 @@ import {
     IVehicleIncidentReport,
     IncidentReportStatus,
     ICheckVehicleGroupResult,
+    canProcessIncidentAsTech,
+    isIncidentReportViewOnly,
 } from '../../apis/vehicleIncidentReports';
 import { getAllDevices } from '../../apis/devices';
 import { getAllUsers } from '../../apis/users';
 import { getRepairsByDevice } from '../../apis/repairs';
 import { getToken } from '../../utils/auth';
 import { useAuthContext } from '../../context/AuthContext/AuthContext';
+import { useSocket } from '../../hooks/useSocket';
 import dayjs from 'dayjs';
 
 const { Title, Text } = Typography;
@@ -42,10 +45,12 @@ const VehicleIncidentReportsPage: React.FC = () => {
     const navigate = useNavigate();
     const { user } = useAuthContext();
 
-    const isTechOrAdmin = ['ADMIN', 'admin', 'TECHNICIAN', 'TEAM_LEAD'].includes(user?.role || '');
+    const isTechOrAdmin = canProcessIncidentAsTech(user);
+    const isViewOnly = isIncidentReportViewOnly(user);
 
     // Kiểm tra người dùng hiện tại có phải là người được giao hoặc người báo cáo sự cố không
     const checkCanHandleDossier = (r: IVehicleIncidentReport) => {
+        if (isViewOnly) return false;
         if (isTechOrAdmin) return true;
         if (!user) return false;
         const isAssigned = (user.user_id && r.assigned_dossier_user_id === user.user_id) ||
@@ -107,8 +112,8 @@ const VehicleIncidentReportsPage: React.FC = () => {
     const [detailReport, setDetailReport] = useState<IVehicleIncidentReport | null>(null);
 
     // Load data
-    const fetchReports = useCallback(async () => {
-        setLoading(true);
+    const fetchReports = useCallback(async (silent = false) => {
+        if (!silent) setLoading(true);
         try {
             const params: any = {};
             if (statusFilter) params.status = statusFilter;
@@ -120,11 +125,17 @@ const VehicleIncidentReportsPage: React.FC = () => {
             }
 
             const data = await getVehicleIncidentReports(params);
-            setReports(data || []);
+            const list = data || [];
+            setReports(list);
+            setDetailReport((prev) => {
+                if (!prev) return null;
+                const updated = list.find((item) => item.id === prev.id);
+                return updated || prev;
+            });
         } catch (err) {
             console.error('Failed to load incident reports:', err);
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     }, [statusFilter, deviceFilter, searchText, dateRange]);
 
@@ -132,10 +143,25 @@ const VehicleIncidentReportsPage: React.FC = () => {
         fetchReports();
     }, [fetchReports]);
 
+    // Realtime WebSocket subscription
+    useSocket(user?.user_id, {
+        incident_report_updated: () => {
+            fetchReports(true);
+        },
+        repair_updated: () => {
+            fetchReports(true);
+        },
+    });
+
     useEffect(() => {
         if (token) {
             getAllDevices().then((res: any) => setDevices(res || [])).catch(() => {});
-            getAllUsers(token).then((res: any) => setUsersList(res || [])).catch(() => {});
+            getAllUsers(token).then((res: any) => {
+                const active = (res || []).filter(
+                    (u: any) => !u.status || u.status.trim().toLowerCase() === 'active'
+                );
+                setUsersList(active);
+            }).catch(() => {});
         }
     }, [token]);
 
@@ -289,46 +315,300 @@ const VehicleIncidentReportsPage: React.FC = () => {
         }
     };
 
+    const screens = Grid.useBreakpoint();
+    const isMobile = !screens.md;
+
     const handleViewDetail = (report: IVehicleIncidentReport) => {
         setDetailReport(report);
         setDetailModalOpen(true);
     };
 
+    const summaryStats = useMemo(() => {
+        const total = reports.length;
+        const pending = reports.filter(r => r.status === IncidentReportStatus.PENDING || r.status === IncidentReportStatus.IN_PROGRESS).length;
+        const requestedRepair = reports.filter(r => r.status === IncidentReportStatus.REQUESTED_REPAIR).length;
+        const resolvedQuick = reports.filter(r => r.status === IncidentReportStatus.RESOLVED_QUICK).length;
+        const convertedRepair = reports.filter(r => r.status === IncidentReportStatus.CONVERTED_REPAIR).length;
+        return { total, pending, requestedRepair, resolvedQuick, convertedRepair };
+    }, [reports]);
+
+    const renderResolutionDetail = (r: IVehicleIncidentReport) => {
+        const conf = STATUS_TAGS[r.status] || { color: 'default', label: r.status };
+
+        if (r.status === IncidentReportStatus.RESOLVED_QUICK) {
+            return (
+                <div style={{ fontSize: 12, background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 8, padding: '8px 10px', lineHeight: 1.45 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+                        <Tag color={conf.color} style={{ borderRadius: 10, margin: 0, fontWeight: 600, fontSize: 11.5 }}>
+                            ✅ {conf.label}
+                        </Tag>
+                        {r.operator_confirmed_at && (
+                            <span style={{ color: '#52c41a', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                <ClockCircleOutlined />
+                                {dayjs(r.operator_confirmed_at).format('DD/MM/YYYY HH:mm')}
+                            </span>
+                        )}
+                    </div>
+                    <div style={{ color: '#262626' }}>
+                        <strong style={{ color: '#389e0d' }}>KTV:</strong> {r.technician?.name || 'Kỹ thuật'}
+                        {r.operator_confirmed_name && (
+                            <span style={{ color: '#595959' }}> • <strong>Nghiệm thu:</strong> {r.operator_confirmed_name}</span>
+                        )}
+                    </div>
+                    {r.quick_solution && (
+                        <div style={{ color: '#434343', marginTop: 2, wordBreak: 'break-word' }}>
+                            <strong>Biện pháp:</strong> {r.quick_solution}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        if (r.status === IncidentReportStatus.REQUESTED_REPAIR) {
+            return (
+                <div style={{ fontSize: 12, background: '#f9f0ff', border: '1px solid #d3adf7', borderRadius: 8, padding: '8px 10px', lineHeight: 1.45 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4, marginBottom: 4 }}>
+                        <Tag color={conf.color} style={{ borderRadius: 10, margin: 0, fontWeight: 600, fontSize: 11.5 }}>
+                            📋 {conf.label}
+                        </Tag>
+                        {r.is_reporter_in_vehicle_group ? (
+                            <Tag color="success" style={{ fontSize: 10, margin: 0 }}>Thuộc nhóm xe</Tag>
+                        ) : r.reporter_user_id ? (
+                            <Tag color="warning" style={{ fontSize: 10, margin: 0 }}>Khác nhóm xe</Tag>
+                        ) : null}
+                    </div>
+                    <div><strong>Giao lập B03:</strong> {r.assigned_dossier_user_name || r.reporter_name || 'Tổ xe'}</div>
+                    {r.dossier_request_note && (
+                        <div style={{ color: '#595959', marginTop: 2, fontSize: 11.5, wordBreak: 'break-word' }}>
+                            {r.dossier_request_note}
+                        </div>
+                    )}
+                    {r.dossier_requested_at && (
+                        <div style={{ color: '#8c8c8c', fontSize: 11, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <ClockCircleOutlined />
+                            <span>{dayjs(r.dossier_requested_at).format('DD/MM/YYYY HH:mm')}</span>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        if (r.status === IncidentReportStatus.CONVERTED_REPAIR) {
+            return (
+                <div style={{ fontSize: 12, background: '#f0f5ff', border: '1px solid #adc6ff', borderRadius: 8, padding: '8px 10px', lineHeight: 1.45 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                        <Tag color={conf.color} style={{ borderRadius: 10, margin: 0, fontWeight: 600, fontSize: 11.5 }}>
+                            📑 {conf.label}
+                        </Tag>
+                        <Tag color="blue" style={{ margin: 0, fontWeight: 700, borderRadius: 6 }}>
+                            Phiếu #{r.converted_repair_id}
+                        </Tag>
+                    </div>
+                    <div style={{ color: '#1d39c4', fontSize: 11.5, marginTop: 4 }}>
+                        Đã chuyển sang quy trình Hồ sơ sửa chữa B03
+                    </div>
+                </div>
+            );
+        }
+
+        if (r.status === IncidentReportStatus.IN_PROGRESS) {
+            return (
+                <div style={{ fontSize: 12, color: '#d46b08', background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 8, padding: '8px 10px', lineHeight: 1.45 }}>
+                    <Tag color={conf.color} style={{ borderRadius: 10, margin: '0 0 4px 0', fontWeight: 600, fontSize: 11.5 }}>
+                        ⏳ {conf.label}
+                    </Tag>
+                    <div><strong>KTV phụ trách:</strong> {r.technician?.name || 'Kỹ thuật viên'}</div>
+                </div>
+            );
+        }
+
+        return (
+            <div style={{ fontSize: 12, background: '#fff1f0', border: '1px solid #ffa39e', borderRadius: 8, padding: '8px 10px', lineHeight: 1.45 }}>
+                <Tag color={conf.color} style={{ borderRadius: 10, margin: '0 0 4px 0', fontWeight: 600, fontSize: 11.5 }}>
+                    🚨 {conf.label}
+                </Tag>
+                <div style={{ color: '#cf1322', fontSize: 11.5 }}>Đang chờ Kỹ thuật viên tiếp nhận</div>
+            </div>
+        );
+    };
+
+    const renderActionButtons = (r: IVehicleIncidentReport, isCardLayout = false) => {
+        if (isViewOnly) {
+            return (
+                <Button
+                    size="small"
+                    icon={<EyeOutlined />}
+                    onClick={() => handleViewDetail(r)}
+                    style={{ borderRadius: 6, width: isCardLayout ? 'auto' : '100%' }}
+                >
+                    Xem chi tiết
+                </Button>
+            );
+        }
+
+        const canHandleDossier = checkCanHandleDossier(r);
+
+        // 1. Trạng thái đã hoàn tất (Khắc phục nhanh hoặc Đã tạo B03)
+        if (r.status === IncidentReportStatus.RESOLVED_QUICK || r.status === IncidentReportStatus.CONVERTED_REPAIR) {
+            return (
+                <Button
+                    size="small"
+                    icon={<EyeOutlined />}
+                    onClick={() => handleViewDetail(r)}
+                    style={{ borderRadius: 6, width: isCardLayout ? 'auto' : '100%' }}
+                >
+                    Xem chi tiết
+                </Button>
+            );
+        }
+
+        // 2. Trạng thái Chờ lập hồ sơ sửa chữa (REQUESTED_REPAIR)
+        if (r.status === IncidentReportStatus.REQUESTED_REPAIR) {
+            return (
+                <Space direction={isCardLayout ? 'horizontal' : 'vertical'} size={5} wrap style={{ width: isCardLayout ? 'auto' : '100%' }}>
+                    {canHandleDossier ? (
+                        <>
+                            <Button
+                                type="primary"
+                                size="small"
+                                block={!isCardLayout}
+                                style={{ background: '#722ed1', borderColor: '#722ed1', borderRadius: 6 }}
+                                icon={<FileAddOutlined />}
+                                onClick={() => handleGoToCreateRepair(r)}
+                            >
+                                Lập hồ sơ B03
+                            </Button>
+                            {isTechOrAdmin && (
+                                <Button
+                                    size="small"
+                                    block={!isCardLayout}
+                                    style={{ borderRadius: 6 }}
+                                    icon={<LinkOutlined />}
+                                    onClick={() => handleOpenLinkRepair(r)}
+                                >
+                                    Gắn mã B03
+                                </Button>
+                            )}
+                        </>
+                    ) : (
+                        <Text type="secondary" style={{ fontSize: 11 }}>
+                            (Chờ tổ xe lập)
+                        </Text>
+                    )}
+                    <Button
+                        size="small"
+                        type={isCardLayout ? 'default' : 'link'}
+                        icon={<EyeOutlined />}
+                        onClick={() => handleViewDetail(r)}
+                        style={{ fontSize: 12, padding: isCardLayout ? undefined : 0 }}
+                    >
+                        Xem chi tiết
+                    </Button>
+                </Space>
+            );
+        }
+
+        // 3. Trạng thái PENDING / IN_PROGRESS:
+        if (isTechOrAdmin) {
+            return (
+                <Space direction={isCardLayout ? 'horizontal' : 'vertical'} size={5} wrap style={{ width: isCardLayout ? 'auto' : '100%' }}>
+                    {r.status === IncidentReportStatus.PENDING && (
+                        <Button
+                            type="primary"
+                            size="small"
+                            block={!isCardLayout}
+                            style={{ borderRadius: 6 }}
+                            icon={<ToolOutlined />}
+                            onClick={() => handleAccept(r.id)}
+                        >
+                            Tiếp nhận
+                        </Button>
+                    )}
+                    <Button
+                        type="primary"
+                        size="small"
+                        block={!isCardLayout}
+                        style={{ background: '#52c41a', borderColor: '#52c41a', borderRadius: 6 }}
+                        icon={<CheckCircleOutlined />}
+                        onClick={() => handleOpenResolve(r)}
+                    >
+                        Khắc phục xong
+                    </Button>
+                    <Button
+                        type="dashed"
+                        danger
+                        size="small"
+                        block={!isCardLayout}
+                        style={{ borderRadius: 6 }}
+                        icon={<FileAddOutlined />}
+                        onClick={() => handleOpenRequestDossier(r)}
+                    >
+                        Yêu cầu B03
+                    </Button>
+                    <Button
+                        size="small"
+                        type={isCardLayout ? 'default' : 'link'}
+                        icon={<EyeOutlined />}
+                        onClick={() => handleViewDetail(r)}
+                        style={{ fontSize: 12, padding: isCardLayout ? undefined : 0 }}
+                    >
+                        Chi tiết
+                    </Button>
+                </Space>
+            );
+        }
+
+        // Đối với Người vận hành (OPERATOR)
+        return (
+            <Button
+                size="small"
+                icon={<EyeOutlined />}
+                onClick={() => handleViewDetail(r)}
+                style={{ borderRadius: 6, width: isCardLayout ? 'auto' : '100%' }}
+            >
+                Xem chi tiết
+            </Button>
+        );
+    };
+
     const columns: any[] = [
         {
-            title: 'Mã',
-            dataIndex: 'id',
-            width: 70,
-            align: 'center',
-            render: (id: number) => <Tag color="blue" style={{ fontWeight: 600 }}>#{id}</Tag>,
-        },
-        {
-            title: 'Phương tiện / Xe',
-            width: 220,
+            title: 'Phương tiện & Vị trí',
+            width: '23%',
             render: (_: any, r: IVehicleIncidentReport) => (
                 <div style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
-                    <div style={{ fontWeight: 600, color: '#1f1f1f', fontSize: 13 }}>
-                        {r.device?.name}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                        <Tag color="blue" style={{ fontWeight: 700, margin: '1px 0 0 0', borderRadius: 6 }}>
+                            #{r.id}
+                        </Tag>
+                        <div style={{ fontWeight: 600, color: '#1f1f1f', fontSize: 13, lineHeight: 1.4 }}>
+                            {r.device?.name || 'Phương tiện'}
+                        </div>
                     </div>
-                    <Space size="small" style={{ fontSize: 12, marginTop: 4 }}>
-                        {r.device?.reg_number && <Tag color="geekblue" style={{ borderRadius: 4, margin: 0 }}>{r.device.reg_number}</Tag>}
-                        {r.device?.device_code && <Text type="secondary">{r.device.device_code}</Text>}
+                    <Space size={6} wrap style={{ fontSize: 12, marginTop: 6 }}>
+                        {r.device?.reg_number && (
+                            <Tag color="geekblue" style={{ borderRadius: 4, margin: 0, fontWeight: 600 }}>
+                                {r.device.reg_number}
+                            </Tag>
+                        )}
+                        {r.device?.device_code && <Text type="secondary" style={{ fontSize: 12 }}>{r.device.device_code}</Text>}
                     </Space>
                     {r.location_issue && (
-                        <div style={{ fontSize: 11, color: '#8c8c8c', marginTop: 4 }}>
-                            📍 {r.location_issue}
+                        <div style={{ fontSize: 11.5, color: '#595959', marginTop: 5, display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+                            <EnvironmentOutlined style={{ color: '#ff4d4f', marginTop: 2, flexShrink: 0 }} />
+                            <span>{r.location_issue}</span>
                         </div>
                     )}
                 </div>
             ),
         },
         {
-            title: 'Nội dung tình trạng xe',
+            title: 'Nội dung & Ảnh hiện trường',
             dataIndex: 'description',
-            width: 280,
+            width: '24%',
             render: (text: string, r: IVehicleIncidentReport) => (
-                <div style={{ wordBreak: 'break-word', whiteSpace: 'normal', minWidth: 240 }}>
-                    <div style={{ fontSize: 13, lineHeight: 1.5, color: '#1f1f1f' }}>
+                <div style={{ wordBreak: 'break-word', whiteSpace: 'normal' }}>
+                    <div style={{ fontSize: 13, lineHeight: 1.5, color: '#1f1f1f', fontWeight: 500 }}>
                         {text}
                     </div>
                     {r.images && r.images.length > 0 && (
@@ -338,10 +618,10 @@ const VehicleIncidentReportsPage: React.FC = () => {
                                     {r.images.map((img, i) => (
                                         <Image
                                             key={i}
-                                            width={48}
-                                            height={48}
+                                            width={46}
+                                            height={46}
                                             src={`${process.env.REACT_APP_BASE_URL?.replace('/api', '')}${img}`}
-                                            style={{ objectFit: 'cover', borderRadius: 4, border: '1px solid #d9d9d9' }}
+                                            style={{ objectFit: 'cover', borderRadius: 6, border: '1px solid #d9d9d9' }}
                                         />
                                     ))}
                                 </Space>
@@ -352,256 +632,44 @@ const VehicleIncidentReportsPage: React.FC = () => {
             ),
         },
         {
-            title: 'Người báo cáo',
-            width: 180,
+            title: 'Người báo & Thời gian',
+            width: '18%',
             render: (_: any, r: IVehicleIncidentReport) => (
-                <div style={{ fontSize: 12, wordBreak: 'break-word', whiteSpace: 'normal' }}>
-                    <div style={{ fontWeight: 600, color: '#262626' }}>
-                        {r.reporter_name} {r.reporter_code ? `(${r.reporter_code})` : ''}
+                <div style={{ fontSize: 12, wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.45 }}>
+                    <div style={{ fontWeight: 600, color: '#262626', fontSize: 13 }}>
+                        {r.reporter_name} {r.reporter_code ? <span style={{ color: '#595959', fontWeight: 500 }}>({r.reporter_code})</span> : ''}
                     </div>
-                    {r.reporter_department && <div style={{ color: '#595959', marginTop: 2 }}>{r.reporter_department}</div>}
+                    {r.reporter_department && (
+                        <div style={{ color: '#595959', marginTop: 2 }}>{r.reporter_department}</div>
+                    )}
                     {r.reporter_phone && (
                         <div style={{ marginTop: 2 }}>
-                            <a href={`tel:${r.reporter_phone}`} style={{ color: '#1890ff' }}>
+                            <a href={`tel:${r.reporter_phone}`} style={{ color: '#1890ff', fontWeight: 500 }}>
                                 <PhoneOutlined /> {r.reporter_phone}
                             </a>
                         </div>
                     )}
-                    {r.is_external_reporter && <Tag color="default" style={{ fontSize: 10, marginTop: 4 }}>Ngoài danh mục</Tag>}
+                    <div style={{ color: '#8c8c8c', fontSize: 11.5, marginTop: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <ClockCircleOutlined />
+                        <span>{dayjs(r.created_at).format('DD/MM/YYYY HH:mm')}</span>
+                    </div>
+                    {r.is_external_reporter && (
+                        <Tag color="default" style={{ fontSize: 10, marginTop: 4 }}>Ngoài danh mục</Tag>
+                    )}
                 </div>
             ),
         },
         {
-            title: 'Thời gian báo',
-            dataIndex: 'created_at',
-            width: 140,
-            render: (date: string) => (
-                <div style={{ fontSize: 12 }}>
-                    <div style={{ fontWeight: 500, color: '#262626' }}>{dayjs(date).format('DD/MM/YYYY')}</div>
-                    <div style={{ color: '#8c8c8c' }}>{dayjs(date).format('HH:mm')}</div>
-                </div>
-            ),
-        },
-        {
-            title: 'Trạng thái',
-            dataIndex: 'status',
-            width: 160,
-            align: 'center',
-            render: (status: IncidentReportStatus) => {
-                const conf = STATUS_TAGS[status] || { color: 'default', label: status };
-                return (
-                    <Tag color={conf.color} style={{ borderRadius: 12, padding: '2px 8px', fontWeight: 500 }}>
-                        {conf.label}
-                    </Tag>
-                );
-            },
-        },
-        {
-            title: 'Xử lý & Nghiệm thu',
-            width: 250,
-            render: (_: any, r: IVehicleIncidentReport) => {
-                if (r.status === IncidentReportStatus.RESOLVED_QUICK) {
-                    return (
-                        <div style={{ fontSize: 12, background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, padding: '6px 10px', lineHeight: 1.5 }}>
-                            <div><strong style={{ color: '#389e0d' }}>KTV:</strong> {r.technician?.name || 'Kỹ thuật'}</div>
-                            <div style={{ color: '#262626', marginTop: 2 }}><strong>Biện pháp:</strong> {r.quick_solution || '-'}</div>
-                            <div style={{ color: '#262626', marginTop: 2 }}><strong>Nghiệm thu:</strong> {r.operator_confirmed_name || '-'}</div>
-                            {r.operator_confirmed_at && (
-                                <div style={{ color: '#8c8c8c', fontSize: 11, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <ClockCircleOutlined />
-                                    <span>{dayjs(r.operator_confirmed_at).format('DD/MM/YYYY HH:mm')}</span>
-                                </div>
-                            )}
-                        </div>
-                    );
-                }
-                if (r.status === IncidentReportStatus.REQUESTED_REPAIR) {
-                    return (
-                        <div style={{ fontSize: 12, background: '#f9f0ff', border: '1px solid #d3adf7', borderRadius: 6, padding: '6px 10px', lineHeight: 1.5 }}>
-                            <div style={{ color: '#722ed1', fontWeight: 600 }}>📋 Yêu cầu lập hồ sơ B03</div>
-                            <div style={{ marginTop: 2 }}><strong>Giao cho:</strong> {r.assigned_dossier_user_name || r.reporter_name || 'Tổ xe'}</div>
-                            {r.is_reporter_in_vehicle_group ? (
-                                <Tag color="success" style={{ fontSize: 10, margin: '2px 0' }}>Thuộc nhóm xe</Tag>
-                            ) : r.reporter_user_id ? (
-                                <Tag color="warning" style={{ fontSize: 10, margin: '2px 0' }}>Khác nhóm xe</Tag>
-                            ) : null}
-                            {r.dossier_request_note && (
-                                <div style={{ color: '#595959', marginTop: 2, fontSize: 11 }}>
-                                    {r.dossier_request_note}
-                                </div>
-                            )}
-                            {r.dossier_requested_at && (
-                                <div style={{ color: '#8c8c8c', fontSize: 11, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <ClockCircleOutlined />
-                                    <span>{dayjs(r.dossier_requested_at).format('DD/MM/YYYY HH:mm')}</span>
-                                </div>
-                            )}
-                        </div>
-                    );
-                }
-                if (r.status === IncidentReportStatus.CONVERTED_REPAIR) {
-                    return (
-                        <div style={{ fontSize: 12, background: '#e6f7ff', border: '1px solid #91d5ff', borderRadius: 6, padding: '6px 10px' }}>
-                            <div style={{ color: '#096dd9', fontWeight: 600 }}>Đã lập hồ sơ sửa chữa:</div>
-                            <Tag color="geekblue" style={{ marginTop: 4, fontWeight: 600 }}>Phiếu #{r.converted_repair_id}</Tag>
-                        </div>
-                    );
-                }
-                if (r.status === IncidentReportStatus.IN_PROGRESS) {
-                    return (
-                        <div style={{ fontSize: 12, color: '#d46b08', background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 6, padding: '6px 10px' }}>
-                            <div>⏳ <strong>KTV đang xử lý:</strong></div>
-                            <div style={{ marginTop: 2 }}>{r.technician?.name || 'Kỹ thuật viên'}</div>
-                        </div>
-                    );
-                }
-                return <span style={{ color: '#bfbfbf', fontSize: 12 }}>Chưa tiếp nhận</span>;
-            },
+            title: 'Trạng thái & Kết quả xử lý',
+            width: '23%',
+            render: (_: any, r: IVehicleIncidentReport) => renderResolutionDetail(r),
         },
         {
             title: 'Thao tác',
             key: 'actions',
-            width: 150,
-            fixed: 'right',
+            width: '12%',
             align: 'center',
-            render: (_: any, r: IVehicleIncidentReport) => {
-                const canHandleDossier = checkCanHandleDossier(r);
-
-                // 1. Trạng thái đã hoàn tất (Khắc phục nhanh hoặc Đã tạo B03)
-                if (r.status === IncidentReportStatus.RESOLVED_QUICK || r.status === IncidentReportStatus.CONVERTED_REPAIR) {
-                    return (
-                        <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                            <Tag color="success" style={{ margin: 0, width: '100%', textAlign: 'center' }}>
-                                Đã hoàn tất
-                            </Tag>
-                            <Button
-                                type="link"
-                                size="small"
-                                icon={<EyeOutlined />}
-                                onClick={() => handleViewDetail(r)}
-                                style={{ fontSize: 12, padding: 0 }}
-                            >
-                                Xem chi tiết
-                            </Button>
-                        </Space>
-                    );
-                }
-
-                // 2. Trạng thái Chờ lập hồ sơ sửa chữa (REQUESTED_REPAIR)
-                if (r.status === IncidentReportStatus.REQUESTED_REPAIR) {
-                    return (
-                        <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                            <Tag color="purple" style={{ margin: 0, width: '100%', textAlign: 'center' }}>
-                                Chờ lập hồ sơ
-                            </Tag>
-                            {canHandleDossier ? (
-                                <>
-                                    <Button
-                                        type="primary"
-                                        size="small"
-                                        block
-                                        style={{ background: '#722ed1', borderColor: '#722ed1' }}
-                                        icon={<FileAddOutlined />}
-                                        onClick={() => handleGoToCreateRepair(r)}
-                                    >
-                                        Lập hồ sơ sửa chữa
-                                    </Button>
-                                    {isTechOrAdmin && (
-                                        <Button
-                                            size="small"
-                                            block
-                                            icon={<LinkOutlined />}
-                                            onClick={() => handleOpenLinkRepair(r)}
-                                        >
-                                            Gắn mã B03
-                                        </Button>
-                                    )}
-                                </>
-                            ) : (
-                                <Text type="secondary" style={{ fontSize: 11 }}>
-                                    (Chờ tổ xe lập)
-                                </Text>
-                            )}
-                            <Button
-                                type="link"
-                                size="small"
-                                icon={<EyeOutlined />}
-                                onClick={() => handleViewDetail(r)}
-                                style={{ fontSize: 12, padding: 0 }}
-                            >
-                                Xem chi tiết
-                            </Button>
-                        </Space>
-                    );
-                }
-
-                // 3. Trạng thái PENDING / IN_PROGRESS:
-                // Đối với Kỹ thuật viên / Quản trị viên / Tổ trưởng kỹ thuật: Đầy đủ các nút thao tác nghiệp vụ
-                if (isTechOrAdmin) {
-                    return (
-                        <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                            {r.status === IncidentReportStatus.PENDING && (
-                                <Button
-                                    type="primary"
-                                    size="small"
-                                    block
-                                    icon={<ToolOutlined />}
-                                    onClick={() => handleAccept(r.id)}
-                                >
-                                    Tiếp nhận
-                                </Button>
-                            )}
-                            <Button
-                                type="primary"
-                                size="small"
-                                block
-                                style={{ background: '#52c41a', borderColor: '#52c41a' }}
-                                icon={<CheckCircleOutlined />}
-                                onClick={() => handleOpenResolve(r)}
-                            >
-                                Khắc phục xong
-                            </Button>
-                            <Button
-                                type="dashed"
-                                danger
-                                size="small"
-                                block
-                                icon={<FileAddOutlined />}
-                                onClick={() => handleOpenRequestDossier(r)}
-                            >
-                                Yêu cầu làm hồ sơ
-                            </Button>
-                            <Button
-                                type="link"
-                                size="small"
-                                icon={<EyeOutlined />}
-                                onClick={() => handleViewDetail(r)}
-                                style={{ fontSize: 12, padding: 0 }}
-                            >
-                                Xem chi tiết
-                            </Button>
-                        </Space>
-                    );
-                }
-
-                // Đối với Người vận hành (OPERATOR): Chỉ theo dõi tiến độ do KTV xử lý
-                return (
-                    <Space direction="vertical" size={4} style={{ width: '100%' }}>
-                        <Tag color={r.status === IncidentReportStatus.PENDING ? 'red' : 'orange'} style={{ margin: 0, width: '100%', textAlign: 'center' }}>
-                            {r.status === IncidentReportStatus.PENDING ? 'Chờ KTV tiếp nhận' : 'KTV đang xử lý'}
-                        </Tag>
-                        <Button
-                            type="link"
-                            size="small"
-                            icon={<EyeOutlined />}
-                            onClick={() => handleViewDetail(r)}
-                            style={{ fontSize: 12, padding: 0 }}
-                        >
-                            Xem chi tiết
-                        </Button>
-                    </Space>
-                );
-            },
+            render: (_: any, r: IVehicleIncidentReport) => renderActionButtons(r, false),
         },
     ];
 
@@ -609,19 +677,21 @@ const VehicleIncidentReportsPage: React.FC = () => {
         <div style={{ padding: '4px 0' }}>
             <style>{`
                 .vehicle-incident-table .ant-table-thead > tr > th {
-                    white-space: nowrap !important;
-                    background-color: #fafafa;
+                    background-color: #f8fafc !important;
+                    color: #334155 !important;
                     font-weight: 600;
+                    padding: 12px 12px !important;
                 }
-                .vehicle-incident-table .ant-table-cell {
+                .vehicle-incident-table .ant-table-tbody > tr > td {
                     vertical-align: top;
+                    padding: 12px 12px !important;
                 }
             `}</style>
 
-            <Card style={{ marginBottom: 16, borderRadius: 10 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+            <Card style={{ marginBottom: 16, borderRadius: 12 }} styles={{ body: { padding: isMobile ? 14 : 20 } }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
                     <div>
-                        <Title level={4} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Title level={4} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontSize: isMobile ? 17 : 20 }}>
                             <WarningOutlined style={{ color: '#ff4d4f' }} />
                             <span>Báo cáo tình trạng xe tại hiện trường</span>
                         </Title>
@@ -630,17 +700,76 @@ const VehicleIncidentReportsPage: React.FC = () => {
                         </Text>
                     </div>
 
-                    <Button icon={<ReloadOutlined />} onClick={fetchReports} loading={loading}>
-                        Làm mới
-                    </Button>
+                    <Space wrap size={8}>
+                        <Button icon={<ReloadOutlined />} onClick={() => fetchReports(false)} loading={loading}>
+                            Làm mới
+                        </Button>
+                    </Space>
+                </div>
+
+                {/* QUICK KPI STATUS PILLS */}
+                <div
+                    style={{
+                        display: 'flex',
+                        gap: 8,
+                        overflowX: 'auto',
+                        paddingBottom: 4,
+                        marginTop: 14,
+                        WebkitOverflowScrolling: 'touch',
+                    }}
+                >
+                    {[
+                        { key: undefined, label: 'Tất cả báo cáo', count: summaryStats.total, color: '#1677ff', bg: '#f0f5ff' },
+                        { key: IncidentReportStatus.PENDING, label: 'Chờ tiếp nhận / Đang xử lý', count: summaryStats.pending, color: '#cf1322', bg: '#fff1f0' },
+                        { key: IncidentReportStatus.REQUESTED_REPAIR, label: 'Chờ lập hồ sơ B03', count: summaryStats.requestedRepair, color: '#722ed1', bg: '#f9f0ff' },
+                        { key: IncidentReportStatus.RESOLVED_QUICK, label: 'Đã khắc phục nhanh', count: summaryStats.resolvedQuick, color: '#389e0d', bg: '#f6ffed' },
+                        { key: IncidentReportStatus.CONVERTED_REPAIR, label: 'Đã lập hồ sơ B03', count: summaryStats.convertedRepair, color: '#0958d9', bg: '#e6f4ff' },
+                    ].map((pill) => {
+                        const isActive = statusFilter === pill.key;
+                        return (
+                            <div
+                                key={String(pill.key || 'ALL')}
+                                onClick={() => setStatusFilter(isActive && pill.key !== undefined ? undefined : pill.key)}
+                                style={{
+                                    cursor: 'pointer',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 8,
+                                    padding: '6px 12px',
+                                    borderRadius: 20,
+                                    border: isActive ? `1.5px solid ${pill.color}` : '1px solid #e2e8f0',
+                                    background: isActive ? pill.bg : '#ffffff',
+                                    whiteSpace: 'nowrap',
+                                    transition: 'all 0.2s',
+                                    fontSize: 12.5,
+                                    fontWeight: isActive ? 600 : 500,
+                                    color: isActive ? pill.color : '#475569',
+                                }}
+                            >
+                                <span>{pill.label}</span>
+                                <span
+                                    style={{
+                                        background: pill.bg,
+                                        color: pill.color,
+                                        fontWeight: 700,
+                                        fontSize: 11.5,
+                                        padding: '1px 8px',
+                                        borderRadius: 10,
+                                    }}
+                                >
+                                    {pill.count}
+                                </span>
+                            </div>
+                        );
+                    })}
                 </div>
 
                 {/* FILTERS */}
-                <Row gutter={[12, 12]} style={{ marginTop: 16 }}>
-                    <Col xs={24} sm={12} md={6}>
+                <Row gutter={[10, 10]} style={{ marginTop: 12 }}>
+                    <Col xs={24} sm={12} md={7}>
                         <Input
                             placeholder="Tìm kiếm người báo, MSNV, nội dung..."
-                            prefix={<SearchOutlined />}
+                            prefix={<SearchOutlined style={{ color: '#94a3b8' }} />}
                             value={searchText}
                             onChange={(e) => setSearchText(e.target.value)}
                             allowClear
@@ -663,7 +792,7 @@ const VehicleIncidentReportsPage: React.FC = () => {
                             ))}
                         </Select>
                     </Col>
-                    <Col xs={24} sm={12} md={6}>
+                    <Col xs={24} sm={12} md={5}>
                         <Select
                             allowClear
                             placeholder="Lọc theo trạng thái"
@@ -682,6 +811,7 @@ const VehicleIncidentReportsPage: React.FC = () => {
                         <DatePicker.RangePicker
                             style={{ width: '100%' }}
                             format="DD/MM/YYYY"
+                            placeholder={['Từ ngày', 'Đến ngày']}
                             value={dateRange}
                             onChange={setDateRange}
                         />
@@ -702,24 +832,109 @@ const VehicleIncidentReportsPage: React.FC = () => {
                                 {reports.filter(r => r.status === IncidentReportStatus.REQUESTED_REPAIR && checkCanHandleDossier(r)).length}
                             </strong>{' '}
                             báo cáo sự cố xe đang được KTV yêu cầu lập hồ sơ sửa chữa B03. Vui lòng bấm{' '}
-                            <strong style={{ color: '#722ed1' }}>"Lập hồ sơ sửa chữa"</strong> tại cột thao tác để lập phiếu đề nghị sửa chữa.
+                            <strong style={{ color: '#722ed1' }}>"Lập hồ sơ B03"</strong> tại cột thao tác để lập phiếu đề nghị sửa chữa.
                         </span>
                     }
                 />
             )}
 
-            {/* TABLE */}
-            <Card style={{ borderRadius: 10 }}>
-                <Table
-                    className="vehicle-incident-table"
-                    columns={columns}
-                    dataSource={reports}
-                    rowKey="id"
-                    loading={loading}
-                    pagination={{ pageSize: 10, showTotal: (total) => `Tổng cộng ${total} báo cáo` }}
-                    scroll={{ x: 1450 }}
-                />
-            </Card>
+            {/* DESKTOP TABLE (NO HORIZONTAL SCROLL) OR MOBILE CARD LIST */}
+            {isMobile ? (
+                <Spin spinning={loading}>
+                    {reports.length === 0 ? (
+                        <Card style={{ borderRadius: 12, textAlign: 'center', padding: '24px 0' }}>
+                            <Empty description="Không có báo cáo tình trạng xe nào" />
+                        </Card>
+                    ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            {reports.map((r) => (
+                                <Card
+                                    key={r.id}
+                                    size="small"
+                                    style={{ borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}
+                                    styles={{ body: { padding: 14 } }}
+                                >
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                            <Tag color="blue" style={{ margin: 0, fontWeight: 700, borderRadius: 6 }}>#{r.id}</Tag>
+                                            <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>
+                                                {r.device?.name}
+                                            </span>
+                                            {r.device?.reg_number && (
+                                                <Tag color="geekblue" style={{ margin: 0, borderRadius: 4 }}>
+                                                    {r.device.reg_number}
+                                                </Tag>
+                                            )}
+                                        </div>
+                                        <span style={{ fontSize: 11.5, color: '#64748b', whiteSpace: 'nowrap' }}>
+                                            {dayjs(r.created_at).format('DD/MM/YYYY HH:mm')}
+                                        </span>
+                                    </div>
+
+                                    {r.location_issue && (
+                                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>
+                                            📍 {r.location_issue}
+                                        </div>
+                                    )}
+
+                                    <div style={{ marginTop: 8, padding: '8px 10px', background: '#f8fafc', borderRadius: 8, fontSize: 13, color: '#1e293b' }}>
+                                        <div style={{ fontWeight: 500 }}>{r.description}</div>
+                                        {r.images && r.images.length > 0 && (
+                                            <div style={{ marginTop: 8 }}>
+                                                <Image.PreviewGroup>
+                                                    <Space size={6} wrap>
+                                                        {r.images.map((img, i) => (
+                                                            <Image
+                                                                key={i}
+                                                                width={48}
+                                                                height={48}
+                                                                src={`${process.env.REACT_APP_BASE_URL?.replace('/api', '')}${img}`}
+                                                                style={{ objectFit: 'cover', borderRadius: 6, border: '1px solid #cbd5e1' }}
+                                                            />
+                                                        ))}
+                                                    </Space>
+                                                </Image.PreviewGroup>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div style={{ marginTop: 8, fontSize: 12, color: '#475569', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                                        <span>
+                                            👤 <strong>{r.reporter_name}</strong> {r.reporter_code ? `(${r.reporter_code})` : ''}
+                                            {r.reporter_department ? ` • ${r.reporter_department}` : ''}
+                                        </span>
+                                        {r.reporter_phone && (
+                                            <a href={`tel:${r.reporter_phone}`} style={{ color: '#1677ff', fontWeight: 500 }}>
+                                                <PhoneOutlined /> {r.reporter_phone}
+                                            </a>
+                                        )}
+                                    </div>
+
+                                    <div style={{ marginTop: 10 }}>
+                                        {renderResolutionDetail(r)}
+                                    </div>
+
+                                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end' }}>
+                                        {renderActionButtons(r, true)}
+                                    </div>
+                                </Card>
+                            ))}
+                        </div>
+                    )}
+                </Spin>
+            ) : (
+                <Card style={{ borderRadius: 12 }} styles={{ body: { padding: '8px 16px 16px 16px' } }}>
+                    <Table
+                        className="vehicle-incident-table"
+                        columns={columns}
+                        dataSource={reports}
+                        rowKey="id"
+                        loading={loading}
+                        tableLayout="fixed"
+                        pagination={{ pageSize: 10, showTotal: (total) => `Tổng cộng ${total} báo cáo` }}
+                    />
+                </Card>
+            )}
 
             {/* MODAL CHI TIẾT BÁO CÁO */}
             <Modal
@@ -804,7 +1019,7 @@ const VehicleIncidentReportsPage: React.FC = () => {
                         </Button>
                     ),
                 ]}
-                width={700}
+                width="min(700px, calc(100vw - 24px))"
                 destroyOnClose
             >
                 {detailReport && (
@@ -965,7 +1180,7 @@ const VehicleIncidentReportsPage: React.FC = () => {
                 okText="Hoàn tất nghiệm thu"
                 cancelText="Hủy"
                 destroyOnClose
-                width={520}
+                width="min(520px, calc(100vw - 24px))"
             >
                 <div style={{ marginBottom: 12, background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 6, padding: '8px 12px', fontSize: 12 }}>
                     Xe: <strong>{selectedReport?.device?.name}</strong> {selectedReport?.device?.reg_number ? `(${selectedReport.device.reg_number})` : ''}
@@ -1030,7 +1245,7 @@ const VehicleIncidentReportsPage: React.FC = () => {
                 okText="Gửi yêu cầu làm hồ sơ"
                 cancelText="Hủy"
                 destroyOnClose
-                width={620}
+                width="min(620px, calc(100vw - 24px))"
             >
                 {checkingGroup ? (
                     <div style={{ textAlign: 'center', padding: '30px 0' }}>
@@ -1168,7 +1383,7 @@ const VehicleIncidentReportsPage: React.FC = () => {
                 okText="Xác nhận liên kết"
                 cancelText="Hủy"
                 destroyOnClose
-                width={520}
+                width="min(520px, calc(100vw - 24px))"
             >
                 <div style={{ marginBottom: 12, background: '#f5f5f5', borderRadius: 8, padding: 12, fontSize: 13 }}>
                     Xe: <strong>{selectedReportForLink?.device?.name}</strong> {selectedReportForLink?.device?.reg_number ? `(${selectedReportForLink.device.reg_number})` : ''}

@@ -352,7 +352,7 @@ const Profile: React.FC = () => {
                 <Col span={8}>
                     <Card>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 24 }}>
-                            <Avatar size={100} src={user.avatar} icon={<UserOutlined />} />
+                            <Avatar size={100} src={user.avatar ? getBackendImageUrl(user.avatar) : undefined} icon={<UserOutlined />} />
                             <Title level={4} style={{ marginTop: 16 }}>{user.name}</Title>
                             <Typography.Text type="secondary">{user.role}</Typography.Text>
                         </div>

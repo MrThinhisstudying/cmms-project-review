@@ -305,10 +305,16 @@ const ProjectModal: React.FC<ProjectModalProps> = ({
                                         showSearch
                                         optionFilterProp="label"
                                         placeholder="Chọn người phụ trách"
-                                        options={users.map((u) => ({
-                                            value: u.user_id,
-                                            label: `${u.name} (${u.position || u.role})`,
-                                        }))}
+                                        options={users
+                                            .filter(
+                                                (u) =>
+                                                    !u.status ||
+                                                    u.status.trim().toLowerCase() === "active"
+                                            )
+                                            .map((u) => ({
+                                                value: u.user_id,
+                                                label: `${u.name} (${u.position || u.role})`,
+                                            }))}
                                     />
                                 </Form.Item>
                             </Col>

@@ -13,6 +13,9 @@ import {
     FileTextOutlined,
     WarningOutlined,
     CheckSquareOutlined,
+    CalendarOutlined,
+    TrophyOutlined,
+    BookOutlined,
 } from "@ant-design/icons";
 
 export interface SidebarMenuItem {
@@ -40,12 +43,49 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
         path: "/trang_chu",
         roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR", "HR_MANAGER"],
     },
+    // --- Quản lý công việc ---
     {
         name: "Quản lý công việc",
         icon: <CheckSquareOutlined />,
         textColor: "#fff",
         color: "#FFC900",
-        path: "/quan_ly_cong_viec",
+        path: "/tasks-group",
+        groupKey: "tasks",
+        roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR", "HR_MANAGER"],
+        children: [
+            {
+                name: "Danh sách công việc",
+                icon: <CheckSquareOutlined />,
+                textColor: "#fff",
+                color: "#FFC900",
+                path: "/quan_ly_cong_viec",
+                roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR", "HR_MANAGER"],
+            },
+            {
+                name: "Lịch công việc",
+                icon: <CalendarOutlined />,
+                textColor: "#fff",
+                color: "#FFC900",
+                path: "/lich_cong_viec",
+                roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR", "HR_MANAGER"],
+            },
+            {
+                name: "Bình xét KPI & Thi đua",
+                icon: <TrophyOutlined />,
+                textColor: "#fff",
+                color: "#FFC900",
+                path: "/kpi_thi_dua",
+                roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR", "HR_MANAGER"],
+            },
+        ],
+    },
+    // --- Cổng thông tin nội bộ (Toàn thể người lao động) ---
+    {
+        name: "Quy chế & Quy định",
+        icon: <BookOutlined />,
+        textColor: "#fff",
+        color: "#FFC900",
+        path: "/quy_che_quy_dinh",
         roles: ["ADMIN", "STAFF", "MANAGER", "OPERATOR", "TECHNICIAN", "TEAM_LEAD", "UNIT_HEAD", "DIRECTOR", "HR_MANAGER"],
     },
     // --- Nhân sự & Đào tạo ---
@@ -58,14 +98,6 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
         groupKey: "hr-training",
         roles: ["ADMIN", "HR_MANAGER", "DIRECTOR", "UNIT_HEAD"],
         children: [
-            {
-                name: "Tổng quan Nhân sự",
-                icon: <BarChartOutlined />,
-                textColor: "#fff",
-                color: "#FFC900",
-                path: "/hr-dashboard",
-                roles: ["ADMIN", "HR_MANAGER", "DIRECTOR", "UNIT_HEAD"],
-            },
             {
                 name: "Trung tâm Nhân sự 360°",
                 icon: <TeamOutlined />,
@@ -128,9 +160,16 @@ export const SIDEBAR_MENU: SidebarMenuItem[] = [
         color: "#FFC900",
         path: "/repair-group",
         groupKey: "repairs",
-        roles: ["ADMIN", "DIRECTOR"],
-        // Chỉ hiện cho user thuộc Đội kỹ thuật (is_technical) hoặc ADMIN/DIRECTOR
-        departmentFilter: (userDepts) => userDepts?.some(ud => ud.department?.is_technical) || false,
+        roles: ["ADMIN", "DIRECTOR", "UNIT_HEAD", "TEAM_LEAD"],
+        // Hiện cho Ban giám đốc, Đội trưởng, Tổ trưởng/Tổ phó VHTTBMĐ và nhân sự thuộc Đội kỹ thuật (is_technical)
+        departmentFilter: (userDepts) =>
+            userDepts?.some(
+                (ud) =>
+                    ud.department?.is_technical ||
+                    ud.department?.name?.toLowerCase().includes("vhttbmđ") ||
+                    ud.department?.name?.toLowerCase().includes("vhttbmd") ||
+                    ud.department?.name?.toLowerCase().includes("vận hành")
+            ) || false,
         children: [
             {
                 name: "Quản lý sửa chữa",
